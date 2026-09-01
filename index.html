@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SUNNY</title>
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="styles.css?v=perf3">
+</head>
+<body>
+  <div id="map"></div>
+  <div class="hud">
+    <p id="status" class="status">Finding you…</p>
+  </div>
+  <div class="timeline">
+    <div class="time-row">
+      <button id="btn-play" class="play" type="button" aria-label="Play cloud animation" aria-pressed="false">Play</button>
+      <div class="track-wrap">
+        <span class="now-mark">NOW</span>
+        <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
+      </div>
+      <span id="time-label">Clouds</span>
+    </div>
+    <div class="overlay-row">
+      <label class="ov">Clouds
+        <input id="cloud-opacity" type="range" min="0" max="100" value="88" step="1">
+      </label>
+      <label class="ov switch">
+        <input id="toggle-map" type="checkbox">
+        <span class="knob" aria-hidden="true"></span>
+        Roads &amp; names
+      </label>
+      <label class="ov switch">
+        <input id="toggle-intl" type="checkbox">
+        <span class="knob" aria-hidden="true"></span>
+        International
+      </label>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="btn-locate" class="ctrl" type="button">Locate me</button>
+    <button id="btn-all" class="ctrl" type="button" aria-pressed="false">All beaches</button>
+    <button id="btn-near" class="ctrl" type="button" disabled>Nearest beach</button>
+    <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled>
+      <span class="beach-emoji" aria-hidden="true">🏖️</span>
+      <span class="ctrl-label">Nearest sunny beach</span>
+    </button>
+  </div>
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="app.js?v=gh1"></script>
+</body>
+</html>
