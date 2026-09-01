@@ -5,6 +5,7 @@
   var BEACH_RADIUS_M = 50000;
   var BEACH_CAP = 60;
   var SUNNY_CLOUD = 40;
+  var SUNNY_PICK_CAP = 12;
   var DWELL_MS = 850;
   var PLAY_MS = 450;
   var FRAME_MIN = 10;
@@ -18,6 +19,10 @@
   var btnNear = document.getElementById("btn-near");
   var btnAll = document.getElementById("btn-all");
   var btnSun = document.getElementById("btn-sun");
+  var sunnySheet = document.getElementById("sunny-sheet");
+  var sunnySheetList = document.getElementById("sunny-sheet-list");
+  var sunnySheetSub = document.getElementById("sunny-sheet-sub");
+  var sunnySheetClose = document.getElementById("sunny-sheet-close");
   var btnPlay = document.getElementById("btn-play");
   var slider = document.getElementById("time-slider");
   var timeLabel = document.getElementById("time-label");
@@ -1057,15 +1062,34 @@
     if (btnAll) btnAll.disabled = false;
   }
 
-  function weatherNearestSunny(list) {
+  function filterSunnyRows(list, assumeForeign) {
+    var rows = list || [];
+    if (isIntl()) {
+      rows = rows.filter(function (b) { return isForeignBeach(b, assumeForeign); });
+    } else {
+      rows = beachesForMode(rows);
+    }
+    return rows.filter(isSunnyBeach).sort(function (a, b) { return a.dist - b.dist; });
+  }
+
+  function weatherCollectSunny(list, assumeForeign, wantCount) {
+    var want = wantCount || SUNNY_PICK_CAP;
+    var found = [];
     var i = 0;
     function step() {
-      if (i >= list.length) return Promise.resolve(null);
+      if (found.length >= want || i >= list.length) {
+        found.sort(function (a, b) { return a.dist - b.dist; });
+        return Promise.resolve(found.slice(0, want));
+      }
       var chunk = list.slice(i, i + WX_BATCH);
       i += WX_BATCH;
+      setStatus("Checking the sun… " + Math.min(i, list.length) + "/" + list.length);
       return fetchCurrentWeather(chunk).then(function (wx) {
-        var b = pickNearestSunnyFrom(wx, true);
-        if (b) return b;
+        filterSunnyRows(wx, assumeForeign).forEach(function (b) {
+          if (found.length >= want) return;
+          if (found.some(function (x) { return x.id === b.id; })) return;
+          found.push(b);
+        });
         return step();
       }).catch(function (err) {
         console.error(err);
@@ -1073,6 +1097,56 @@
       });
     }
     return step();
+  }
+
+  function closeSunnySheet() {
+    if (!sunnySheet) return;
+    sunnySheet.hidden = true;
+    if (sunnySheetList) sunnySheetList.innerHTML = "";
+  }
+
+  function openSunnySheet(list) {
+    if (!sunnySheet || !sunnySheetList) {
+      if (list && list[0]) finishBeach(list[0], "sunny");
+      return;
+    }
+    sunnySheetList.innerHTML = "";
+    if (sunnySheetSub) {
+      sunnySheetSub.textContent = list.length === 1
+        ? "1 sunny beach, nearest first."
+        : list.length + " sunny beaches, nearest first. Tap one.";
+    }
+    list.forEach(function (b, idx) {
+      var li = document.createElement("li");
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "sheet-item";
+      var cloud = b.cloud != null ? Math.round(b.cloud) + "% cloudy" : "sunny";
+      btn.innerHTML = "<span>" + escapeHtml(b.name || "Beach") + "</span>" +
+        "<span class=\"dist\">" + escapeHtml(formatKm(b.dist)) + "</span>" +
+        "<span class=\"meta\">#" + (idx + 1) + " · " + escapeHtml(cloud) + "</span>";
+      btn.addEventListener("click", function () {
+        closeSunnySheet();
+        finishBeach(b, "sunny");
+      });
+      li.appendChild(btn);
+      sunnySheetList.appendChild(li);
+    });
+    sunnySheet.hidden = false;
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function weatherNearestSunny(list) {
+    return weatherCollectSunny(list, true, 1).then(function (rows) {
+      return rows[0] || null;
+    });
   }
 
   function searchBeachesFar(wantSunny) {
@@ -1097,10 +1171,14 @@
           setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
           return;
         }
-        return weatherNearestSunny(list).then(function (b) {
+        return weatherCollectSunny(list, true, SUNNY_PICK_CAP).then(function (rows) {
           unlockSearch();
-          if (b) finishBeach(b, "sunny");
-          else setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
+          if (rows && rows.length) {
+            setStatus(rows.length === 1 ? "1 sunny beach found." : rows.length + " sunny beaches found. Pick one.");
+            openSunnySheet(rows);
+          } else {
+            setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
+          }
         });
       })
       .catch(function (err) {
@@ -1256,14 +1334,18 @@
   function goNearestSunny() {
     if (!origin || searchingSunny) return;
     ensureHomeCountry().then(function () {
-      var local = pickNearestSunnyFrom(nearbyBeaches, false);
-      if (local) {
-        finishBeach(local, "sunny");
+      var localSunny = filterSunnyRows(nearbyBeaches, false);
+      if (localSunny.length >= 3) {
+        setStatus(localSunny.length + " sunny beaches nearby. Pick one.");
+        openSunnySheet(localSunny.slice(0, SUNNY_PICK_CAP));
         return;
       }
       searchingSunny = true;
       btnSun.disabled = true;
       if (btnNear) btnNear.disabled = true;
+      if (localSunny.length) {
+        setStatus("Found " + localSunny.length + " nearby. Looking farther for more…");
+      }
       searchBeachesFar(true);
     });
   }
@@ -1458,6 +1540,12 @@
   if (btnAll) btnAll.addEventListener("click", showAllBeaches);
   if (btnNear) btnNear.addEventListener("click", goNearestBeach);
   btnSun.addEventListener("click", goNearestSunny);
+  if (sunnySheetClose) sunnySheetClose.addEventListener("click", closeSunnySheet);
+  if (sunnySheet) {
+    sunnySheet.addEventListener("click", function (e) {
+      if (e.target && e.target.getAttribute("data-close")) closeSunnySheet();
+    });
+  }
   btnPlay.addEventListener("click", togglePlay);
   slider.addEventListener("input", function () {
     stopPlay();

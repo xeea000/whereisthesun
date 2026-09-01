@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="styles.css?v=perf3">
+  <link rel="stylesheet" href="styles.css?v=picker1">
 </head>
 <body>
   <div id="map"></div>
@@ -43,10 +43,21 @@
     <button id="btn-near" class="ctrl" type="button" disabled>Nearest beach</button>
     <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled>
       <span class="beach-emoji" aria-hidden="true">🏖️</span>
-      <span class="ctrl-label">Nearest sunny beach</span>
+      <span class="ctrl-label">Find Nearest Sunny Beaches</span>
     </button>
   </div>
+  <div id="sunny-sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close="1"></div>
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="sunny-sheet-title">
+      <div class="sheet-head">
+        <h2 id="sunny-sheet-title">Sunny beaches</h2>
+        <button type="button" id="sunny-sheet-close" class="sheet-close" aria-label="Close">Close</button>
+      </div>
+      <p id="sunny-sheet-sub" class="sheet-sub"></p>
+      <ul id="sunny-sheet-list" class="sheet-list"></ul>
+    </div>
+  </div>
   <script src="vendor/maplibre-gl.js"></script>
-  <script src="app.js?v=gh1"></script>
+  <script src="app.js?v=picker1"></script>
 </body>
 </html>

@@ -101,10 +101,10 @@ html, body {
 }
 
 .ctrl-label {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   text-align: center;
-  max-width: 9.5rem;
-  line-height: 1.2;
+  max-width: 10.5rem;
+  line-height: 1.15;
 }
 
 .timeline {
@@ -377,4 +377,98 @@ html, body {
   .beach-emoji {
     font-size: 68px;
   }
+}
+
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet[hidden] { display: none !important; }
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+.sheet-card {
+  position: relative;
+  z-index: 1;
+  width: min(28rem, 100%);
+  max-height: min(70dvh, 520px);
+  margin: 0;
+  padding: 14px 14px max(16px, env(safe-area-inset-bottom));
+  border: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 -8px 28px rgba(0,0,0,0.35);
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sheet-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.sheet-close {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  padding: 6px 12px;
+  font: 600 0.85rem/1 system-ui, sans-serif;
+  cursor: pointer;
+}
+.sheet-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sheet-list li { margin: 0; }
+.sheet-item {
+  width: 100%;
+  appearance: none;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 12px 4px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  cursor: pointer;
+  font: 600 0.95rem/1.25 system-ui, sans-serif;
+}
+.sheet-list li:first-child .sheet-item { border-top: 0; }
+.sheet-item:active { background: rgba(255,255,255,0.06); }
+.sheet-item .meta {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+.sheet-item .dist {
+  color: var(--sun);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
