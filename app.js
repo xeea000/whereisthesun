@@ -168,7 +168,7 @@
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
     new maplibregl.AttributionControl({ compact: true, customAttribution: "NASA GIBS / NOAA GOES · Open-Meteo · free tiles" }),
-    "bottom-left"
+    "bottom-right"
   );
 
   function setStatus(text) {
@@ -1987,7 +1987,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt9c");
+      beachWorker = new Worker("beach-worker.js?v=opt9d");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3813,7 +3813,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt9c").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt9d").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

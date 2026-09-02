@@ -73,8 +73,10 @@ html, body {
   display: none !important;
 }
 #map .maplibregl-ctrl-bottom-right {
-  margin-bottom: 12px;
-  margin-right: 8px;
+  /* sit above Locate/Find stack on phones; stay clear of timeline on desktop */
+  margin-bottom: max(12px, env(safe-area-inset-bottom));
+  margin-right: max(8px, env(safe-area-inset-right));
+  max-width: min(70vw, 22rem);
 }
 #map .maplibregl-ctrl-attrib {
   background: rgba(18, 20, 23, 0.82) !important;
