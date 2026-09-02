@@ -73,14 +73,44 @@
   var searchingSunny = false;
   var overlayIds = ["ov-road-casing", "ov-road", "ov-road-name", "ov-place"];
   var BASEMAP_KEY = "sunny-basemap";
+  var OPACITY_KEY = "sunny-cloud-opacity";
+  var LABELS_KEY = "sunny-labels";
+  var INTL_KEY = "sunny-intl";
+  var VIEW_KEY = "sunny-last-view";
   var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
   var basemapMode = "roads";
+  var MOVE_DEBOUNCE_MS = 220; /* opt12: single queue for paint/regions/Play bbox */
+  var viewSaveTimer = null;
+  var settingsRestored = false;
   try {
     var savedBasemap = localStorage.getItem(BASEMAP_KEY);
     if (savedBasemap === "roads" || savedBasemap === "satellite" || savedBasemap === "dark") {
       basemapMode = savedBasemap;
     }
   } catch (eBasemap) {}
+  try {
+    var savedOp = localStorage.getItem(OPACITY_KEY);
+    if (savedOp != null && cloudOpacityEl) {
+      var opN = Number(savedOp);
+      if (isFinite(opN)) {
+        opN = Math.max(0, Math.min(100, Math.round(opN)));
+        cloudOpacityEl.value = String(opN);
+        cloudOpacity = opN / 100;
+      }
+    }
+  } catch (eOp) {}
+  try {
+    var savedLabels = localStorage.getItem(LABELS_KEY);
+    if (toggleMap && (savedLabels === "1" || savedLabels === "0")) {
+      toggleMap.checked = savedLabels === "1";
+    }
+  } catch (eLab) {}
+  try {
+    var savedIntl = localStorage.getItem(INTL_KEY);
+    if (toggleIntl && (savedIntl === "1" || savedIntl === "0")) {
+      toggleIntl.checked = savedIntl === "1";
+    }
+  } catch (eIntl) {}
   var allMode = false;
   var nearbyBeaches = [];
   var viewGen = 0;
@@ -117,6 +147,22 @@
   var overlayReady = false;
   var hoverThrottle = 0;
 
+
+  var bootCenter = [-79.38, 43.65];
+  var bootZoom = 3;
+  try {
+    var rawView = localStorage.getItem(VIEW_KEY);
+    if (rawView) {
+      var ov = JSON.parse(rawView);
+      if (ov && isFinite(ov.lat) && isFinite(ov.lon) && isFinite(ov.zoom) &&
+          ov.lat >= -90 && ov.lat <= 90 && ov.lon >= -180 && ov.lon <= 180 &&
+          ov.zoom >= 0 && ov.zoom <= 22) {
+        bootCenter = [Number(ov.lon), Number(ov.lat)];
+        bootZoom = Number(ov.zoom);
+      }
+    }
+  } catch (eViewBoot) {}
+
   var map = new maplibregl.Map({
     container: "map",
     style: {
@@ -151,8 +197,8 @@
         { id: "base-dark", type: "raster", source: "base-dark", layout: { visibility: "none" } }
       ]
     },
-    center: [-79.38, 43.65],
-    zoom: 3,
+    center: bootCenter,
+    zoom: bootZoom,
     dragRotate: false,
     pitchWithRotate: false,
     fadeDuration: 0,
@@ -301,8 +347,8 @@
   var PLAY_DWELL_MS = 250; /* min dwell after reveal when next is cached */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
   var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
-  var PLAY_PREFETCH = 5; /* prefetch 4–6 frames ahead */
-  var PLAY_MOVE_DEBOUNCE_MS = 300;
+  var PLAY_PREFETCH = 2; /* opt12: next 1–2 frames while playing */
+  var PLAY_MOVE_DEBOUNCE_MS = 250; /* opt12: align with map move debounce */
   var PLAY_LRU_CAP = 24;
   var WMS_MAX_SIDE_PHONE = 960;
   var WMS_MAX_SIDE_DESKTOP = 1280;
@@ -1742,7 +1788,7 @@
 
   var BEACH_DB_IDB = "sunny";
   var BEACH_DB_STORE = "beachdb";
-  var BEACH_DB_VER = "region1-bin1-idb3";
+  var BEACH_DB_VER = "region1-bin1-idb4-opt12";
 
   function idbOpenBeach() {
     return new Promise(function (resolve, reject) {
@@ -2020,7 +2066,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt11");
+      beachWorker = new Worker("beach-worker.js?v=opt12");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -2524,7 +2570,8 @@
   }
 
   function wxCacheKey(lat, lon) {
-    return lat.toFixed(3) + "," + lon.toFixed(3);
+    /* opt12: shared short-TTL bins ~0.05° for Find / list / hover */
+    return Math.round(lat * 20) + "," + Math.round(lon * 20);
   }
 
   function getCachedCurrentWx(lat, lon) {
@@ -2774,10 +2821,22 @@
   }
 
   function showPopup(b, lngLat, extra, imgUrl) {
-    if (popup) popup.remove();
+    var ll = lngLat || [b.lon, b.lat];
+    var html = popupHtml(b, extra, imgUrl);
+    if (popup) {
+      try {
+        popup.setLngLat(ll).setHTML(html);
+        if (typeof popup.isOpen === "function" && !popup.isOpen()) popup.addTo(map);
+        else if (typeof popup.isOpen !== "function") popup.addTo(map);
+        return;
+      } catch (ePop) {
+        try { popup.remove(); } catch (eRem) {}
+        popup = null;
+      }
+    }
     popup = new maplibregl.Popup({ offset: 14, closeButton: true, maxWidth: "280px" })
-      .setLngLat(lngLat || [b.lon, b.lat])
-      .setHTML(popupHtml(b, extra, imgUrl))
+      .setLngLat(ll)
+      .setHTML(html)
       .addTo(map);
   }
 
@@ -3085,7 +3144,10 @@
   function closeSunnySheet() {
     if (!sunnySheet) return;
     sunnySheet.hidden = true;
-    if (sunnySheetList) sunnySheetList.innerHTML = "";
+    if (sunnySheetList) {
+      var items = sunnySheetList.querySelectorAll(".sheet-item");
+      for (var ci = 0; ci < items.length; ci++) items[ci].classList.remove("is-active");
+    }
     sheetListRows = [];
   }
 
@@ -3144,13 +3206,34 @@
     return s.slice(0, maxLen - 1).replace(/\s+$/g, "") + "…";
   }
 
+  function fillSheetItem(btn, b, idx) {
+    var cloud = b.cloud != null ? Math.round(b.cloud) + "% cloudy" : "—";
+    var label = shortBeachName(b.name || "Beach", 40);
+    var spans = btn.children;
+    if (spans && spans.length >= 3) {
+      spans[0].textContent = label;
+      spans[1].textContent = formatKm(b.dist);
+      spans[2].textContent = "#" + (idx + 1) + " · " + cloud;
+    } else {
+      btn.innerHTML = "<span>" + escapeHtml(label) + "</span>" +
+        "<span class=\"dist\">" + escapeHtml(formatKm(b.dist)) + "</span>" +
+        "<span class=\"meta\">#" + (idx + 1) + " · " + escapeHtml(cloud) + "</span>";
+    }
+    btn.title = b.name || "Beach";
+    btn._beach = b;
+  }
+
   function openSunnySheet(list, sunnyMode) {
     sheetSunnyMode = sunnyMode !== false;
     sheetListRows = list ? list.slice() : [];
     if (sheetSunnyMode && (!list || !list.length)) {
       sheetListRows = [];
       if (sunnySheet) sunnySheet.hidden = true;
-      if (sunnySheetList) sunnySheetList.innerHTML = "";
+      if (sunnySheetList) {
+        /* keep pooled rows; just hide sheet */
+        var dead = sunnySheetList.querySelectorAll(".sheet-item");
+        for (var di = 0; di < dead.length; di++) dead[di].classList.remove("is-active");
+      }
       setStatus("No beaches under 20% cloud nearby");
       return;
     }
@@ -3161,7 +3244,6 @@
     if (sunnySheetTitle) {
       sunnySheetTitle.textContent = sheetSunnyMode ? "Sunny beaches" : "Nearest beaches";
     }
-    sunnySheetList.innerHTML = "";
     if (sunnySheetSub) {
       if (sheetSunnyMode) {
         sunnySheetSub.textContent = list.length === 1
@@ -3173,23 +3255,43 @@
           : list.length + " nearest beaches. Tap one, map stays live.";
       }
     }
-    list.forEach(function (b, idx) {
-      var li = document.createElement("li");
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "sheet-item";
-      var cloud = b.cloud != null ? Math.round(b.cloud) + "% cloudy" : "—";
-      var label = shortBeachName(b.name || "Beach", 40);
-      btn.innerHTML = "<span>" + escapeHtml(label) + "</span>" +
-        "<span class=\"dist\">" + escapeHtml(formatKm(b.dist)) + "</span>" +
-        "<span class=\"meta\">#" + (idx + 1) + " · " + escapeHtml(cloud) + "</span>";
-      btn.title = b.name || "Beach";
-      btn.addEventListener("click", function () {
-        previewSunnyBeach(b, btn);
-      });
-      li.appendChild(btn);
-      sunnySheetList.appendChild(li);
-    });
+    /* opt12: reuse existing row nodes instead of wiping innerHTML */
+    var existing = sunnySheetList.children;
+    var i, li, btn, b;
+    for (i = 0; i < list.length; i++) {
+      b = list[i];
+      if (i < existing.length) {
+        li = existing[i];
+        btn = li.querySelector(".sheet-item") || li.firstElementChild;
+        if (!btn) {
+          btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "sheet-item";
+          btn.addEventListener("click", function (ev) {
+            var el = ev.currentTarget;
+            previewSunnyBeach(el._beach, el);
+          });
+          li.appendChild(btn);
+        }
+        fillSheetItem(btn, b, i);
+        btn.classList.remove("is-active");
+      } else {
+        li = document.createElement("li");
+        btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sheet-item";
+        fillSheetItem(btn, b, i);
+        btn.addEventListener("click", function (ev) {
+          var el = ev.currentTarget;
+          previewSunnyBeach(el._beach, el);
+        });
+        li.appendChild(btn);
+        sunnySheetList.appendChild(li);
+      }
+    }
+    while (sunnySheetList.children.length > list.length) {
+      sunnySheetList.removeChild(sunnySheetList.lastChild);
+    }
     sunnySheet.hidden = false;
     if (list[0]) {
       var firstBtn = sunnySheetList.querySelector(".sheet-item");
@@ -3554,6 +3656,55 @@
       });
   }
 
+
+  function saveSetting(key, val) {
+    try { localStorage.setItem(key, val); } catch (eSave) {}
+  }
+
+  function saveLastViewDebounced() {
+    if (viewSaveTimer) clearTimeout(viewSaveTimer);
+    viewSaveTimer = setTimeout(function () {
+      viewSaveTimer = null;
+      try {
+        var c = map.getCenter();
+        var z = map.getZoom();
+        if (!c || !isFinite(c.lat) || !isFinite(c.lng) || !isFinite(z)) return;
+        localStorage.setItem(VIEW_KEY, JSON.stringify({
+          lat: Math.round(c.lat * 1e5) / 1e5,
+          lon: Math.round(c.lng * 1e5) / 1e5,
+          zoom: Math.round(z * 100) / 100
+        }));
+      } catch (eView) {}
+    }, 400);
+  }
+
+  function restorePersistedSettingsAfterMapReady() {
+    if (settingsRestored) return;
+    settingsRestored = true;
+    try {
+      if (cloudOpacityEl) {
+        cloudOpacity = Math.max(0, Math.min(1, Number(cloudOpacityEl.value) / 100));
+        applyCloudOpacity();
+      }
+    } catch (e1) {}
+    try {
+      setBasemapMode(basemapMode);
+    } catch (e2) {}
+    try {
+      if (overlayVisible()) restackOverlay();
+      else applyOverlay();
+    } catch (e3) {}
+    try {
+      var raw = localStorage.getItem(VIEW_KEY);
+      if (raw) {
+        var ov = JSON.parse(raw);
+        if (ov && isFinite(ov.lat) && isFinite(ov.lon) && isFinite(ov.zoom)) {
+          map.jumpTo({ center: [Number(ov.lon), Number(ov.lat)], zoom: Number(ov.zoom) });
+        }
+      }
+    } catch (e4) {}
+  }
+
   function saveLastLocate(lat, lon) {
     try {
       localStorage.setItem(LOCATE_KEY, JSON.stringify({ lat: lat, lon: lon, t: Date.now() }));
@@ -3715,6 +3866,7 @@
     } else {
       syncCloudMap(true);
     }
+    saveLastViewDebounced();
     if (moveTimer) clearTimeout(moveTimer);
     moveTimer = setTimeout(function () {
       paintBeaches(beaches);
@@ -3728,7 +3880,7 @@
         } catch (eMove) {}
       }
       maybeIdlePrefetchRing();
-    }, 180);
+    }, MOVE_DEBOUNCE_MS);
   });
 
   map.on("load", function () {
@@ -3738,8 +3890,8 @@
     slider.value = String(sliderMax());
     ensureBeachLayers();
     applyCloudSolidMode();
-    setBasemapMode(basemapMode);
     ensureCloudMap(); /* hide unused #cloud-map; mount play layer on map container */
+    restorePersistedSettingsAfterMapReady();
     var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
     addGibsStatic(url);
     setCloudFrame(sliderMax());
@@ -3808,9 +3960,11 @@
   cloudOpacityEl.addEventListener("input", function () {
     cloudOpacity = Math.max(0, Math.min(1, Number(cloudOpacityEl.value) / 100));
     applyCloudOpacity();
+    saveSetting(OPACITY_KEY, String(Math.round(cloudOpacity * 100)));
   });
   toggleMap.addEventListener("change", function () {
     restackOverlay();
+    saveSetting(LABELS_KEY, toggleMap.checked ? "1" : "0");
   });
   (function bindBasemapSeg() {
     var seg = document.getElementById("basemap-seg");
@@ -3827,6 +3981,7 @@
   })();
   if (toggleIntl) {
     toggleIntl.addEventListener("change", function () {
+      saveSetting(INTL_KEY, toggleIntl.checked ? "1" : "0");
       if (!isIntl()) {
         ensureHomeCountry().then(function () {
           setStatus("International off. Staying in " + countryLabel() + ".");
@@ -3848,9 +4003,53 @@
     });
   }
 
+
+  /* opt12: small FPS meter (rAF, ~4 Hz text, pause when hidden) */
+  (function initFpsMeter() {
+    var el = document.getElementById("fps");
+    if (!el) return;
+    var frames = 0;
+    var last = 0;
+    var lastPaint = 0;
+    var raf = 0;
+    function loop(ts) {
+      raf = 0;
+      if (tabHidden || document.hidden) return;
+      frames += 1;
+      if (!last) last = ts;
+      if (!lastPaint) lastPaint = ts;
+      var dt = ts - lastPaint;
+      if (dt >= 250) {
+        var fps = Math.round((frames * 1000) / (ts - last || dt));
+        el.textContent = fps + " fps";
+        frames = 0;
+        last = ts;
+        lastPaint = ts;
+      }
+      raf = requestAnimationFrame(loop);
+    }
+    function start() {
+      if (raf || tabHidden || document.hidden) return;
+      frames = 0;
+      last = 0;
+      lastPaint = 0;
+      raf = requestAnimationFrame(loop);
+    }
+    function stop() {
+      if (raf) {
+        try { cancelAnimationFrame(raf); } catch (eC) {}
+        raf = 0;
+      }
+    }
+    window.__sunnyFpsStart = start;
+    window.__sunnyFpsStop = stop;
+    start();
+  })();
+
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       tabHidden = true;
+      try { if (window.__sunnyFpsStop) window.__sunnyFpsStop(); } catch (eFps) {}
       /* opt10: abort/ignore Play WMS prefetch + in-flight frame loads */
       playLoadGen += 1;
       playLoadPending = Object.create(null);
@@ -3864,6 +4063,7 @@
       } catch (eStop) {}
     } else {
       tabHidden = false;
+      try { if (window.__sunnyFpsStart) window.__sunnyFpsStart(); } catch (eFps2) {}
       try {
         if (map && typeof map.resume === "function") map.resume();
         setCloudFrame(cloudIndex);
@@ -3891,7 +4091,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt11").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt12").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
