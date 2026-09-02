@@ -1,0 +1,20 @@
+SUNNY opt15 — GOES GeoColor time lag + mobile-web-app-capable
+==============================================================
+
+Bug — GOES-East GeoColor 404 flood after stop Play / pan:
+- Snap all GeoColor times to GIBS 10-min step (shared helper).
+- Availability lag: wall clock − 40 min ceiling so NOW never requests
+  an unpublished slot.
+- Probe one mid-disk Level7 tile backward in 10-min steps (cap 2h);
+  cache ~20 min (goesTimeCache). Prefer last-known-good from successful
+  Play WMS frame or probe when restoring static tiles on exitPlay.
+- Play WMS + static WMTS share goesLatestIsoSync / buildCloudTimes.
+- map.on("error") also filters "Not Found" / 404 (disk-edge 404s remain
+  inevitable; no proxy).
+
+Meta:
+- Keep apple-mobile-web-app-capable; ADD mobile-web-app-capable.
+
+Cache: ?v=opt15; SW CACHE=sunny-v-opt15
+Preserved: opt14 MODIS day fallback, WX_BATCH timeouts, layer order,
+Play image overlay, SUNNY_CLOUD=20, settings, FPS, PWA.
