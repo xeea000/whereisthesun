@@ -1066,6 +1066,62 @@
     applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
   }
 
+  function basemapLayerId(mode) {
+    if (mode === "satellite") return "base-sat";
+    if (mode === "dark") return "base-dark";
+    return "osm";
+  }
+
+  function restackBasemap() {
+    var layers = map.getStyle() && map.getStyle().layers;
+    if (!layers || !layers.length) return;
+    var firstOther = null;
+    var i, id;
+    for (i = 0; i < layers.length; i++) {
+      id = layers[i].id;
+      if (BASEMAP_IDS.indexOf(id) === -1) {
+        firstOther = id;
+        break;
+      }
+    }
+    if (!firstOther) return;
+    for (i = 0; i < BASEMAP_IDS.length; i++) {
+      id = BASEMAP_IDS[i];
+      if (map.getLayer(id)) map.moveLayer(id, firstOther);
+    }
+  }
+
+  function applyBaseMap() {
+    var active = basemapLayerId(basemapMode);
+    var i, id;
+    for (i = 0; i < BASEMAP_IDS.length; i++) {
+      id = BASEMAP_IDS[i];
+      if (!map.getLayer(id)) continue;
+      map.setLayoutProperty(id, "visibility", id === active ? "visible" : "none");
+    }
+    restackBasemap();
+  }
+
+  function setBasemapMode(mode) {
+    if (mode !== "roads" && mode !== "satellite" && mode !== "dark") mode = "roads";
+    basemapMode = mode;
+    try { localStorage.setItem(BASEMAP_KEY, basemapMode); } catch (eSet) {}
+    var seg = document.getElementById("basemap-seg");
+    if (seg) {
+      var buttons = seg.querySelectorAll(".seg-btn");
+      var b, m;
+      for (b = 0; b < buttons.length; b++) {
+        m = buttons[b].getAttribute("data-basemap");
+        var on = m === basemapMode;
+        if (on) buttons[b].classList.add("is-on");
+        else buttons[b].classList.remove("is-on");
+        buttons[b].setAttribute("aria-pressed", on ? "true" : "false");
+      }
+    }
+    applyBaseMap();
+    applyHires();
+  }
+
   function applyCloudOpacity() {
     if (playMode) setPlayLayerOpacity();
     applyHires();
@@ -1731,7 +1787,7 @@
     if (beachWorker) return beachWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      beachWorker = new Worker("beach-worker.js?v=opt6");
+      beachWorker = new Worker("beach-worker.js?v=opt6b");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3530,7 +3586,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt6").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt6b").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
