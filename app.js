@@ -351,7 +351,9 @@
   var PLAY_MOVE_DEBOUNCE_MS = 250; /* opt12: align with map move debounce */
   var PLAY_LRU_CAP = 24;
   var WMS_MAX_SIDE_PHONE = 960;
-  var WMS_MAX_SIDE_DESKTOP = 1280;
+  var WMS_MAX_SIDE_TABLET = 1280;
+  var WMS_MAX_SIDE_DESKTOP = 1600;
+  var WMS_MAX_SIDE_DESKTOP_HI = 2048;
   var GIBS_SRC = "gibs";
   var GIBS_LAYER = "gibs";
 
@@ -433,12 +435,30 @@
     }
   }
 
+  function cloudResamplingForZoom(z) {
+    /* opt13: nearest at z≥8 for crisper cloud pixels; linear below */
+    return (z != null && z >= 8) ? "nearest" : "linear";
+  }
+
+  function applyCloudRasterResampling() {
+    if (!map) return;
+    var mode = cloudResamplingForZoom(map.getZoom());
+    var ids = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      if (map.getLayer(ids[i])) {
+        try { map.setPaintProperty(ids[i], "raster-resampling", mode); } catch (eRs) {}
+      }
+    }
+  }
+
   function cloudRasterPaint(opacity) {
     /* Approximate former CSS screen+filter look via MapLibre raster paint */
     var solid = cloudOpacity >= 0.82;
+    var z = map && typeof map.getZoom === "function" ? map.getZoom() : 0;
     return {
       "raster-opacity": opacity == null ? 0 : opacity,
-      "raster-resampling": "linear",
+      "raster-resampling": cloudResamplingForZoom(z),
       "raster-fade-duration": 0,
       "raster-brightness-min": solid ? 0 : 0.02,
       "raster-brightness-max": solid ? 1 : 0.92,
@@ -518,15 +538,28 @@
   }
 
   function wmsMaxSide() {
-    /* opt8 D: adaptive WMS max side — phone/narrow 960, desktop 1280; respect DPR */
+    /* opt13: phone ~960, tablet ~1280, desktop 1600–2048; gate by width/DPR (no mobile data blow) */
     var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
     var cw = (el && el.clientWidth) || window.innerWidth || 800;
     var dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    var ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
     var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
-    var phone = narrow || (typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || ""));
-    var cap = phone ? WMS_MAX_SIDE_PHONE : WMS_MAX_SIDE_DESKTOP;
-    if (dpr >= 2.5 && phone) cap = Math.min(cap, 960);
-    else if (dpr >= 2 && !phone) cap = Math.min(cap, WMS_MAX_SIDE_DESKTOP);
+    var phone = narrow || /Mobi|Android|iPhone/i.test(ua);
+    var tablet = !phone && (cw < 1100 || /iPad|Tablet/i.test(ua));
+    var cap;
+    if (phone) {
+      cap = WMS_MAX_SIDE_PHONE;
+      if (dpr >= 2.5) cap = Math.min(cap, 960);
+    } else if (tablet) {
+      cap = WMS_MAX_SIDE_TABLET;
+      if (dpr >= 2.5 && cw < 900) cap = Math.min(cap, 1280);
+    } else if (cw >= 1400 && dpr >= 1.5) {
+      cap = WMS_MAX_SIDE_DESKTOP_HI;
+    } else if (cw >= 1100) {
+      cap = WMS_MAX_SIDE_DESKTOP;
+    } else {
+      cap = WMS_MAX_SIDE_TABLET;
+    }
     return cap;
   }
 
@@ -1266,9 +1299,10 @@
 
   function applyCloudPaintMain(layerId, opacity) {
     if (!map.getLayer(layerId)) return;
+    var z = typeof map.getZoom === "function" ? map.getZoom() : 0;
     var paint = {
       "raster-opacity": opacity,
-      "raster-resampling": "linear",
+      "raster-resampling": cloudResamplingForZoom(z),
       "raster-fade-duration": 0
     };
     var key;
@@ -1283,24 +1317,39 @@
     if (tabHidden || playMode) return;
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
-    /* Hires overlays only at NOW (not scrubbing / play). GOES GeoColor stays base. */
-    var wantSharp = atNow && z >= 5.6;
+    /* opt13: hires only at NOW. Far=GeoColor; mid=light VIIRS/MODIS; close=favor sharp+IEM. */
+    var HIRES_Z = 5.5;
+    var IEM_Z = 6.0;
+    var wantSharp = atNow && z >= HIRES_Z;
     if (wantSharp) {
       addHiresSources();
-      var sharp = Math.min(0.94, cloudOpacity);
+      var sharp = Math.min(0.96, cloudOpacity);
+      /* 0 at z=5.5 → 1 at z≈7.5 */
+      var t = Math.max(0, Math.min(1, (z - HIRES_Z) / 2.0));
+      /* Stronger when zoomed; still respect slider (don't bury basemap at low opacity) */
+      var modisOp = Math.min(sharp * (0.40 + 0.32 * t), cloudOpacity * 0.88);
+      var viirsOp = Math.min(sharp * (0.30 + 0.28 * t), cloudOpacity * 0.78);
       if (map.getLayer("modis")) {
         map.setLayoutProperty("modis", "visibility", "visible");
-        applyCloudPaintMain("modis", sharp * 0.55);
+        applyCloudPaintMain("modis", modisOp);
       }
       if (map.getLayer("viirs")) {
         map.setLayoutProperty("viirs", "visibility", "visible");
-        applyCloudPaintMain("viirs", sharp * 0.4);
+        applyCloudPaintMain("viirs", viirsOp);
       }
       if (map.getLayer("iem-vis")) {
-        var vis = z >= 6.5 ? (0.45 * cloudOpacity) : 0;
-        map.setLayoutProperty("iem-vis", "visibility", vis > 0 ? "visible" : "none");
+        var iemT = z >= IEM_Z ? Math.max(0, Math.min(1, (z - IEM_Z) / 1.5)) : 0;
+        var vis = z >= IEM_Z ? Math.min(0.62, 0.40 + 0.22 * iemT) * cloudOpacity : 0;
+        map.setLayoutProperty("iem-vis", "visibility", vis > 0.02 ? "visible" : "none");
         applyCloudPaintMain("iem-vis", vis);
       }
+      /* Close NOW: ease GeoColor down so sharp layers read (never zero) */
+      var gibsOp = gibsEffectiveOpacity();
+      if (z >= 6.2) {
+        var gReduce = Math.min(0.42, (z - 6.2) * 0.22);
+        gibsOp = Math.max(cloudOpacity * 0.32, gibsOp * (1 - gReduce));
+      }
+      applyCloudPaint(GIBS_LAYER, gibsOp);
     } else {
       ["modis", "viirs", "iem-vis"].forEach(function (id) {
         if (map.getLayer(id)) {
@@ -1308,9 +1357,10 @@
           applyCloudPaintMain(id, 0);
         }
       });
+      /* Scrub/Play path hides hires elsewhere; far NOW = GeoColor only */
+      applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
     }
-    /* Single GIBS layer — never collapse opacity to blank */
-    applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+    applyCloudRasterResampling();
     restackCloudRasters();
   }
 
@@ -2066,7 +2116,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt12");
+      beachWorker = new Worker("beach-worker.js?v=opt13");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3844,6 +3894,7 @@
   map.on("zoomend", function () {
     if (playMode) {
       onPlayViewChanged();
+      applyCloudRasterResampling();
       return;
     }
     syncCloudMap(true);
@@ -3869,6 +3920,7 @@
     saveLastViewDebounced();
     if (moveTimer) clearTimeout(moveTimer);
     moveTimer = setTimeout(function () {
+      applyCloudRasterResampling();
       paintBeaches(beaches);
       if (allMode) {
         loadViewBeaches();
@@ -4091,7 +4143,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt12").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt13").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
