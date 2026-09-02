@@ -273,7 +273,7 @@
     });
   }
 
-/* === BEGIN CLOUD STATIC + PLAY IMAGE OVERLAY (opt6) === */
+/* === BEGIN CLOUD STATIC + PLAY IMAGE OVERLAY (opt6/7 + opt8 smooth) === */
   /*
    * opt6: Abandon MapLibre tile animation for Play (opt5 double-buffer flickered
    * because clearTiles / source rebuild blanked the visible buffer).
@@ -283,13 +283,15 @@
    *   NASA GIBS WMS GetMap, mix-blend-mode:screen, double-buffer crossfade.
    *   Never clear to empty — hold previous image until next onload.
    */
-  var CLOUD_FADE_MS = 350;
-  var PLAY_DWELL_MS = 800;
-  var FRAME_LOAD_STUCK_MS = 1200;
-  var FRAME_PLAY_STEP = 3; /* 30 min while playing (cloudTimes are 10-min) */
-  var PLAY_PREFETCH = 2;
+  var CLOUD_FADE_MS = 520; /* rAF crossfade ~450–600ms */
+  var PLAY_DWELL_MS = 250; /* min dwell after reveal when next is cached */
+  var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
+  var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
+  var PLAY_PREFETCH = 5; /* prefetch 4–6 frames ahead */
   var PLAY_MOVE_DEBOUNCE_MS = 300;
-  var WMS_MAX_SIDE = 1280;
+  var PLAY_LRU_CAP = 24;
+  var WMS_MAX_SIDE_PHONE = 960;
+  var WMS_MAX_SIDE_DESKTOP = 1280;
   var GIBS_SRC = "gibs";
   var GIBS_LAYER = "gibs";
 
@@ -301,12 +303,14 @@
   var playBusy = false;
   var playMode = false;
   var playFrontBuf = "a";
-  var playImgCache = Object.create(null);
+  var playImgCache = Object.create(null); /* LRU: key -> {ok,url,img,key} */
+  var playLruOrder = []; /* oldest → newest keys */
+  var playLoadPending = Object.create(null);
   var playLoadGen = 0;
+  var playFadeRaf = 0;
   var playMoveTimer = null;
   var playCorsOk = null; /* null=untested, true/false */
   var playUseOpenMeteo = false;
-  var cloudFadeTimer = null;
   var loadingFrameHint = false;
   var frameWaitStarted = 0;
 
@@ -368,13 +372,14 @@
 
   function syncCloudMap(force) {
     if (!cloudMap || !map) return;
+    /* opt8 E: during Play skip continuous sync; only debounced moveend passes force */
+    if (playMode && !force) return;
     try {
       var c = map.getCenter();
       var z = map.getZoom();
       var b = map.getBearing();
       var p = map.getPitch();
       cloudMap.jumpTo({ center: c, zoom: z, bearing: b, pitch: p });
-      void force;
     } catch (eSync) {}
   }
 
@@ -441,24 +446,83 @@
     return { minx: minx, miny: miny, maxx: maxx, maxy: maxy };
   }
 
+  function wmsMaxSide() {
+    /* opt8 D: adaptive WMS max side — phone/narrow 960, desktop 1280; respect DPR */
+    var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
+    var cw = (el && el.clientWidth) || window.innerWidth || 800;
+    var dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
+    var phone = narrow || (typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || ""));
+    var cap = phone ? WMS_MAX_SIDE_PHONE : WMS_MAX_SIDE_DESKTOP;
+    if (dpr >= 2.5 && phone) cap = Math.min(cap, 960);
+    else if (dpr >= 2 && !phone) cap = Math.min(cap, WMS_MAX_SIDE_DESKTOP);
+    return cap;
+  }
+
   function playImageSize() {
     var el = map.getContainer ? map.getContainer() : document.getElementById("map");
     var w = (el && el.clientWidth) || window.innerWidth || 800;
     var h = (el && el.clientHeight) || window.innerHeight || 600;
+    var cap = wmsMaxSide();
     var maxSide = Math.max(w, h);
-    if (maxSide > WMS_MAX_SIDE) {
-      var s = WMS_MAX_SIDE / maxSide;
+    if (maxSide > cap) {
+      var s = cap / maxSide;
       w = Math.max(64, Math.round(w * s));
       h = Math.max(64, Math.round(h * s));
     }
-    w = Math.max(64, Math.min(WMS_MAX_SIDE, Math.round(w)));
-    h = Math.max(64, Math.min(WMS_MAX_SIDE, Math.round(h)));
+    w = Math.max(64, Math.min(cap, Math.round(w)));
+    h = Math.max(64, Math.min(cap, Math.round(h)));
     return { w: w, h: h };
+  }
+
+  function roundPlayBbox(box) {
+    /* Stable LRU / URL key — ~100m web-mercator grid */
+    function r(v) { return Math.round(v / 100) * 100; }
+    return { minx: r(box.minx), miny: r(box.miny), maxx: r(box.maxx), maxy: r(box.maxy) };
+  }
+
+  function playFrameKey(iso, box, sz) {
+    return String(iso) + "|" + box.minx + "," + box.miny + "," + box.maxx + "," + box.maxy + "|" + sz.w + "x" + sz.h;
+  }
+
+  function playLruTouch(key) {
+    var i = playLruOrder.indexOf(key);
+    if (i >= 0) playLruOrder.splice(i, 1);
+    playLruOrder.push(key);
+  }
+
+  function playLruGet(key) {
+    var rec = playImgCache[key];
+    if (!rec || !rec.ok) return null;
+    playLruTouch(key);
+    return rec;
+  }
+
+  function playLruSet(key, rec) {
+    if (!rec || !rec.ok) return;
+    rec.key = key;
+    if (playImgCache[key]) {
+      playImgCache[key] = rec;
+      playLruTouch(key);
+      return;
+    }
+    while (playLruOrder.length >= PLAY_LRU_CAP) {
+      var old = playLruOrder.shift();
+      if (old && playImgCache[old]) delete playImgCache[old];
+    }
+    playImgCache[key] = rec;
+    playLruOrder.push(key);
+  }
+
+  function playLruClear() {
+    playImgCache = Object.create(null);
+    playLruOrder = [];
+    playLoadPending = Object.create(null);
   }
 
   function gibsWmsUrl(iso, lon) {
     var layer = goesLayer(lon == null ? -79 : lon);
-    var box = mapBbox3857();
+    var box = roundPlayBbox(mapBbox3857());
     var sz = playImageSize();
     return "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi" +
       "?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0" +
@@ -468,6 +532,13 @@
       "&CRS=EPSG:3857" +
       "&BBOX=" + box.minx + "," + box.miny + "," + box.maxx + "," + box.maxy +
       "&TIME=" + encodeURIComponent(iso);
+  }
+
+  function gibsWmsFrameMeta(iso, lon) {
+    var box = roundPlayBbox(mapBbox3857());
+    var sz = playImageSize();
+    var url = gibsWmsUrl(iso, lon);
+    return { iso: iso, box: box, sz: sz, url: url, key: playFrameKey(iso, box, sz) };
   }
 
   function ensurePlayLayer() {
@@ -495,7 +566,12 @@
   function setPlayLayerOpacity() {
     var layer = document.getElementById("cloud-play-layer");
     if (!layer) return;
-    layer.style.setProperty("--cloud-play-op", String(gibsEffectiveOpacity()));
+    var op = gibsEffectiveOpacity();
+    layer.style.setProperty("--cloud-play-op", String(op));
+    var front = playBufEl(playFrontBuf);
+    if (front && front.classList.contains("is-front")) {
+      front.style.opacity = String(op);
+    }
   }
 
   function setMapLibreCloudsHidden(hidden) {
@@ -665,7 +741,7 @@
           playUseOpenMeteo = true;
           try { console.warn("GIBS WMS image load failed; Play falls back to Open-Meteo cloud grid.", note || ""); } catch (eW) {}
         } else {
-          try { console.info("GIBS WMS Play frames OK (opt6 image overlay)"); } catch (eI) {}
+          try { console.info("GIBS WMS Play frames OK (opt8 smooth image overlay)"); } catch (eI) {}
         }
         resolve(playCorsOk);
       }
@@ -685,19 +761,20 @@
     });
   }
 
-  function loadImageSrc(url, preferCors) {
-    return new Promise(function (resolve) {
-      if (playImgCache[url] && playImgCache[url].ok) {
-        resolve(playImgCache[url]);
-        return;
-      }
+  function loadImageSrc(url, preferCors, cacheKey) {
+    var key = cacheKey || url;
+    var hit = playLruGet(key);
+    if (hit) return Promise.resolve(hit);
+    if (playLoadPending[key]) return playLoadPending[key];
+    var p = new Promise(function (resolve) {
       var img = new Image();
       var settled = false;
       function finish(ok) {
         if (settled) return;
         settled = true;
-        var rec = { ok: !!ok, url: url, img: img };
-        if (ok) playImgCache[url] = rec;
+        delete playLoadPending[key];
+        var rec = { ok: !!ok, url: url, img: img, key: key };
+        if (ok) playLruSet(key, rec);
         resolve(rec);
       }
       img.onload = function () { finish(true); };
@@ -711,9 +788,51 @@
         if (!settled) finish(img.naturalWidth > 0);
       }, 15000);
     });
+    playLoadPending[key] = p;
+    return p;
   }
 
-  function crossfadePlayImage(url) {
+  function cancelPlayFade() {
+    if (playFadeRaf) {
+      try { cancelAnimationFrame(playFadeRaf); } catch (eC) {}
+      playFadeRaf = 0;
+    }
+  }
+
+  function rafCrossfade(back, front, gen, resolve) {
+    var targetOp = gibsEffectiveOpacity();
+    var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    var dur = CLOUD_FADE_MS;
+    back.style.opacity = "0";
+    back.classList.add("is-front");
+    function easeInOut(t) {
+      return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    }
+    function step(now) {
+      playFadeRaf = 0;
+      if (gen !== playLoadGen) {
+        resolve(false);
+        return;
+      }
+      var t = Math.min(1, (now - start) / dur);
+      var e = easeInOut(t);
+      back.style.opacity = String(targetOp * e);
+      if (front) front.style.opacity = String(targetOp * (1 - e));
+      if (t < 1) {
+        playFadeRaf = requestAnimationFrame(step);
+      } else {
+        back.style.opacity = String(targetOp);
+        if (front) {
+          front.style.opacity = "0";
+          front.classList.remove("is-front");
+        }
+        resolve(true);
+      }
+    }
+    playFadeRaf = requestAnimationFrame(step);
+  }
+
+  function crossfadePlayImage(url, cacheKey) {
     return new Promise(function (resolve) {
       var backId = playFrontBuf === "a" ? "b" : "a";
       var back = playBufEl(backId);
@@ -723,6 +842,7 @@
         return;
       }
       var gen = ++playLoadGen;
+      cancelPlayFade();
       frameWaitStarted = Date.now();
       var stuckTimer = setTimeout(function () {
         if (gen === playLoadGen) showLoadingFrameHint(true);
@@ -741,17 +861,14 @@
           return;
         }
         setPlayLayerOpacity();
-        back.classList.add("is-front");
-        if (front) front.classList.remove("is-front");
-        playFrontBuf = backId;
-        if (cloudFadeTimer) clearTimeout(cloudFadeTimer);
-        cloudFadeTimer = setTimeout(function () {
-          cloudFadeTimer = null;
-          resolve(true);
-        }, CLOUD_FADE_MS);
+        /* Mark back as incoming front; rAF lerps opacity (no CSS flash) */
+        rafCrossfade(back, front, gen, function (ok) {
+          if (ok) playFrontBuf = backId;
+          resolve(ok);
+        });
       }
 
-      loadImageSrc(url, false).then(function (rec) {
+      loadImageSrc(url, false, cacheKey).then(function (rec) {
         if (gen !== playLoadGen) {
           clearTimeout(stuckTimer);
           resolve(false);
@@ -764,7 +881,6 @@
           resolve(false);
           return;
         }
-        back.classList.remove("is-front");
         if (back.src === rec.url && back.complete && back.naturalWidth) {
           reveal();
           return;
@@ -787,6 +903,9 @@
           showLoadingFrameHint(false);
           resolve(false);
         };
+        /* Keep back behind until loaded — do not blank front */
+        if (back.classList.contains("is-front")) back.classList.remove("is-front");
+        back.style.opacity = "0";
         back.src = rec.url;
         if (back.complete && back.naturalWidth) onReady();
       });
@@ -802,9 +921,9 @@
       if (idx > sliderMax()) idx = sliderMax();
       if (idx === fromIndex) continue;
       var iso = cloudTimes[idx];
-      var url = gibsWmsUrl(iso, lon);
-      if (!playImgCache[url]) {
-        loadImageSrc(url, false);
+      var meta = gibsWmsFrameMeta(iso, lon);
+      if (!playImgCache[meta.key] && !playLoadPending[meta.key]) {
+        loadImageSrc(meta.url, false, meta.key);
       }
     }
   }
@@ -911,8 +1030,8 @@
     if (playUseOpenMeteo) {
       return paintOpenMeteoFrame(iso);
     }
-    var url = gibsWmsUrl(iso, origin ? origin.lon : null);
-    return crossfadePlayImage(url).then(function (ok) {
+    var meta = gibsWmsFrameMeta(iso, origin ? origin.lon : null);
+    return crossfadePlayImage(meta.url, meta.key).then(function (ok) {
       if (!ok && playCorsOk === false) {
         playUseOpenMeteo = true;
         return paintOpenMeteoFrame(iso);
@@ -929,14 +1048,27 @@
     showPlayOverlay();
     setMapLibreCloudsHidden(true);
     setPlayLayerOpacity();
+    /* opt8 E: pause cloud MapLibre render loop during Play */
+    if (cloudMap && typeof cloudMap.stop === "function") {
+      try { cloudMap.stop(); } catch (eStop) {}
+    }
   }
 
   function exitPlayMode() {
     playMode = false;
     playLoadGen += 1;
+    cancelPlayFade();
     if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
     hidePlayOverlay();
     setMapLibreCloudsHidden(false);
+    /* opt8 E: resume cloud map paint after Play */
+    if (cloudMap) {
+      try {
+        if (typeof cloudMap.resize === "function") cloudMap.resize();
+        if (typeof cloudMap.triggerRepaint === "function") cloudMap.triggerRepaint();
+      } catch (eRes) {}
+      syncCloudMap(true);
+    }
     /* restore MapLibre to current slider time WITHOUT clearTiles flicker */
     if (cloudTimes.length) {
       var url = gibsTiles(cloudTimes[cloudIndex], origin ? origin.lon : null);
@@ -946,12 +1078,15 @@
 
   function onPlayViewChanged() {
     if (!playMode || tabHidden) return;
+    /* keep last image visible; debounce bbox reload */
     if (playMoveTimer) clearTimeout(playMoveTimer);
     playMoveTimer = setTimeout(function () {
       playMoveTimer = null;
       if (!playMode) return;
-      /* purge cache — bbox changed; keep last image visible until new loads */
-      playImgCache = Object.create(null);
+      /* opt8 E: one sync at debounced moveend only */
+      syncCloudMap(true);
+      /* purge LRU — bbox changed; keep last image visible until new loads */
+      playLruClear();
       omPlayGrid = null;
       omPlayPromise = null;
       if (cloudTimes.length) {
@@ -1783,7 +1918,10 @@
   }
 
 
-  /* --- beach worker + binary shards (opt5) --- */
+  /* --- beach worker + binary shards (opt5/8) ---
+   * opt8 C: lazy Worker — do NOT new Worker at startup; create on first
+   * region/decode need via getBeachWorker(); main-thread fallback always kept.
+   */
   var beachWorker = null;
   var beachWorkerSeq = 0;
   var beachWorkerPending = Object.create(null);
@@ -1794,7 +1932,8 @@
     if (beachWorker) return beachWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      beachWorker = new Worker("beach-worker.js?v=opt7");
+      /* created only when a region fetch actually needs decode off-main */
+      beachWorker = new Worker("beach-worker.js?v=opt8");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3359,9 +3498,9 @@
           setCloudFrame(sliderMax(), { forceHires: true });
           return;
         }
-        var elapsed = Date.now() - t0;
-        var wait = Math.max(40, PLAY_DWELL_MS - elapsed);
-        schedule(wait);
+        /* Min dwell after reveal; next frame already prefetching into LRU */
+        void t0;
+        schedule(PLAY_DWELL_MS);
       }).catch(function () {
         playBusy = false;
         if (playSession === session) {
@@ -3390,9 +3529,12 @@
   }
 
   map.on("zoomend", function () {
+    if (playMode) {
+      onPlayViewChanged();
+      return;
+    }
     syncCloudMap(true);
-    if (playMode) onPlayViewChanged();
-    else applyHires();
+    applyHires();
   });
 
   map.on("move", function () {
@@ -3400,16 +3542,23 @@
   });
 
   map.on("resize", function () {
+    if (playMode) {
+      onPlayViewChanged();
+      return;
+    }
     if (cloudMap) {
       try { cloudMap.resize(); } catch (eR) {}
       syncCloudMap(true);
     }
-    if (playMode) onPlayViewChanged();
   });
 
   map.on("moveend", function () {
-    syncCloudMap(true);
-    if (playMode) onPlayViewChanged();
+    if (playMode) {
+      /* debounced inside onPlayViewChanged; keeps last image visible */
+      onPlayViewChanged();
+    } else {
+      syncCloudMap(true);
+    }
     if (moveTimer) clearTimeout(moveTimer);
     moveTimer = setTimeout(function () {
       paintBeaches(beaches);
@@ -3595,7 +3744,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt7").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt8").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

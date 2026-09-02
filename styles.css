@@ -94,12 +94,15 @@ html, body {
   height: 100%;
   object-fit: fill;
   opacity: 0;
-  transition: opacity 350ms ease;
+  /* opacity lerped by rAF in app.js (opt8) — no CSS flash */
+  transition: none;
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+  will-change: opacity;
 }
 #cloud-play-layer .cloud-play-buf.is-front {
+  /* JS sets inline opacity to --cloud-play-op; class marks front buffer */
   opacity: var(--cloud-play-op, 0.72);
 }
 

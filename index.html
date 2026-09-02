@@ -4,14 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
-  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=opt7">
-  <link rel="stylesheet" href="styles.css?v=opt7">
+  <link rel="preconnect" href="https://gibs.earthdata.nasa.gov" crossorigin>
+  <link rel="dns-prefetch" href="https://gibs.earthdata.nasa.gov">
+  <link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
+  <link rel="dns-prefetch" href="https://api.open-meteo.com">
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+  <link rel="dns-prefetch" href="https://tiles.openfreemap.org">
+  <link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
+  <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=opt8">
+  <link rel="stylesheet" href="styles.css?v=opt8">
 </head>
 <body>
   <div id="map"></div>
   <!-- Cloud overlay map: CSS mix-blend-mode:screen (MapLibre rasters have no blend-mode). -->
   <div id="cloud-map" aria-hidden="true"></div>
-  <!-- Play-only cloud image overlay (opt7): WMS GetMap double-buffer, screen blend -->
+  <!-- Play-only cloud image overlay (opt8): WMS GetMap double-buffer, screen blend -->
   <div id="cloud-play-layer" aria-hidden="true" hidden>
     <img class="cloud-play-buf cloud-play-a" alt="" draggable="false">
     <img class="cloud-play-buf cloud-play-b" alt="" draggable="false">
@@ -71,7 +79,7 @@
     <p id="sunny-sheet-sub" class="sheet-sub"></p>
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
-  <!-- MapLibre loaded async from app.js (?v=opt7) so first paint stays light -->
-  <script src="app.js?v=opt7"></script>
+  <!-- MapLibre loaded async from app.js (?v=opt8) so first paint stays light -->
+  <script src="app.js?v=opt8"></script>
 </body>
 </html>
