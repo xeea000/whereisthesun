@@ -31,8 +31,8 @@ html, body {
 }
 
 /*
- * Cloud overlay (opt5): separate MapLibre map, black background, CSS mix-blend-mode:screen.
- * Bright cloud pixels lighten the basemap; dark pixels stay neutral. Pointer-events none.
+ * Cloud overlay: separate MapLibre map for static/scrub (opt6), black bg + screen blend.
+ * Play uses #cloud-play-layer (DOM images) instead of MapLibre tile animation.
  */
 #cloud-map {
   position: fixed; /* fallback before reparent; becomes absolute inside canvas container */
@@ -45,6 +45,10 @@ html, body {
   mix-blend-mode: screen;
   background: #000;
 }
+#cloud-map.is-play-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
 .maplibregl-canvas-container > #cloud-map {
   position: absolute;
   z-index: 2; /* above basemap canvas, under marker pane */
@@ -56,6 +60,47 @@ html, body {
 #cloud-map .maplibregl-ctrl-top-left,
 #cloud-map .maplibregl-ctrl-top-right {
   display: none !important;
+}
+
+/* Play image overlay — double-buffered <img>, screen blend, never pointer-capture */
+#cloud-play-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: #000;
+  --cloud-play-op: 0.72;
+}
+.maplibregl-canvas-container > #cloud-play-layer {
+  position: absolute;
+  z-index: 3;
+  height: 100%;
+}
+#cloud-play-layer[hidden],
+#cloud-play-layer:not(.is-active) {
+  display: none !important;
+}
+#cloud-play-layer.is-active {
+  display: block !important;
+}
+#cloud-play-layer .cloud-play-buf {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  opacity: 0;
+  transition: opacity 350ms ease;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+#cloud-play-layer .cloud-play-buf.is-front {
+  opacity: var(--cloud-play-op, 0.72);
 }
 
 .hud {
