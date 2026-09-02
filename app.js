@@ -413,10 +413,28 @@
   }
 
   function gibsEffectiveOpacity() {
-    /* Full cloudOpacity always (no 0.42 crush under screen blend). Slight boost. */
+    /* Full opacity for solid mode; slight boost still OK for screen mode. */
+    if (cloudOpacity >= 0.82) return Math.min(1, cloudOpacity);
     var op = Math.min(1, cloudOpacity * 1.05);
     return Math.max(0, Math.min(1, op));
   }
+
+  function applyCloudSolidMode() {
+    /* screen blend can never fully obscure the basemap; at high opacity use normal */
+    var solid = cloudOpacity >= 0.82;
+    var cm = document.getElementById("cloud-map");
+    var pl = document.getElementById("cloud-play-layer");
+    if (cm) {
+      if (solid) cm.classList.add("clouds-solid");
+      else cm.classList.remove("clouds-solid");
+    }
+    if (pl) {
+      if (solid) pl.classList.add("clouds-solid");
+      else pl.classList.remove("clouds-solid");
+    }
+  }
+
+
 
   function gibsHostLayerKey(url) {
     try {
@@ -1968,7 +1986,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt9");
+      beachWorker = new Worker("beach-worker.js?v=opt9b");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3630,6 +3648,7 @@
     slider.max = String(sliderMax());
     slider.value = String(sliderMax());
     ensureBeachLayers();
+    applyCloudSolidMode();
     setBasemapMode(basemapMode);
     if (overlayVisible()) restackOverlay();
     ensureCloudMap();
@@ -3793,7 +3812,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt9").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt9b").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

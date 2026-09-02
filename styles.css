@@ -42,9 +42,14 @@ html, body {
   height: 100dvh;
   z-index: 1;
   pointer-events: none;
-  mix-blend-mode: screen;
+  mix-blend-mode: screen; /* JS adds .clouds-solid → normal at high opacity */
   background: #000;
   filter: contrast(1.15) brightness(1.05);
+}
+#cloud-map.clouds-solid {
+  mix-blend-mode: normal;
+  background: transparent;
+  filter: contrast(1.08) brightness(1.02);
 }
 #cloud-map.is-play-hidden {
   opacity: 0;
@@ -63,6 +68,24 @@ html, body {
   display: none !important;
 }
 
+/* Main map: kill empty/white bottom-left control stack under the timeline */
+#map .maplibregl-ctrl-bottom-left {
+  display: none !important;
+}
+#map .maplibregl-ctrl-bottom-right {
+  margin-bottom: 12px;
+  margin-right: 8px;
+}
+#map .maplibregl-ctrl-attrib {
+  background: rgba(18, 20, 23, 0.82) !important;
+  color: #c8cdd4 !important;
+  border-radius: 8px;
+  box-shadow: none;
+}
+#map .maplibregl-ctrl-attrib a {
+  color: #9ec5ff !important;
+}
+
 /* Play image overlay — double-buffered <img>, screen blend, never pointer-capture */
 #cloud-play-layer {
   position: fixed;
@@ -76,6 +99,11 @@ html, body {
   background: #000;
   filter: contrast(1.15) brightness(1.05);
   --cloud-play-op: 0.90;
+}
+#cloud-play-layer.clouds-solid {
+  mix-blend-mode: normal;
+  background: transparent;
+  filter: contrast(1.08) brightness(1.02);
 }
 .maplibregl-canvas-container > #cloud-play-layer {
   position: absolute;
