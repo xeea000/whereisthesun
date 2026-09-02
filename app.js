@@ -48,6 +48,7 @@
   var cloudOpacityEl = document.getElementById("cloud-opacity");
   var toggleMap = document.getElementById("toggle-map");
   var toggleIntl = document.getElementById("toggle-intl");
+  var toggleRadar = document.getElementById("toggle-radar");
 
   var origin = null;
   var homeCountry = null;
@@ -76,6 +77,7 @@
   var OPACITY_KEY = "sunny-cloud-opacity";
   var LABELS_KEY = "sunny-labels";
   var INTL_KEY = "sunny-intl";
+  var RADAR_KEY = "sunny-radar";
   var VIEW_KEY = "sunny-last-view";
   var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
   var basemapMode = "roads";
@@ -111,6 +113,12 @@
       toggleIntl.checked = savedIntl === "1";
     }
   } catch (eIntl) {}
+  try {
+    var savedRadar = localStorage.getItem(RADAR_KEY);
+    if (toggleRadar && (savedRadar === "1" || savedRadar === "0")) {
+      toggleRadar.checked = savedRadar === "1";
+    }
+  } catch (eRadar) {}
   var allMode = false;
   var nearbyBeaches = [];
   var viewGen = 0;
@@ -222,7 +230,7 @@
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
-    new maplibregl.AttributionControl({ compact: true, customAttribution: "NASA GIBS / NOAA GOES · Open-Meteo · free tiles" }),
+    new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · free tiles' }),
     "bottom-right"
   );
 
@@ -684,7 +692,8 @@
   }
 
   function cloudStackBefore() {
-    /* Insert cloud rasters under Labels overlay if present, else under beaches */
+    /* Insert cloud rasters under radar (opt16), else Labels, else beaches */
+    if (map.getLayer("radar")) return "radar";
     var i, id;
     for (i = 0; i < overlayIds.length; i++) {
       id = overlayIds[i];
@@ -692,6 +701,23 @@
     }
     if (map.getLayer("beaches-fill")) return "beaches-fill";
     return undefined;
+  }
+
+  function radarStackBefore() {
+    /* Radar above clouds, under Labels / beaches */
+    var i, id;
+    for (i = 0; i < overlayIds.length; i++) {
+      id = overlayIds[i];
+      if (map.getLayer(id)) return id;
+    }
+    if (map.getLayer("beaches-fill")) return "beaches-fill";
+    return undefined;
+  }
+
+  function restackRadar() {
+    if (!map || !map.getLayer("radar")) return;
+    var before = radarStackBefore();
+    try { map.moveLayer("radar", before); } catch (eMvR) {}
   }
 
   function restackCloudRasters() {
@@ -1765,6 +1791,7 @@
       }, before);
     }
     restackCloudRasters();
+    restackRadar();
   }
 
   /* legacy aliases */
@@ -1784,8 +1811,11 @@
   function restackOverlay() {
     restackBasemap();
     restackCloudRasters();
+    restackRadar();
     if (!overlayVisible()) {
       applyOverlay();
+      restackCloudRasters();
+      restackRadar();
       return;
     }
     ensureOverlayLayers();
@@ -1794,8 +1824,9 @@
     overlayIds.forEach(function (id) {
       if (map.getLayer(id)) map.moveLayer(id, before);
     });
-    /* Keep clouds under Labels: basemap → clouds/hires → labels → beaches */
+    /* basemap → clouds/hires → radar → labels → beaches */
     restackCloudRasters();
+    restackRadar();
     applyOverlay();
   }
 
@@ -1903,6 +1934,7 @@
       }
     }, before);
     restackCloudRasters();
+    restackRadar();
   }
 
   function ensureBeachLayers() {
@@ -2387,7 +2419,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt15");
+      beachWorker = new Worker("beach-worker.js?v=opt16");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4049,6 +4081,151 @@
   }
 
 
+
+  /* === BEGIN RAINVIEWER RADAR (opt16) === */
+  var RADAR_SRC = "radar";
+  var RADAR_LAYER = "radar";
+  var RADAR_OPACITY = 0.7;
+  var RADAR_REFRESH_MS = 6 * 60 * 1000; /* ~6 min while Radar on + tab visible */
+  var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
+  var RADAR_OPTS = "1_1"; /* smoothed + snow */
+  var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
+  var radarRefreshTimer = null;
+  var radarFetchGen = 0;
+  var radarHost = null;
+  var radarPath = null;
+
+  function radarOn() {
+    return !!(toggleRadar && toggleRadar.checked);
+  }
+
+  function radarTileUrl(host, path) {
+    return String(host) + String(path) + "/256/{z}/{x}/{y}/" + RADAR_COLOR + "/" + RADAR_OPTS + ".png";
+  }
+
+  function pickRadarFrame(data) {
+    var past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past : [];
+    var nowcast = (data && data.radar && Array.isArray(data.radar.nowcast)) ? data.radar.nowcast : [];
+    /* Prefer latest past for stability; nowcast only if past empty */
+    if (past.length) return past[past.length - 1];
+    if (nowcast.length) return nowcast[nowcast.length - 1];
+    return null;
+  }
+
+  function stopRadarRefresh() {
+    if (radarRefreshTimer) {
+      clearInterval(radarRefreshTimer);
+      radarRefreshTimer = null;
+    }
+  }
+
+  function startRadarRefresh() {
+    stopRadarRefresh();
+    if (!radarOn() || tabHidden) return;
+    radarRefreshTimer = setInterval(function () {
+      if (!radarOn() || tabHidden) {
+        stopRadarRefresh();
+        return;
+      }
+      fetchAndApplyRadar({ quiet: true });
+    }, RADAR_REFRESH_MS);
+  }
+
+  function ensureRadarLayer(url) {
+    if (!map || !url) return;
+    var before = radarStackBefore();
+    if (!map.getSource(RADAR_SRC)) {
+      map.addSource(RADAR_SRC, {
+        type: "raster",
+        tiles: [url],
+        tileSize: 256,
+        maxzoom: 7, /* RainViewer native max; MapLibre overzooms beyond */
+        attribution: '<a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>'
+      });
+    } else {
+      var src = map.getSource(RADAR_SRC);
+      if (src && typeof src.setTiles === "function") {
+        try {
+          var cur = (src.tiles && src.tiles[0]) || "";
+          if (cur !== url) src.setTiles([url]);
+        } catch (eSet) {
+          try { src.setTiles([url]); } catch (e2) {}
+        }
+      }
+    }
+    if (!map.getLayer(RADAR_LAYER)) {
+      map.addLayer({
+        id: RADAR_LAYER,
+        type: "raster",
+        source: RADAR_SRC,
+        paint: {
+          "raster-opacity": RADAR_OPACITY,
+          "raster-fade-duration": 0,
+          "raster-resampling": "linear"
+        }
+      }, before);
+    } else {
+      try { map.setLayoutProperty(RADAR_LAYER, "visibility", "visible"); } catch (eVis) {}
+      try { map.moveLayer(RADAR_LAYER, before); } catch (eMv) {}
+    }
+    restackCloudRasters();
+    restackRadar();
+  }
+
+  function hideRadarLayer() {
+    stopRadarRefresh();
+    radarFetchGen += 1;
+    radarHost = null;
+    radarPath = null;
+    if (!map) return;
+    if (map.getLayer(RADAR_LAYER)) {
+      try { map.removeLayer(RADAR_LAYER); } catch (eRmL) {}
+    }
+    if (map.getSource(RADAR_SRC)) {
+      try { map.removeSource(RADAR_SRC); } catch (eRmS) {}
+    }
+  }
+
+  function fetchAndApplyRadar(opts) {
+    opts = opts || {};
+    if (!radarOn() || !map) return Promise.resolve(false);
+    var gen = ++radarFetchGen;
+    return fetch(RADAR_MANIFEST_URL, { cache: "no-store" }).then(function (res) {
+      if (!res.ok) throw new Error("radar manifest");
+      return res.json();
+    }).then(function (data) {
+      if (gen !== radarFetchGen || !radarOn()) return false;
+      var frame = pickRadarFrame(data);
+      if (!frame || !frame.path || !data.host) throw new Error("radar frame");
+      radarHost = data.host;
+      radarPath = frame.path;
+      ensureRadarLayer(radarTileUrl(data.host, frame.path));
+      return true;
+    }).catch(function () {
+      /* fail soft — do not break the map */
+      if (!opts.quiet && statusEl && radarOn()) {
+        try {
+          var prev = statusEl.textContent || "";
+          if (prev.indexOf("Radar") === -1) {
+            statusEl.textContent = (prev ? prev + " " : "") + "Radar unavailable right now.";
+          }
+        } catch (eSt) {}
+      }
+      return false;
+    });
+  }
+
+  function setRadarEnabled(on) {
+    if (on) {
+      fetchAndApplyRadar({ quiet: false }).then(function (ok) {
+        if (ok && radarOn() && !tabHidden) startRadarRefresh();
+      });
+    } else {
+      hideRadarLayer();
+    }
+  }
+  /* === END RAINVIEWER RADAR (opt16) === */
+
   function saveSetting(key, val) {
     try { localStorage.setItem(key, val); } catch (eSave) {}
   }
@@ -4086,6 +4263,9 @@
       if (overlayVisible()) restackOverlay();
       else applyOverlay();
     } catch (e3) {}
+    try {
+      if (radarOn()) setRadarEnabled(true);
+    } catch (eRadarR) {}
     try {
       var raw = localStorage.getItem(VIEW_KEY);
       if (raw) {
@@ -4296,7 +4476,10 @@
     }).catch(function () {});
     applyBaseMap();
     if (overlayVisible()) restackOverlay();
-    else restackCloudRasters();
+    else {
+      restackCloudRasters();
+      restackRadar();
+    }
     var lastGps = readLastLocate();
     var bootLat = lastGps ? lastGps.lat : DEFAULT_WARM_LAT;
     var bootLon = lastGps ? lastGps.lon : DEFAULT_WARM_LON;
@@ -4401,6 +4584,12 @@
       });
     });
   }
+  if (toggleRadar) {
+    toggleRadar.addEventListener("change", function () {
+      saveSetting(RADAR_KEY, toggleRadar.checked ? "1" : "0");
+      setRadarEnabled(!!toggleRadar.checked);
+    });
+  }
 
 
   /* opt12: small FPS meter (rAF, ~4 Hz text, pause when hidden) */
@@ -4448,6 +4637,7 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       tabHidden = true;
+      stopRadarRefresh();
       try { if (window.__sunnyFpsStop) window.__sunnyFpsStop(); } catch (eFps) {}
       /* opt10: abort/ignore Play WMS prefetch + in-flight frame loads */
       playLoadGen += 1;
@@ -4468,6 +4658,11 @@
         setCloudFrame(cloudIndex);
         if (map && typeof map.triggerRepaint === "function") map.triggerRepaint();
       } catch (eRes) {}
+      if (radarOn()) {
+        fetchAndApplyRadar({ quiet: true }).then(function (ok) {
+          if (ok && radarOn() && !tabHidden) startRadarRefresh();
+        });
+      }
       if (resumePlay) {
         resumePlay = false;
         startPlay();
@@ -4490,7 +4685,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt15").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt16").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

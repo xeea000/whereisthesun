@@ -14,3 +14,6 @@ opt12: settings/view persistence, PWA manifest+icons, FPS meter, DOM reuse —
 layer order unchanged.
 opt13: earlier NOW hires, zoom product emphasis, Play WMS up to 2048 desktop,
 nearest resampling z≥8 — layer order unchanged.
+
+opt16: RainViewer precip radar between clouds and Labels/beaches —
+basemap → clouds → radar → Labels → beaches. Radar default OFF.

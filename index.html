@@ -18,10 +18,14 @@
   <link rel="dns-prefetch" href="https://tiles.openfreemap.org">
   <link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
   <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
-  <link rel="preload" href="vendor/maplibre-gl.slim.css?v=opt15" as="style">
-  <link rel="preload" href="vendor/maplibre-gl.js?v=opt15" as="script">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt15">
-  <link rel="stylesheet" href="styles.css?v=opt15">
+  <link rel="preconnect" href="https://api.rainviewer.com" crossorigin>
+  <link rel="dns-prefetch" href="https://api.rainviewer.com">
+  <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
+  <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
+  <link rel="preload" href="vendor/maplibre-gl.slim.css?v=opt16" as="style">
+  <link rel="preload" href="vendor/maplibre-gl.js?v=opt16" as="script">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt16">
+  <link rel="stylesheet" href="styles.css?v=opt16">
 </head>
 <body>
   <div id="map"></div>
@@ -66,6 +70,11 @@
         <span class="knob" aria-hidden="true"></span>
         International
       </label>
+      <label class="ov switch">
+        <input id="toggle-radar" type="checkbox">
+        <span class="knob" aria-hidden="true"></span>
+        Radar
+      </label>
     </div>
   </div>
   <div class="controls">
@@ -88,7 +97,7 @@
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
-  <!-- MapLibre JS preloaded; still loaded async from app.js (?v=opt15) -->
-  <script src="app.js?v=opt15"></script>
+  <!-- MapLibre JS preloaded; still loaded async from app.js (?v=opt16) -->
+  <script src="app.js?v=opt16"></script>
 </body>
 </html>
