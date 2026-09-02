@@ -17,14 +17,14 @@
   <link rel="dns-prefetch" href="https://tiles.openfreemap.org">
   <link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
   <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
-  <link rel="preload" href="vendor/maplibre-gl.slim.css?v=opt12" as="style">
-  <link rel="preload" href="vendor/maplibre-gl.js?v=opt12" as="script">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt12">
-  <link rel="stylesheet" href="styles.css?v=opt12">
+  <link rel="preload" href="vendor/maplibre-gl.slim.css?v=opt13" as="style">
+  <link rel="preload" href="vendor/maplibre-gl.js?v=opt13" as="script">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt13">
+  <link rel="stylesheet" href="styles.css?v=opt13">
 </head>
 <body>
   <div id="map"></div>
-  <!-- Unused (opt11/opt12): static clouds are main-map rasters. Kept hidden for DOM stability. -->
+  <!-- Unused (opt11/opt13): static clouds are main-map rasters. Kept hidden for DOM stability. -->
   <div id="cloud-map" class="is-unused" aria-hidden="true" hidden></div>
   <!-- Play-only cloud image overlay (opt8): WMS GetMap double-buffer, screen blend -->
   <div id="cloud-play-layer" aria-hidden="true" hidden>
@@ -87,7 +87,7 @@
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
-  <!-- MapLibre JS preloaded; still loaded async from app.js (?v=opt12) -->
-  <script src="app.js?v=opt12"></script>
+  <!-- MapLibre JS preloaded; still loaded async from app.js (?v=opt13) -->
+  <script src="app.js?v=opt13"></script>
 </body>
 </html>
