@@ -44,6 +44,7 @@ html, body {
   pointer-events: none;
   mix-blend-mode: screen;
   background: #000;
+  filter: contrast(1.15) brightness(1.05);
 }
 #cloud-map.is-play-hidden {
   opacity: 0;
@@ -73,7 +74,8 @@ html, body {
   pointer-events: none;
   mix-blend-mode: screen;
   background: #000;
-  --cloud-play-op: 0.72;
+  filter: contrast(1.15) brightness(1.05);
+  --cloud-play-op: 0.90;
 }
 .maplibregl-canvas-container > #cloud-play-layer {
   position: absolute;
@@ -103,7 +105,7 @@ html, body {
 }
 #cloud-play-layer .cloud-play-buf.is-front {
   /* JS sets inline opacity to --cloud-play-op; class marks front buffer */
-  opacity: var(--cloud-play-op, 0.72);
+  opacity: var(--cloud-play-op, 0.90);
 }
 
 .hud {

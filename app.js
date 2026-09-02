@@ -22,7 +22,7 @@
 
   var BEACH_RADIUS_M = 50000;
   var BEACH_CAP = 60;
-  var SUNNY_CLOUD = 40;
+  var SUNNY_CLOUD = 20;
   var SUNNY_PICK_CAP = 12;
   var DWELL_MS = 850;
   var PLAY_MS = 450;
@@ -65,7 +65,11 @@
   var currentWxCache = {};
   var CURRENT_WX_TTL_MS = 20 * 60 * 1000;
   var wikiCache = {};
-  var cloudOpacity = 0.72;
+  var cloudOpacity = 0.90;
+  if (cloudOpacityEl) {
+    var _co = Number(cloudOpacityEl.value);
+    if (isFinite(_co)) cloudOpacity = Math.max(0, Math.min(1, _co / 100));
+  }
   var searchingSunny = false;
   var overlayIds = ["ov-road-casing", "ov-road", "ov-road-name", "ov-place"];
   var BASEMAP_KEY = "sunny-basemap";
@@ -231,6 +235,11 @@
 
   function modisTiles(date) {
     return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/" +
+      date + "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
+  }
+
+  function viirsTiles(date) {
+    return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" +
       date + "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
   }
 
@@ -404,10 +413,8 @@
   }
 
   function gibsEffectiveOpacity() {
-    var z = map.getZoom();
-    var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
-    var wantSharp = atNow && z >= 5.6;
-    var op = wantSharp ? cloudOpacity * 0.42 : cloudOpacity;
+    /* Full cloudOpacity always (no 0.42 crush under screen blend). Slight boost. */
+    var op = Math.min(1, cloudOpacity * 1.05);
     return Math.max(0, Math.min(1, op));
   }
 
@@ -1135,27 +1142,31 @@
     return p.then(function (shown) {
       void shown;
       if (playMode) return shown;
-      if (atNow || opts.forceHires) {
-        var visUrl = iemVisTiles(origin ? origin.lon : null);
-        var vis = map.getSource("iem-vis");
-        if (vis && typeof vis.setTiles === "function") {
-          try {
-            var cur = vis.tiles && vis.tiles[0];
-            if (cur !== visUrl) vis.setTiles([visUrl]);
-          } catch (eVis) {
-            vis.setTiles([visUrl]);
+      /* Hires (MODIS/VIIRS/IEM) only at NOW — not while scrubbing history / play */
+      if (atNow) {
+        var day = utcDate(0);
+        function refreshRaster(srcId, url) {
+          var src = map.getSource(srcId);
+          if (src && typeof src.setTiles === "function") {
+            try {
+              var cur = src.tiles && src.tiles[0];
+              if (cur !== url) src.setTiles([url]);
+            } catch (eRef) {
+              src.setTiles([url]);
+            }
           }
         }
+        refreshRaster("modis", modisTiles(day));
+        refreshRaster("viirs", viirsTiles(day));
+        refreshRaster("iem-vis", iemVisTiles(origin ? origin.lon : null));
         applyHires();
       } else {
-        if (map.getLayer("modis")) {
-          map.setLayoutProperty("modis", "visibility", "none");
-          applyCloudPaintMain("modis", 0);
-        }
-        if (map.getLayer("iem-vis")) {
-          map.setLayoutProperty("iem-vis", "visibility", "none");
-          applyCloudPaintMain("iem-vis", 0);
-        }
+        ["modis", "viirs", "iem-vis"].forEach(function (id) {
+          if (map.getLayer(id)) {
+            map.setLayoutProperty(id, "visibility", "none");
+            applyCloudPaintMain(id, 0);
+          }
+        });
         applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
       }
       return shown;
@@ -1181,30 +1192,33 @@
     if (tabHidden || playMode) return;
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
-    /* MODIS jpg tiles 404 loudly in MapLibre — skip. IEM only at high zoom. */
-    var wantSharp = atNow && z >= 8;
+    /* Hires overlays only at NOW (not scrubbing / play). GOES GeoColor stays base. */
+    var wantSharp = atNow && z >= 5.6;
     if (wantSharp) {
       addHiresSources();
+      var sharp = Math.min(0.94, cloudOpacity);
       if (map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "none");
-        applyCloudPaintMain("modis", 0);
+        map.setLayoutProperty("modis", "visibility", "visible");
+        applyCloudPaintMain("modis", sharp * 0.55);
+      }
+      if (map.getLayer("viirs")) {
+        map.setLayoutProperty("viirs", "visibility", "visible");
+        applyCloudPaintMain("viirs", sharp * 0.4);
       }
       if (map.getLayer("iem-vis")) {
-        var vis = Math.min(0.28, cloudOpacity);
+        var vis = z >= 6.5 ? (0.45 * cloudOpacity) : 0;
         map.setLayoutProperty("iem-vis", "visibility", vis > 0 ? "visible" : "none");
         applyCloudPaintMain("iem-vis", vis);
       }
     } else {
-      if (map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "none");
-        applyCloudPaintMain("modis", 0);
-      }
-      if (map.getLayer("iem-vis")) {
-        map.setLayoutProperty("iem-vis", "visibility", "none");
-        applyCloudPaintMain("iem-vis", 0);
-      }
+      ["modis", "viirs", "iem-vis"].forEach(function (id) {
+        if (map.getLayer(id)) {
+          map.setLayoutProperty(id, "visibility", "none");
+          applyCloudPaintMain(id, 0);
+        }
+      });
     }
-    /* Single layer — never collapse opacity to blank */
+    /* Single GIBS layer — never collapse opacity to blank */
     applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
   }
 
@@ -1282,6 +1296,15 @@
         attribution: "NASA GIBS / MODIS"
       });
     }
+    if (!map.getSource("viirs")) {
+      map.addSource("viirs", {
+        type: "raster",
+        tiles: [viirsTiles(utcDate(0))],
+        tileSize: 256,
+        maxzoom: 9,
+        attribution: "NASA GIBS / VIIRS SNPP"
+      });
+    }
     if (!map.getSource("iem-vis")) {
       map.addSource("iem-vis", {
         type: "raster",
@@ -1296,6 +1319,18 @@
         id: "modis",
         type: "raster",
         source: "modis",
+        paint: {
+          "raster-opacity": 0,
+          "raster-resampling": "linear",
+          "raster-fade-duration": 0
+        }
+      }, before);
+    }
+    if (!map.getLayer("viirs")) {
+      map.addLayer({
+        id: "viirs",
+        type: "raster",
+        source: "viirs",
         paint: {
           "raster-opacity": 0,
           "raster-resampling": "linear",
@@ -1933,7 +1968,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt8");
+      beachWorker = new Worker("beach-worker.js?v=opt9");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -2839,6 +2874,13 @@
     return !!(b && b.isDay && b.cloud != null && b.cloud < SUNNY_CLOUD);
   }
 
+  function sunnySortCmp(a, b) {
+    var ca = a && a.cloud != null ? a.cloud : 999;
+    var cb = b && b.cloud != null ? b.cloud : 999;
+    if (ca !== cb) return ca - cb;
+    return (a.dist || 0) - (b.dist || 0);
+  }
+
   function excludeCode() {
     return isIntl() && homeCountry && homeCountry.code ? homeCountry.code : null;
   }
@@ -2860,7 +2902,7 @@
     }
     var sunny = rows.filter(isSunnyBeach);
     if (!sunny.length) return null;
-    sunny.sort(function (a, b) { return a.dist - b.dist; });
+    sunny.sort(sunnySortCmp);
     return sunny[0];
   }
 
@@ -2906,7 +2948,7 @@
     } else {
       rows = beachesForMode(rows);
     }
-    return rows.filter(isSunnyBeach).sort(function (a, b) { return a.dist - b.dist; });
+    return rows.filter(isSunnyBeach).sort(sunnySortCmp);
   }
 
   function weatherCollectSunny(list, assumeForeign, wantCount, genToken) {
@@ -2928,7 +2970,7 @@
     function step() {
       if (stale()) return Promise.resolve([]);
       if (found.length >= want || i >= list.length) {
-        found.sort(function (a, b) { return a.dist - b.dist; });
+        found.sort(sunnySortCmp);
         return Promise.resolve(found.slice(0, want));
       }
       var chunkA = list.slice(i, i + WX_BATCH);
@@ -3027,6 +3069,13 @@
   function openSunnySheet(list, sunnyMode) {
     sheetSunnyMode = sunnyMode !== false;
     sheetListRows = list ? list.slice() : [];
+    if (sheetSunnyMode && (!list || !list.length)) {
+      sheetListRows = [];
+      if (sunnySheet) sunnySheet.hidden = true;
+      if (sunnySheetList) sunnySheetList.innerHTML = "";
+      setStatus("No beaches under 20% cloud nearby");
+      return;
+    }
     if (!sunnySheet || !sunnySheetList) {
       if (list && list[0]) finishBeach(list[0], sheetSunnyMode ? "sunny" : "near");
       return;
@@ -3136,7 +3185,7 @@
         }
         if (!list || !list.length) {
           unlockSearch();
-          setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
+          setStatus("No beaches under 20% cloud nearby");
           return;
         }
         return weatherCollectSunny(list, true, SUNNY_PICK_CAP, myGen).then(function (rows) {
@@ -3146,7 +3195,7 @@
             setStatus(rows.length === 1 ? "1 sunny beach found." : rows.length + " sunny beaches found. Pick one.");
             openSunnySheet(rows, true);
           } else {
-            setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
+            setStatus("No beaches under 20% cloud nearby");
           }
         });
       })
@@ -3155,7 +3204,7 @@
         unlockSearch();
         if (!beachDb) return;
         if (wantSunny) {
-          setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
+          setStatus("No beaches under 20% cloud nearby");
         } else {
           setStatus("Couldn't find a beach" + where + " within " + km + " km.");
         }
@@ -3744,7 +3793,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt8").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt9").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
