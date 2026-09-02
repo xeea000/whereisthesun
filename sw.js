@@ -1,12 +1,13 @@
 /* SUNNY service worker — shell cache-first; beach data network-first with store. */
-var CACHE = "sunny-v-opt4";
+var CACHE = "sunny-v-opt5";
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt4",
-  "app.js?v=opt4",
-  "vendor/maplibre-gl.js",
-  "vendor/maplibre-gl.css"
+  "styles.css?v=opt5",
+  "app.js?v=opt5",
+  "beach-worker.js?v=opt5",
+  "vendor/maplibre-gl.js?v=opt5",
+  "vendor/maplibre-gl.css?v=opt5"
 ];
 
 self.addEventListener("install", function (event) {
@@ -38,7 +39,10 @@ function isDataRequest(url) {
     var u = new URL(url);
     if (u.origin !== self.location.origin) return false;
     var p = u.pathname;
-    if (p.indexOf("/data/") !== -1 && (p.slice(-8) === ".json.gz" || p.slice(-5) === ".json")) return true;
+    if (p.indexOf("/data/") !== -1) {
+      if (p.slice(-8) === ".json.gz" || p.slice(-5) === ".json") return true;
+      if (p.slice(-7) === ".bin.gz" || p.slice(-4) === ".bin") return true;
+    }
     if (p.slice(-18) === "/data/manifest.json" || p.slice(-13) === "manifest.json") return true;
     return false;
   } catch (e) {

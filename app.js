@@ -2,6 +2,24 @@
 (function () {
   "use strict";
 
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error("script " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function startSunny() {
+  if (typeof maplibregl === "undefined") {
+    var st = document.getElementById("status");
+    if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
+    return;
+  }
+
   var BEACH_RADIUS_M = 50000;
   var BEACH_CAP = 60;
   var SUNNY_CLOUD = 40;
@@ -59,7 +77,6 @@
       basemapMode = savedBasemap;
     }
   } catch (eBasemap) {}
-  var lastGibsUrl = null;
   var allMode = false;
   var nearbyBeaches = [];
   var viewGen = 0;
@@ -85,12 +102,10 @@
   var sheetSunnyMode = true;
   var sheetListRows = [];
   var wxSearchGen = 0;
-  var FRAME_PLAY_STEP = 3; /* 30 min while playing (cloudTimes are 10-min) */
   var BG_RING_KM = 1000;
   var BG_PAD_CELLS = 2;
 
   var lastPaintKey = "";
-  var lastGibsHostLayer = "";
   var overlayReady = false;
   var hoverThrottle = 0;
 
@@ -98,7 +113,7 @@
     container: "map",
     style: {
       version: 8,
-      glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+      /* glyphs deferred until Labels on — see ensureOverlayLayers / setGlyphs */
       sources: {
         osm: {
           type: "raster",
@@ -251,127 +266,388 @@
     });
   }
 
-  // MapLibre raster layers have no screen/multiply blend mode; approximate lighter
-  // additive clouds with brightness/contrast while the basemap stays always visible.
-  // Do not set CSS mix-blend-mode on #map / canvas — that would blend the whole map.
+/* === BEGIN CLOUD DOUBLE-BUFFER + SCREEN BLEND (opt5) === */
+  /*
+   * Screen-blend approach (opt5): MapLibre raster paint has no blend-mode.
+   * Clouds live on a second map (#cloud-map) with CSS mix-blend-mode:screen over
+   * the basemap map. Black cloud-map background ⇒ dark pixels stay neutral;
+   * bright cloud tops lighten the basemap (true screen) without the old
+   * raster-brightness-min darkening hack. Roads/Satellite/Dark stay on #map.
+   */
+  var CLOUD_FADE_MS = 300;
+  var PLAY_DWELL_MS = 700;
+  var FRAME_LOAD_STUCK_MS = 1000;
+  var FRAME_PLAY_STEP = 3; /* 30 min while playing (cloudTimes are 10-min) */
+  var GIBS_A = "gibs-a";
+  var GIBS_B = "gibs-b";
+
+  var cloudMap = null;
+  var gibsFrontId = GIBS_A;
+  var gibsBackId = GIBS_B;
+  var lastGibsUrl = null;
+  var lastGibsHostLayer = "";
+  var cloudSwapGen = 0;
+  var cloudFadeTimer = null;
+  var playSession = 0;
+  var playBusy = false;
+  var frameWaitStarted = 0;
+  var loadingFrameHint = false;
+  var prefabricatedBackUrl = null;
+  var cloudSourcesReady = false;
+
+  function cloudTargetMap() {
+    return cloudMap || map;
+  }
+
+  function ensureCloudMap() {
+    if (cloudMap) return cloudMap;
+    var el = document.getElementById("cloud-map");
+    if (!el || typeof maplibregl === "undefined") return null;
+    /* Sit inside the basemap canvas container so screen-blend covers tiles but
+       DOM markers / controls (siblings outside the canvas container) stay on top. */
+    try {
+      var canvasBox = map.getCanvasContainer && map.getCanvasContainer();
+      if (canvasBox && el.parentNode !== canvasBox) {
+        canvasBox.appendChild(el);
+        el.style.position = "absolute";
+        el.style.inset = "0";
+        el.style.width = "100%";
+        el.style.height = "100%";
+      }
+    } catch (ePar) {}
+    cloudMap = new maplibregl.Map({
+      container: "cloud-map",
+      style: {
+        version: 8,
+        /* no glyphs — clouds are raster only */
+        sources: {},
+        layers: [
+          {
+            id: "cloud-bg",
+            type: "background",
+            paint: { "background-color": "#000000", "background-opacity": 1 }
+          }
+        ]
+      },
+      center: map.getCenter(),
+      zoom: map.getZoom(),
+      interactive: false,
+      attributionControl: false,
+      fadeDuration: 0,
+      refreshExpiredTiles: false,
+      maxTileCacheSize: 64,
+      maxPitch: 0,
+      dragRotate: false,
+      pitchWithRotate: false,
+      preserveDrawingBuffer: false
+    });
+    cloudMap.on("load", function () {
+      cloudSourcesReady = true;
+      syncCloudMap(true);
+      try { cloudMap.resize(); } catch (eRz) {}
+    });
+    return cloudMap;
+  }
+
+  function syncCloudMap(force) {
+    if (!cloudMap || !map) return;
+    try {
+      var c = map.getCenter();
+      var z = map.getZoom();
+      var b = map.getBearing();
+      var p = map.getPitch();
+      if (force) {
+        cloudMap.jumpTo({ center: c, zoom: z, bearing: b, pitch: p });
+      } else {
+        cloudMap.jumpTo({ center: c, zoom: z, bearing: b, pitch: p });
+      }
+    } catch (eSync) {}
+  }
+
   function cloudRasterPaint(opacity) {
+    /* Screen blend is via #cloud-map CSS; keep raster paint simple (no brightness hack). */
     return {
-      "raster-opacity": opacity,
+      "raster-opacity": opacity == null ? 0 : opacity,
       "raster-resampling": "linear",
-      "raster-fade-duration": 0,
-      "raster-brightness-min": 0.32,
-      "raster-contrast": 0.18
+      "raster-fade-duration": 0
     };
   }
 
   function applyCloudPaint(layerId, opacity) {
-    if (!map.getLayer(layerId)) return;
+    var m = cloudTargetMap();
+    if (!m || !m.getLayer(layerId)) return;
     var paint = cloudRasterPaint(opacity);
     var key;
     for (key in paint) {
       if (Object.prototype.hasOwnProperty.call(paint, key)) {
-        map.setPaintProperty(layerId, key, paint[key]);
+        m.setPaintProperty(layerId, key, paint[key]);
       }
     }
   }
 
-  function basemapLayerId(mode) {
-    if (mode === "satellite") return "base-sat";
-    if (mode === "dark") return "base-dark";
-    return "osm";
-  }
-
-  function restackBasemap() {
-    var layers = map.getStyle() && map.getStyle().layers;
-    if (!layers || !layers.length) return;
-    var firstOther = null;
-    var i, id;
-    for (i = 0; i < layers.length; i++) {
-      id = layers[i].id;
-      if (BASEMAP_IDS.indexOf(id) === -1) {
-        firstOther = id;
-        break;
-      }
-    }
-    if (!firstOther) return;
-    for (i = 0; i < BASEMAP_IDS.length; i++) {
-      id = BASEMAP_IDS[i];
-      if (map.getLayer(id)) map.moveLayer(id, firstOther);
-    }
-  }
-
-  function applyBaseMap() {
-    var active = basemapLayerId(basemapMode);
-    var i, id;
-    for (i = 0; i < BASEMAP_IDS.length; i++) {
-      id = BASEMAP_IDS[i];
-      if (!map.getLayer(id)) continue;
-      map.setLayoutProperty(id, "visibility", id === active ? "visible" : "none");
-    }
-    restackBasemap();
-  }
-
-  function setBasemapMode(mode) {
-    if (mode !== "roads" && mode !== "satellite" && mode !== "dark") mode = "roads";
-    basemapMode = mode;
-    try { localStorage.setItem(BASEMAP_KEY, basemapMode); } catch (eSet) {}
-    var seg = document.getElementById("basemap-seg");
-    if (seg) {
-      var buttons = seg.querySelectorAll(".seg-btn");
-      var b, m;
-      for (b = 0; b < buttons.length; b++) {
-        m = buttons[b].getAttribute("data-basemap");
-        var on = m === basemapMode;
-        if (on) buttons[b].classList.add("is-on");
-        else buttons[b].classList.remove("is-on");
-        buttons[b].setAttribute("aria-pressed", on ? "true" : "false");
-      }
-    }
-    applyBaseMap();
-    applyHires();
-  }
-
-  function applyHires() {
-    if (tabHidden) return;
+  function gibsEffectiveOpacity() {
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
     var wantSharp = atNow && z >= 5.6;
-    var sharp = wantSharp ? Math.min(0.94, cloudOpacity) : 0;
-    var baseMul = (basemapMode === "dark" || basemapMode === "satellite") ? 0.82 : 1;
-    if (wantSharp) {
-      addHiresSources();
-      if (map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "visible");
-        applyCloudPaint("modis", sharp * baseMul);
-      }
-      if (map.getLayer("iem-vis")) {
-        var vis = z >= 8 ? Math.min(0.28, cloudOpacity) : 0;
-        map.setLayoutProperty("iem-vis", "visibility", vis > 0 ? "visible" : "none");
-        applyCloudPaint("iem-vis", vis * baseMul);
-      }
-    } else {
-      if (map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "none");
-        applyCloudPaint("modis", 0);
-      }
-      if (map.getLayer("iem-vis")) {
-        map.setLayoutProperty("iem-vis", "visibility", "none");
-        applyCloudPaint("iem-vis", 0);
-      }
-    }
-    if (map.getLayer("gibs")) {
-      var gibsOp = wantSharp ? cloudOpacity * 0.42 : cloudOpacity;
-      applyCloudPaint("gibs", gibsOp * baseMul);
+    var baseMul = 1; /* screen blend handles lighten; no darken mul needed */
+    var op = wantSharp ? cloudOpacity * 0.42 : cloudOpacity;
+    return Math.max(0, Math.min(1, op * baseMul));
+  }
+
+  function cancelCloudFade() {
+    if (cloudFadeTimer) {
+      clearTimeout(cloudFadeTimer);
+      cloudFadeTimer = null;
     }
   }
 
-  function applyCloudOpacity() {
-    applyHires();
-    applyBaseMap();
+  function crossfadeToBack(targetOp, done) {
+    cancelCloudFade();
+    var m = cloudTargetMap();
+    if (!m) {
+      if (done) done();
+      return;
+    }
+    var front = gibsFrontId;
+    var back = gibsBackId;
+    var steps = Math.max(4, Math.round(CLOUD_FADE_MS / 32));
+    var i = 0;
+    function tick() {
+      i += 1;
+      var t = Math.min(1, i / steps);
+      /* smoothstep */
+      var s = t * t * (3 - 2 * t);
+      applyCloudPaint(back, targetOp * s);
+      applyCloudPaint(front, targetOp * (1 - s));
+      if (t >= 1) {
+        applyCloudPaint(back, targetOp);
+        applyCloudPaint(front, 0);
+        gibsFrontId = back;
+        gibsBackId = front;
+        cloudFadeTimer = null;
+        if (done) done();
+        return;
+      }
+      cloudFadeTimer = setTimeout(tick, 32);
+    }
+    tick();
+  }
+
+  function setHiddenTiles(sourceId, url) {
+    var m = cloudTargetMap();
+    if (!m) return false;
+    var src = m.getSource(sourceId);
+    if (!src) return false;
+    /* NEVER clearTiles on the visible front during play — only touch hidden buffer. */
+    if (typeof src.setTiles === "function") {
+      try {
+        var cur = src.tiles && src.tiles[0];
+        if (cur === url) return true;
+      } catch (eCur) {}
+      src.setTiles([url]);
+      /* Optional: clear ONLY the hidden buffer so it refetches the new time cleanly */
+      if (sourceId === gibsBackId) {
+        try {
+          if (m.style && m.style.sourceCaches && m.style.sourceCaches[sourceId]) {
+            m.style.sourceCaches[sourceId].clearTiles();
+          }
+        } catch (eClear) {}
+        try { m.triggerRepaint(); } catch (eRep) {}
+      }
+      return true;
+    }
+    try {
+      src.tiles = [url];
+      if (sourceId === gibsBackId && m.style && m.style.sourceCaches && m.style.sourceCaches[sourceId]) {
+        m.style.sourceCaches[sourceId].clearTiles();
+      }
+      m.triggerRepaint();
+      return true;
+    } catch (eTiles) {
+      return false;
+    }
+  }
+
+  function waitSourceReady(sourceId, gen, timeoutMs) {
+    var m = cloudTargetMap();
+    return new Promise(function (resolve) {
+      if (!m) {
+        resolve(false);
+        return;
+      }
+      var settled = false;
+      var tid;
+      function finish(ok) {
+        if (settled) return;
+        if (gen !== cloudSwapGen) {
+          settled = true;
+          cleanup();
+          resolve(false);
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(!!ok);
+      }
+      function cleanup() {
+        try { m.off("sourcedata", onSourceData); } catch (e1) {}
+        try { m.off("idle", onIdle); } catch (e2) {}
+        if (tid) clearTimeout(tid);
+      }
+      function onSourceData(e) {
+        if (!e || e.sourceId !== sourceId) return;
+        if (e.isSourceLoaded) finish(true);
+      }
+      function onIdle() {
+        try {
+          if (typeof m.isSourceLoaded === "function" && m.isSourceLoaded(sourceId)) finish(true);
+        } catch (e3) {}
+      }
+      m.on("sourcedata", onSourceData);
+      m.on("idle", onIdle);
+      tid = setTimeout(function () {
+        try {
+          finish(typeof m.isSourceLoaded === "function" && m.isSourceLoaded(sourceId));
+        } catch (e4) {
+          finish(false);
+        }
+      }, timeoutMs || 10000);
+      try {
+        if (typeof m.isSourceLoaded === "function" && m.isSourceLoaded(sourceId)) finish(true);
+      } catch (e5) {}
+    });
+  }
+
+  function showLoadingFrameHint(show) {
+    if (show && !loadingFrameHint) {
+      loadingFrameHint = true;
+      setStatus("Loading frame…");
+    } else if (!show && loadingFrameHint) {
+      loadingFrameHint = false;
+    }
+  }
+
+  function addGibsDoubleBuffer(url) {
+    var m = cloudTargetMap();
+    if (!m) return;
+    function ensureOne(id, opacity) {
+      if (!m.getSource(id)) {
+        m.addSource(id, {
+          type: "raster",
+          tiles: [url],
+          tileSize: 256,
+          maxzoom: 7,
+          attribution: "NASA GIBS / NOAA GOES"
+        });
+      }
+      if (!m.getLayer(id)) {
+        m.addLayer({
+          id: id,
+          type: "raster",
+          source: id,
+          paint: cloudRasterPaint(opacity)
+        });
+      } else {
+        applyCloudPaint(id, opacity);
+      }
+    }
+    ensureOne(GIBS_A, cloudOpacity);
+    ensureOne(GIBS_B, 0);
+    gibsFrontId = GIBS_A;
+    gibsBackId = GIBS_B;
+    lastGibsUrl = url;
+    lastGibsHostLayer = gibsHostLayerKey(url);
+    cloudSourcesReady = true;
+  }
+
+  function rebuildHiddenGibs(url) {
+    var m = cloudTargetMap();
+    if (!m) return;
+    var id = gibsBackId;
+    if (m.getLayer(id)) m.removeLayer(id);
+    if (m.getSource(id)) m.removeSource(id);
+    m.addSource(id, {
+      type: "raster",
+      tiles: [url],
+      tileSize: 256,
+      maxzoom: 7,
+      attribution: "NASA GIBS / NOAA GOES"
+    });
+    m.addLayer({
+      id: id,
+      type: "raster",
+      source: id,
+      paint: cloudRasterPaint(0)
+    });
+  }
+
+  function prefetchNextPlayFrame() {
+    if (tabHidden || !cloudTimes.length) return;
+    var next = cloudIndex + FRAME_PLAY_STEP;
+    if (next > sliderMax()) next = sliderMax();
+    if (next === cloudIndex) return;
+    var url = gibsTiles(cloudTimes[next], origin ? origin.lon : null);
+    if (!url || url === lastGibsUrl) return;
+    prefabricatedBackUrl = url;
+    var hostLayer = gibsHostLayerKey(url);
+    if (hostLayer !== lastGibsHostLayer) {
+      rebuildHiddenGibs(url);
+    } else {
+      setHiddenTiles(gibsBackId, url);
+    }
+  }
+
+  function presentCloudUrl(url, opts) {
+    opts = opts || {};
+    var m = cloudTargetMap();
+    if (!m || tabHidden) return Promise.resolve(false);
+    if (!cloudSourcesReady || !m.getSource(GIBS_A)) {
+      addGibsDoubleBuffer(url);
+      return Promise.resolve(true);
+    }
+    if (url === lastGibsUrl) {
+      applyCloudPaint(gibsFrontId, gibsEffectiveOpacity());
+      applyCloudPaint(gibsBackId, 0);
+      return Promise.resolve(true);
+    }
+    var gen = ++cloudSwapGen;
+    frameWaitStarted = Date.now();
+    var stuckTimer = setTimeout(function () {
+      if (gen === cloudSwapGen) showLoadingFrameHint(true);
+    }, FRAME_LOAD_STUCK_MS);
+
+    var hostLayer = gibsHostLayerKey(url);
+    var already = prefabricatedBackUrl === url;
+    prefabricatedBackUrl = null;
+
+    if (hostLayer !== lastGibsHostLayer) {
+      lastGibsHostLayer = hostLayer;
+      rebuildHiddenGibs(url);
+    } else if (!already) {
+      setHiddenTiles(gibsBackId, url);
+    } else {
+      /* prefetch already set tiles on back — still ensure */
+      setHiddenTiles(gibsBackId, url);
+    }
+
+    return waitSourceReady(gibsBackId, gen, opts.timeoutMs || 12000).then(function (ok) {
+      clearTimeout(stuckTimer);
+      showLoadingFrameHint(false);
+      if (!ok || gen !== cloudSwapGen) {
+        /* HOLD current frame — do not advance visible image */
+        return false;
+      }
+      lastGibsUrl = url;
+      var targetOp = gibsEffectiveOpacity();
+      return new Promise(function (resolve) {
+        crossfadeToBack(targetOp, function () {
+          resolve(true);
+        });
+      });
+    });
   }
 
   function gibsHostLayerKey(url) {
-    /* host + layer path without the time segment */
     try {
       var u = String(url);
       var i = u.indexOf("/default/");
@@ -382,33 +658,8 @@
     }
   }
 
-  function updateRasterTiles(sourceId, url) {
-    var src = map.getSource(sourceId);
-    if (!src) return false;
-    if (typeof src.setTiles === "function") {
-      src.setTiles([url]);
-      try {
-        if (map.style && map.style.sourceCaches && map.style.sourceCaches[sourceId]) {
-          map.style.sourceCaches[sourceId].clearTiles();
-        }
-      } catch (eClear) {}
-      try { map.triggerRepaint(); } catch (eRep) {}
-      return true;
-    }
-    try {
-      src.tiles = [url];
-      if (map.style && map.style.sourceCaches && map.style.sourceCaches[sourceId]) {
-        map.style.sourceCaches[sourceId].clearTiles();
-      }
-      map.triggerRepaint();
-      return true;
-    } catch (eTiles) {
-      return false;
-    }
-  }
-
   function setCloudFrame(i, opts) {
-    if (!cloudTimes.length) return;
+    if (!cloudTimes.length) return Promise.resolve();
     opts = opts || {};
     cloudIndex = clampIndex(i);
     slider.min = "0";
@@ -418,50 +669,88 @@
     var atNow = cloudIndex >= sliderMax();
     var suffix = atNow ? " · NOW" : "";
     timeLabel.textContent = formatFrameLabel(iso) + suffix;
-    if (tabHidden) return;
+    if (tabHidden) return Promise.resolve();
     var url = gibsTiles(iso, origin ? origin.lon : null);
-    var hostLayer = gibsHostLayerKey(url);
-    if (url !== lastGibsUrl) {
-      lastGibsUrl = url;
-      var needRebuild = hostLayer !== lastGibsHostLayer || !map.getSource("gibs");
-      lastGibsHostLayer = hostLayer;
-      if (needRebuild && map.isStyleLoaded()) {
-        addGibsSource(url);
-      } else if (!updateRasterTiles("gibs", url) && map.isStyleLoaded()) {
-        addGibsSource(url);
+    var p = presentCloudUrl(url, opts);
+    return p.then(function (shown) {
+      void shown;
+      if (atNow || opts.forceHires) {
+        var visUrl = iemVisTiles(origin ? origin.lon : null);
+        var vis = map.getSource("iem-vis");
+        if (vis && typeof vis.setTiles === "function") {
+          try {
+            var cur = vis.tiles && vis.tiles[0];
+            if (cur !== visUrl) vis.setTiles([visUrl]);
+          } catch (eVis) {
+            vis.setTiles([visUrl]);
+          }
+        }
+        applyHires();
+      } else {
+        if (map.getLayer("modis")) {
+          map.setLayoutProperty("modis", "visibility", "none");
+          applyCloudPaintMain("modis", 0);
+        }
+        if (map.getLayer("iem-vis")) {
+          map.setLayoutProperty("iem-vis", "visibility", "none");
+          applyCloudPaintMain("iem-vis", 0);
+        }
+        applyCloudPaint(gibsFrontId, gibsEffectiveOpacity());
+      }
+      if (!opts.noPrefetch) prefetchNextPlayFrame();
+      return shown;
+    });
+  }
+
+  function applyCloudPaintMain(layerId, opacity) {
+    if (!map.getLayer(layerId)) return;
+    var paint = {
+      "raster-opacity": opacity,
+      "raster-resampling": "linear",
+      "raster-fade-duration": 0
+    };
+    var key;
+    for (key in paint) {
+      if (Object.prototype.hasOwnProperty.call(paint, key)) {
+        map.setPaintProperty(layerId, key, paint[key]);
       }
     }
-    /* IEM layer only depends on lon/satellite, not frame time — update sparingly */
-    if (atNow || opts.forceHires) {
-      var visUrl = iemVisTiles(origin ? origin.lon : null);
-      var vis = map.getSource("iem-vis");
-      if (vis && typeof vis.setTiles === "function") {
-        try {
-          var cur = vis.tiles && vis.tiles[0];
-          if (cur !== visUrl) vis.setTiles([visUrl]);
-        } catch (eVis) {
-          vis.setTiles([visUrl]);
-        }
+  }
+
+  function applyHires() {
+    if (tabHidden) return;
+    var z = map.getZoom();
+    var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
+    var wantSharp = atNow && z >= 5.6;
+    var sharp = wantSharp ? Math.min(0.94, cloudOpacity) : 0;
+    if (wantSharp) {
+      addHiresSources();
+      if (map.getLayer("modis")) {
+        map.setLayoutProperty("modis", "visibility", "visible");
+        applyCloudPaintMain("modis", sharp * 0.55);
       }
-      applyHires();
-    } else if (map.getLayer("modis") || map.getLayer("iem-vis")) {
-      /* playing / scrubbing away from NOW — hide hires, don't add */
+      if (map.getLayer("iem-vis")) {
+        var vis = z >= 8 ? Math.min(0.28, cloudOpacity) : 0;
+        map.setLayoutProperty("iem-vis", "visibility", vis > 0 ? "visible" : "none");
+        applyCloudPaintMain("iem-vis", vis);
+      }
+    } else {
       if (map.getLayer("modis")) {
         map.setLayoutProperty("modis", "visibility", "none");
-        applyCloudPaint("modis", 0);
+        applyCloudPaintMain("modis", 0);
       }
       if (map.getLayer("iem-vis")) {
         map.setLayoutProperty("iem-vis", "visibility", "none");
-        applyCloudPaint("iem-vis", 0);
+        applyCloudPaintMain("iem-vis", 0);
       }
-      if (map.getLayer("gibs")) {
-        var baseMul = (basemapMode === "dark" || basemapMode === "satellite") ? 0.82 : 1;
-        applyCloudPaint("gibs", cloudOpacity * baseMul);
-      }
-    } else if (map.getLayer("gibs")) {
-      var baseMul2 = (basemapMode === "dark" || basemapMode === "satellite") ? 0.82 : 1;
-      applyCloudPaint("gibs", cloudOpacity * baseMul2);
     }
+    applyCloudPaint(gibsFrontId, gibsEffectiveOpacity());
+    applyCloudPaint(gibsBackId, 0);
+  }
+
+  function applyCloudOpacity() {
+    applyHires();
+    applyBaseMap();
   }
 
   function addHiresSources() {
@@ -490,7 +779,11 @@
         id: "modis",
         type: "raster",
         source: "modis",
-        paint: cloudRasterPaint(0)
+        paint: {
+          "raster-opacity": 0,
+          "raster-resampling": "linear",
+          "raster-fade-duration": 0
+        }
       }, before);
     }
     if (!map.getLayer("iem-vis")) {
@@ -498,32 +791,28 @@
         id: "iem-vis",
         type: "raster",
         source: "iem-vis",
-        paint: cloudRasterPaint(0)
+        paint: {
+          "raster-opacity": 0,
+          "raster-resampling": "linear",
+          "raster-fade-duration": 0
+        }
       }, before);
     }
   }
 
+  /* legacy name kept for any stray callers — routes to double-buffer */
   function addGibsSource(url) {
-    if (map.getLayer("gibs")) map.removeLayer("gibs");
-    if (map.getSource("gibs")) map.removeSource("gibs");
-    map.addSource("gibs", {
-      type: "raster",
-      tiles: [url],
-      tileSize: 256,
-      maxzoom: 7,
-      attribution: "NASA GIBS / NOAA GOES"
-    });
-    var before = map.getLayer("modis") ? "modis" : (map.getLayer("beaches-fill") ? "beaches-fill" : undefined);
-    map.addLayer({
-      id: "gibs",
-      type: "raster",
-      source: "gibs",
-      paint: cloudRasterPaint(cloudOpacity)
-    }, before);
-    restackBasemap();
-    applyHires();
-    if (overlayVisible()) restackOverlay();
+    addGibsDoubleBuffer(url);
   }
+
+  function updateRasterTiles(sourceId, url) {
+    /* Prefer hidden-buffer path; never clear visible front. */
+    if (sourceId === gibsFrontId) {
+      return setHiddenTiles(gibsBackId, url);
+    }
+    return setHiddenTiles(sourceId, url);
+  }
+/* === END CLOUD PATCH SNIPPET === */
 
 
   function overlayVisible() {
@@ -553,6 +842,14 @@
   }
 
   function ensureOverlayLayers() {
+    /* Fetch glyphs only when Labels are turned on */
+    try {
+      if (typeof map.setGlyphs === "function") {
+        map.setGlyphs("https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf");
+      } else if (map.style && map.style.glyphManager == null && map.getStyle) {
+        /* older fallback: style already may omit glyphs */
+      }
+    } catch (eGlyph) {}
     if (!map.getSource("ofm")) {
       map.addSource("ofm", {
         type: "vector",
@@ -846,7 +1143,7 @@
 
   var BEACH_DB_IDB = "sunny";
   var BEACH_DB_STORE = "beachdb";
-  var BEACH_DB_VER = "region1-idb2";
+  var BEACH_DB_VER = "region1-bin1-idb3";
 
   function idbOpenBeach() {
     return new Promise(function (resolve, reject) {
@@ -1108,11 +1405,165 @@
     return pickRegionsForBbox(lat - degLat, lat + degLat, lon - degLon, lon + degLon, padCells);
   }
 
+
+  /* --- beach worker + binary shards (opt5) --- */
+  var beachWorker = null;
+  var beachWorkerSeq = 0;
+  var beachWorkerPending = Object.create(null);
+  var idlePrefetchBusy = false;
+  var idlePrefetchSeen = Object.create(null);
+
+  function getBeachWorker() {
+    if (beachWorker) return beachWorker;
+    if (typeof Worker === "undefined") return null;
+    try {
+      beachWorker = new Worker("beach-worker.js?v=opt5");
+      beachWorker.onmessage = function (ev) {
+        var msg = ev.data || {};
+        var pending = beachWorkerPending[msg.id];
+        if (!pending) return;
+        delete beachWorkerPending[msg.id];
+        if (msg.ok) pending.resolve(msg.rows || []);
+        else pending.reject(new Error(msg.error || "worker"));
+      };
+      beachWorker.onerror = function () {
+        /* fall back to main-thread parse next time */
+        try { beachWorker.terminate(); } catch (eT) {}
+        beachWorker = null;
+      };
+      return beachWorker;
+    } catch (eW) {
+      beachWorker = null;
+      return null;
+    }
+  }
+
+  function parseBin1Main(u8) {
+    if (u8.length < 8 || u8[0] !== 0x53 || u8[1] !== 0x4e || u8[2] !== 0x59 || u8[3] !== 0x31) {
+      throw new Error("bad magic");
+    }
+    var view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    var count = view.getUint32(4, true);
+    var off = 8;
+    var out = new Array(count);
+    var n = 0;
+    var dec = new TextDecoder();
+    var i, idLen, nameLen, id, name, lat, lon, cLen, country;
+    for (i = 0; i < count; i++) {
+      idLen = view.getUint16(off, true); off += 2;
+      id = dec.decode(u8.subarray(off, off + idLen)); off += idLen;
+      nameLen = view.getUint16(off, true); off += 2;
+      name = dec.decode(u8.subarray(off, off + nameLen)); off += nameLen;
+      lat = view.getFloat64(off, true); off += 8;
+      lon = view.getFloat64(off, true); off += 8;
+      cLen = view.getUint8(off); off += 1;
+      country = cLen ? dec.decode(u8.subarray(off, off + cLen)).toUpperCase().slice(0, 2) : "";
+      off += cLen;
+      out[n++] = [id, name, lat, lon, country];
+    }
+    out.length = n;
+    return out;
+  }
+
+  function gunzipU8(buf) {
+    var u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
+      if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("no decompress"));
+      var stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
+      return new Response(stream).arrayBuffer().then(function (ab) { return new Uint8Array(ab); });
+    }
+    return Promise.resolve(u8);
+  }
+
+  function fetchRegionViaWorker(url, format) {
+    var w = getBeachWorker();
+    if (!w) return Promise.reject(new Error("no worker"));
+    var id = "r" + (++beachWorkerSeq);
+    return new Promise(function (resolve, reject) {
+      beachWorkerPending[id] = { resolve: resolve, reject: reject };
+      w.postMessage({ id: id, url: url, format: format || "auto" });
+      setTimeout(function () {
+        if (!beachWorkerPending[id]) return;
+        delete beachWorkerPending[id];
+        reject(new Error("worker timeout"));
+      }, 60000);
+    });
+  }
+
+  function fetchRegionBytes(url, format) {
+    return fetchRegionViaWorker(url, format).catch(function () {
+      return fetch(url).then(function (res) {
+        if (!res.ok) throw new Error("beach list");
+        return res.arrayBuffer();
+      }).then(gunzipU8).then(function (u8) {
+        var looksBin = u8.length >= 4 && u8[0] === 0x53 && u8[1] === 0x4e && u8[2] === 0x59 && u8[3] === 0x31;
+        if (format === "bin1" || (format === "auto" && looksBin)) return parseBin1Main(u8);
+        var data = JSON.parse(new TextDecoder().decode(u8));
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.beaches)) return data.beaches;
+        throw new Error("beach list");
+      });
+    });
+  }
+
+  function regionFileCandidates(region) {
+    var files = [];
+    var fmt = beachManifest && beachManifest.format;
+    if (region.file) files.push({ url: region.file, format: /\.bin(\.gz)?$/i.test(region.file) ? "bin1" : (fmt === "bin1" ? "bin1" : "auto") });
+    if (region.fileJson && region.fileJson !== region.file) {
+      files.push({ url: region.fileJson, format: "json" });
+    }
+    if (!files.length) {
+      files.push({ url: "data/" + region.id + ".bin.gz", format: "bin1" });
+      files.push({ url: "data/" + region.id + ".json.gz", format: "json" });
+    } else if (fmt === "bin1" && files.length === 1 && files[0].format === "bin1") {
+      files.push({ url: "data/" + region.id + ".json.gz", format: "json" });
+    }
+    return files;
+  }
+
+  function maybeIdlePrefetchRing() {
+    if (idlePrefetchBusy || tabHidden || !beachManifest || !beachManifest.regions) return;
+    if (!beachDb || !beachDb.length) return;
+    var lat = origin ? origin.lat : DEFAULT_WARM_LAT;
+    var lon = origin ? origin.lon : DEFAULT_WARM_LON;
+    var ring = pickRegionsAround(lat, lon, BG_RING_KM * 1.35, BG_PAD_CELLS + 1);
+    var need = [];
+    var i, r;
+    for (i = 0; i < ring.length; i++) {
+      r = ring[i];
+      if (!r || !r.id) continue;
+      if (beachRegionsLoaded[r.id] || beachRegionInflight[r.id] || idlePrefetchSeen[r.id]) continue;
+      need.push(r);
+    }
+    if (!need.length) return;
+    idlePrefetchBusy = true;
+    var CONCURRENCY = 2;
+    var idx = 0;
+    function pump() {
+      if (idx >= need.length || tabHidden) {
+        idlePrefetchBusy = false;
+        return Promise.resolve();
+      }
+      var batch = [];
+      while (batch.length < CONCURRENCY && idx < need.length) {
+        var reg = need[idx++];
+        idlePrefetchSeen[reg.id] = 1;
+        batch.push(reg);
+      }
+      return Promise.all(batch.map(function (reg) {
+        return fetchOneRegion(reg).catch(function () { return null; });
+      })).then(function () {
+        return yieldMain().then(pump);
+      });
+    }
+    pump();
+  }
+
   function fetchOneRegion(region) {
     var id = region.id;
     if (beachRegionsLoaded[id]) return Promise.resolve(null);
     if (beachRegionInflight[id]) return beachRegionInflight[id];
-    var url = region.file || ("data/" + id + ".json.gz");
     beachRegionInflight[id] = idbGetRegionRows(id).then(function (cached) {
       if (cached && cached.length) {
         if (!beachRegionsLoaded[id]) {
@@ -1121,19 +1572,24 @@
         }
         return cached;
       }
-      return fetchJsonMaybeGzip(url).then(function (part) {
-        if (beachRegionsLoaded[id]) return null;
-        beachRegionsLoaded[id] = true;
-        var rows = Array.isArray(part) ? part : (part && Array.isArray(part.beaches) ? part.beaches : null);
-        if (rows && rows.length) {
-          var compact = Array.isArray(rows[0]) ? rows : toCompactRows(parseBeachDb(rows));
-          mergeBeachRows(compact);
-          idbPutRegionRows(id, compact).catch(function () {});
-        } else if (rows) {
-          mergeBeachRows(rows);
-        }
-        return part;
-      });
+      var candidates = regionFileCandidates(region);
+      function tryNext(i) {
+        if (i >= candidates.length) throw new Error("beach list");
+        var c = candidates[i];
+        return fetchRegionBytes(c.url, c.format).then(function (rows) {
+          if (beachRegionsLoaded[id]) return null;
+          beachRegionsLoaded[id] = true;
+          if (rows && rows.length) {
+            var compact = Array.isArray(rows[0]) ? rows : toCompactRows(parseBeachDb(rows));
+            mergeBeachRows(compact);
+            idbPutRegionRows(id, compact).catch(function () {});
+          }
+          return rows;
+        }).catch(function () {
+          return tryNext(i + 1);
+        });
+      }
+      return tryNext(0);
     }).then(function (part) {
       delete beachRegionInflight[id];
       return part;
@@ -2473,37 +2929,97 @@
   }
 
   function stopPlay() {
-    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    playSession += 1;
+    playBusy = false;
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     btnPlay.textContent = "Play";
     btnPlay.setAttribute("aria-pressed", "false");
     btnPlay.classList.remove("is-on");
   }
 
   function startPlay() {
-    if (playTimer) return;
+    if (playTimer || playBusy) return;
     btnPlay.textContent = "Pause";
     btnPlay.setAttribute("aria-pressed", "true");
     btnPlay.classList.add("is-on");
-    playTimer = setInterval(function () {
-      if (tabHidden) return;
-      var next = cloudIndex + FRAME_PLAY_STEP;
-      if (next >= sliderMax()) {
+    var session = ++playSession;
+    var holdTarget = null;
+    function schedule(ms) {
+      if (playSession !== session) return;
+      playTimer = setTimeout(tick, ms);
+    }
+    function tick() {
+      playTimer = null;
+      if (playSession !== session || tabHidden) return;
+      var next;
+      if (holdTarget != null) {
+        next = holdTarget;
+      } else {
+        next = cloudIndex + FRAME_PLAY_STEP;
+      }
+      if (cloudIndex >= sliderMax() && holdTarget == null) {
         stopPlay();
         setCloudFrame(sliderMax(), { forceHires: true });
         return;
       }
-      setCloudFrame(next);
-    }, PLAY_MS);
+      if (next >= sliderMax()) next = sliderMax();
+      playBusy = true;
+      var t0 = Date.now();
+      setCloudFrame(next).then(function (shown) {
+        playBusy = false;
+        if (playSession !== session) return;
+        if (!shown) {
+          /* HOLD visible frame; retry the same target index */
+          holdTarget = next;
+          schedule(280);
+          return;
+        }
+        holdTarget = null;
+        if (cloudIndex >= sliderMax()) {
+          stopPlay();
+          setCloudFrame(sliderMax(), { forceHires: true });
+          return;
+        }
+        var elapsed = Date.now() - t0;
+        var wait = Math.max(40, PLAY_DWELL_MS - elapsed);
+        schedule(wait);
+      }).catch(function () {
+        playBusy = false;
+        if (playSession === session) {
+          holdTarget = next;
+          schedule(400);
+        }
+      });
+    }
+    schedule(80);
   }
 
   function togglePlay() {
-    if (playTimer) { stopPlay(); return; }
+    if (playTimer || playBusy || btnPlay.getAttribute("aria-pressed") === "true") {
+      stopPlay();
+      return;
+    }
     startPlay();
   }
 
-  map.on("zoomend", applyHires);
+  map.on("zoomend", function () {
+    syncCloudMap(true);
+    applyHires();
+  });
+
+  map.on("move", function () {
+    syncCloudMap(false);
+  });
+
+  map.on("resize", function () {
+    if (cloudMap) {
+      try { cloudMap.resize(); } catch (eR) {}
+      syncCloudMap(true);
+    }
+  });
 
   map.on("moveend", function () {
+    syncCloudMap(true);
     if (moveTimer) clearTimeout(moveTimer);
     moveTimer = setTimeout(function () {
       paintBeaches(beaches);
@@ -2516,6 +3032,7 @@
           ensureRegionsForBbox(qb.south, qb.north, qb.west, qb.east, true).catch(function () {});
         } catch (eMove) {}
       }
+      maybeIdlePrefetchRing();
     }, 180);
   });
 
@@ -2527,10 +3044,33 @@
     ensureBeachLayers();
     setBasemapMode(basemapMode);
     if (overlayVisible()) restackOverlay();
-    setCloudFrame(sliderMax());
-    applyBaseMap();
+    ensureCloudMap();
+    var cloudsBooted = false;
+    function bootClouds() {
+      if (cloudsBooted) return;
+      cloudsBooted = true;
+      syncCloudMap(true);
+      var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
+      addGibsDoubleBuffer(url);
+      setCloudFrame(sliderMax());
+      applyBaseMap();
+    }
+    if (cloudMap) {
+      cloudMap.once("load", bootClouds);
+      try {
+        if ((cloudMap.loaded && cloudMap.loaded()) || (cloudMap.isStyleLoaded && cloudMap.isStyleLoaded())) {
+          bootClouds();
+        }
+      } catch (eBoot) {}
+    } else {
+      bootClouds();
+    }
     loadBeachDb({ quiet: true, lat: DEFAULT_WARM_LAT, lon: DEFAULT_WARM_LON }).catch(function () {});
     locate();
+  });
+
+  map.on("idle", function () {
+    maybeIdlePrefetchRing();
   });
 
   ["beaches-fill", "beaches-line", "beaches-dot"].forEach(function (layer) {
@@ -2631,13 +3171,17 @@
       }
       try {
         if (map && typeof map.stop === "function") map.stop();
+        if (cloudMap && typeof cloudMap.stop === "function") cloudMap.stop();
       } catch (eStop) {}
     } else {
       tabHidden = false;
       try {
         if (map && typeof map.resume === "function") map.resume();
+        if (cloudMap && typeof cloudMap.resume === "function") cloudMap.resume();
+        syncCloudMap(true);
         setCloudFrame(cloudIndex);
         if (map && typeof map.triggerRepaint === "function") map.triggerRepaint();
+        if (cloudMap && typeof cloudMap.triggerRepaint === "function") cloudMap.triggerRepaint();
       } catch (eRes) {}
       if (resumePlay) {
         resumePlay = false;
@@ -2653,4 +3197,15 @@
       });
     }
   } catch (eSw) {}
+
+  } /* end startSunny */
+
+  if (typeof maplibregl !== "undefined") {
+    startSunny();
+  } else {
+    loadScript("vendor/maplibre-gl.js?v=opt5").then(startSunny).catch(function () {
+      var st = document.getElementById("status");
+      if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
+    });
+  }
 })();

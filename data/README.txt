@@ -45,3 +45,16 @@ How to regenerate
 
 Scripts used for this build: /workspace/sunny-app/fetch_overpass.py
 and /tmp/sunny-beaches/stamp_countries.py
+
+Geographic region shards (deploy)
+---------------------------------
+Production ships data/r{latIndex}_{lonIndex}.json.gz cells (10° lat × 20° lon)
+plus data/manifest.json:
+  {"v":"region1","cell":{"lat":10,"lon":20},
+   "regions":[{"id":"r13_5","south":40,"west":-80,"north":50,"east":-60,
+               "file":"data/r13_5.json.gz"}, …]}
+The app loads priority regions near the user/map first (DecompressionStream),
+resolves Locate/nearby as soon as those land, then background-fetches the rest.
+When the full set is in, compact rows are cached in IndexedDB
+(db sunny / store beachdb / version region1). Falls back to beaches.json.gz /
+beaches.json when present. Legacy flat {"files":[…]} manifests still work.

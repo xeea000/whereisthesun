@@ -4,11 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
-  <link rel="stylesheet" href="vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="styles.css?v=opt4">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=opt5">
+  <link rel="stylesheet" href="styles.css?v=opt5">
 </head>
 <body>
   <div id="map"></div>
+  <!-- Cloud overlay map: CSS mix-blend-mode:screen (MapLibre rasters have no blend-mode). -->
+  <div id="cloud-map" aria-hidden="true"></div>
   <div class="hud">
     <p id="status" class="status">Finding you… Clouds sit lightly on the map so land stays visible.</p>
   </div>
@@ -64,7 +66,7 @@
     <p id="sunny-sheet-sub" class="sheet-sub"></p>
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
-  <script src="vendor/maplibre-gl.js"></script>
-  <script src="app.js?v=opt4"></script>
+  <!-- MapLibre loaded async from app.js (?v=opt5) so first paint stays light -->
+  <script src="app.js?v=opt5"></script>
 </body>
 </html>

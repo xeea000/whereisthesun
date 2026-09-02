@@ -20,13 +20,42 @@ html, body {
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
-/* Do not set mix-blend-mode on #map / .maplibregl-canvas — it blends the basemap too. */
+/* Basemap map — never put mix-blend-mode here (would blend markers/UI canvas too). */
 #map {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
   height: 100dvh;
+  z-index: 0;
+}
+
+/*
+ * Cloud overlay (opt5): separate MapLibre map, black background, CSS mix-blend-mode:screen.
+ * Bright cloud pixels lighten the basemap; dark pixels stay neutral. Pointer-events none.
+ */
+#cloud-map {
+  position: fixed; /* fallback before reparent; becomes absolute inside canvas container */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: #000;
+}
+.maplibregl-canvas-container > #cloud-map {
+  position: absolute;
+  z-index: 2; /* above basemap canvas, under marker pane */
+  height: 100%;
+}
+#cloud-map .maplibregl-ctrl-attrib,
+#cloud-map .maplibregl-ctrl-bottom-left,
+#cloud-map .maplibregl-ctrl-bottom-right,
+#cloud-map .maplibregl-ctrl-top-left,
+#cloud-map .maplibregl-ctrl-top-right {
+  display: none !important;
 }
 
 .hud {
