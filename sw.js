@@ -1,10 +1,10 @@
 /* SUNNY service worker — shell cache-first; beach data network-first with store. */
-var CACHE = "sunny-v-opt3";
+var CACHE = "sunny-v-opt4";
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt3",
-  "app.js?v=opt3",
+  "styles.css?v=opt4",
+  "app.js?v=opt4",
   "vendor/maplibre-gl.js",
   "vendor/maplibre-gl.css"
 ];

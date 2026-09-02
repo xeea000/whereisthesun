@@ -77,14 +77,20 @@
   var beachDbComplete = false;
   var beachBgStarted = false;
   var beachSeenIds = Object.create(null);
+  var beachByIdMap = Object.create(null);
   var GRID_DEG = 1;
   var DEFAULT_WARM_LAT = 43.65;
   var DEFAULT_WARM_LON = -79.38;
   var WX_BATCH = 60;
   var sheetSunnyMode = true;
   var sheetListRows = [];
+  var wxSearchGen = 0;
+  var FRAME_PLAY_STEP = 3; /* 30 min while playing (cloudTimes are 10-min) */
+  var BG_RING_KM = 1000;
+  var BG_PAD_CELLS = 2;
 
   var lastPaintKey = "";
+  var lastGibsHostLayer = "";
   var overlayReady = false;
   var hoverThrottle = 0;
 
@@ -364,30 +370,98 @@
     applyBaseMap();
   }
 
-  function setCloudFrame(i) {
+  function gibsHostLayerKey(url) {
+    /* host + layer path without the time segment */
+    try {
+      var u = String(url);
+      var i = u.indexOf("/default/");
+      if (i < 0) return u;
+      return u.slice(0, i);
+    } catch (eK) {
+      return String(url || "");
+    }
+  }
+
+  function updateRasterTiles(sourceId, url) {
+    var src = map.getSource(sourceId);
+    if (!src) return false;
+    if (typeof src.setTiles === "function") {
+      src.setTiles([url]);
+      try {
+        if (map.style && map.style.sourceCaches && map.style.sourceCaches[sourceId]) {
+          map.style.sourceCaches[sourceId].clearTiles();
+        }
+      } catch (eClear) {}
+      try { map.triggerRepaint(); } catch (eRep) {}
+      return true;
+    }
+    try {
+      src.tiles = [url];
+      if (map.style && map.style.sourceCaches && map.style.sourceCaches[sourceId]) {
+        map.style.sourceCaches[sourceId].clearTiles();
+      }
+      map.triggerRepaint();
+      return true;
+    } catch (eTiles) {
+      return false;
+    }
+  }
+
+  function setCloudFrame(i, opts) {
     if (!cloudTimes.length) return;
+    opts = opts || {};
     cloudIndex = clampIndex(i);
     slider.min = "0";
     slider.max = String(sliderMax());
     slider.value = String(cloudIndex);
     var iso = cloudTimes[cloudIndex];
-    var suffix = cloudIndex >= sliderMax() ? " · NOW" : "";
+    var atNow = cloudIndex >= sliderMax();
+    var suffix = atNow ? " · NOW" : "";
     timeLabel.textContent = formatFrameLabel(iso) + suffix;
     if (tabHidden) return;
     var url = gibsTiles(iso, origin ? origin.lon : null);
+    var hostLayer = gibsHostLayerKey(url);
     if (url !== lastGibsUrl) {
       lastGibsUrl = url;
-      var src = map.getSource("gibs");
-      if (src && typeof src.setTiles === "function") {
-        src.setTiles([url]);
-      } else if (map.isStyleLoaded()) {
+      var needRebuild = hostLayer !== lastGibsHostLayer || !map.getSource("gibs");
+      lastGibsHostLayer = hostLayer;
+      if (needRebuild && map.isStyleLoaded()) {
+        addGibsSource(url);
+      } else if (!updateRasterTiles("gibs", url) && map.isStyleLoaded()) {
         addGibsSource(url);
       }
     }
-    var vis = map.getSource("iem-vis");
-    var visUrl = iemVisTiles(origin ? origin.lon : null);
-    if (vis && typeof vis.setTiles === "function") vis.setTiles([visUrl]);
-    applyHires();
+    /* IEM layer only depends on lon/satellite, not frame time — update sparingly */
+    if (atNow || opts.forceHires) {
+      var visUrl = iemVisTiles(origin ? origin.lon : null);
+      var vis = map.getSource("iem-vis");
+      if (vis && typeof vis.setTiles === "function") {
+        try {
+          var cur = vis.tiles && vis.tiles[0];
+          if (cur !== visUrl) vis.setTiles([visUrl]);
+        } catch (eVis) {
+          vis.setTiles([visUrl]);
+        }
+      }
+      applyHires();
+    } else if (map.getLayer("modis") || map.getLayer("iem-vis")) {
+      /* playing / scrubbing away from NOW — hide hires, don't add */
+      if (map.getLayer("modis")) {
+        map.setLayoutProperty("modis", "visibility", "none");
+        applyCloudPaint("modis", 0);
+      }
+      if (map.getLayer("iem-vis")) {
+        map.setLayoutProperty("iem-vis", "visibility", "none");
+        applyCloudPaint("iem-vis", 0);
+      }
+      if (map.getLayer("gibs")) {
+        var baseMul = (basemapMode === "dark" || basemapMode === "satellite") ? 0.82 : 1;
+        applyCloudPaint("gibs", cloudOpacity * baseMul);
+      }
+    } else if (map.getLayer("gibs")) {
+      var baseMul2 = (basemapMode === "dark" || basemapMode === "satellite") ? 0.82 : 1;
+      applyCloudPaint("gibs", cloudOpacity * baseMul2);
+    }
   }
 
   function addHiresSources() {
@@ -640,17 +714,25 @@
     if (data && Array.isArray(data.beaches)) rows = data.beaches;
     else if (Array.isArray(data)) rows = data;
     else throw new Error("beach list");
-    var out = [];
+    var out = new Array(rows.length);
+    var n = 0;
     var i, r, lat, lon, name, country, id;
     for (i = 0; i < rows.length; i++) {
       r = rows[i];
       if (!r) continue;
       if (Array.isArray(r)) {
+        /* compact row [id,name,lat,lon,country] — read in place, one object */
         id = r[0] != null ? String(r[0]) : ("b/" + i);
         name = r[1] == null ? "" : String(r[1]).trim();
         lat = Number(r[2]);
         lon = Number(r[3]);
         country = r[4] == null || r[4] === "" ? null : String(r[4]).toUpperCase().slice(0, 2);
+      } else if (r.id != null && r.lat != null && r.lon != null && !r.geom) {
+        /* already a compact object from a prior merge — reuse */
+        if (beachSeenIds[String(r.id)]) continue;
+        if (!isFinite(Number(r.lat)) || !isFinite(Number(r.lon))) continue;
+        out[n++] = r;
+        continue;
       } else {
         id = r.id != null ? String(r.id) : ("b/" + i);
         name = r.name == null ? "" : String(r.name).trim();
@@ -661,8 +743,9 @@
       if (!isFinite(lat) || !isFinite(lon)) continue;
       if (!name) name = "Unnamed beach";
       if (country && country.length !== 2) country = null;
-      out.push({ id: id, name: name, lat: lat, lon: lon, country: country });
+      out[n++] = { id: id, name: name, lat: lat, lon: lon, country: country };
     }
+    out.length = n;
     return out;
   }
 
@@ -763,8 +846,7 @@
 
   var BEACH_DB_IDB = "sunny";
   var BEACH_DB_STORE = "beachdb";
-  var BEACH_DB_KEY = "rows";
-  var BEACH_DB_VER = "region1";
+  var BEACH_DB_VER = "region1-idb2";
 
   function idbOpenBeach() {
     return new Promise(function (resolve, reject) {
@@ -784,7 +866,25 @@
     });
   }
 
-  function idbGetBeachRows() {
+  function idbRegionKey(id) {
+    return "region:" + id;
+  }
+
+  function idbGetVer() {
+    return idbOpenBeach().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(BEACH_DB_STORE, "readonly");
+        var store = tx.objectStore(BEACH_DB_STORE);
+        var verReq = store.get("v");
+        verReq.onsuccess = function () {
+          resolve(verReq.result === BEACH_DB_VER ? BEACH_DB_VER : null);
+        };
+        verReq.onerror = function () { reject(verReq.error || new Error("idb")); };
+      });
+    });
+  }
+
+  function idbGetRegionRows(regionId) {
     return idbOpenBeach().then(function (db) {
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(BEACH_DB_STORE, "readonly");
@@ -795,8 +895,11 @@
             resolve(null);
             return;
           }
-          var rowReq = store.get(BEACH_DB_KEY);
-          rowReq.onsuccess = function () { resolve(rowReq.result || null); };
+          var rowReq = store.get(idbRegionKey(regionId));
+          rowReq.onsuccess = function () {
+            var val = rowReq.result;
+            resolve(val && Array.isArray(val) ? val : null);
+          };
           rowReq.onerror = function () { reject(rowReq.error || new Error("idb")); };
         };
         verReq.onerror = function () { reject(verReq.error || new Error("idb")); };
@@ -804,13 +907,37 @@
     });
   }
 
-  function idbPutBeachRows(rows) {
+  function idbPutRegionRows(regionId, rows) {
     return idbOpenBeach().then(function (db) {
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(BEACH_DB_STORE, "readwrite");
         var store = tx.objectStore(BEACH_DB_STORE);
         store.put(BEACH_DB_VER, "v");
-        store.put(rows, BEACH_DB_KEY);
+        store.put(rows, idbRegionKey(regionId));
+        try {
+          var loadedReq = store.get("loaded");
+          loadedReq.onsuccess = function () {
+            var idx = loadedReq.result;
+            if (!idx || typeof idx !== "object") idx = {};
+            idx[regionId] = 1;
+            store.put(idx, "loaded");
+          };
+        } catch (eLoaded) {}
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error || new Error("idb")); };
+        tx.onabort = function () { reject(tx.error || new Error("idb")); };
+      });
+    });
+  }
+
+  function idbPutBeachRowsLegacy(rows) {
+    /* legacy full-blob write kept only for non-region fallbacks; prefer per-region */
+    return idbOpenBeach().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(BEACH_DB_STORE, "readwrite");
+        var store = tx.objectStore(BEACH_DB_STORE);
+        store.put(BEACH_DB_VER, "v");
+        store.put(rows, "rows");
         tx.oncomplete = function () { resolve(); };
         tx.onerror = function () { reject(tx.error || new Error("idb")); };
         tx.onabort = function () { reject(tx.error || new Error("idb")); };
@@ -849,10 +976,29 @@
       if (beachSeenIds[row.id]) continue;
       beachSeenIds[row.id] = 1;
       beachDb.push(row);
+      beachByIdMap[row.id] = row;
       added.push(row);
     }
     if (added.length) appendBeachGrid(added);
     return beachDb;
+  }
+
+  function noteBeachObjects(list) {
+    var i, b;
+    for (i = 0; i < (list || []).length; i++) {
+      b = list[i];
+      if (b && b.id != null) beachByIdMap[String(b.id)] = b;
+    }
+  }
+
+  function yieldMain() {
+    return new Promise(function (resolve) {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(function () { resolve(); }, { timeout: 80 });
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
   }
 
   function markAllRegionsLoaded() {
@@ -967,11 +1113,29 @@
     if (beachRegionsLoaded[id]) return Promise.resolve(null);
     if (beachRegionInflight[id]) return beachRegionInflight[id];
     var url = region.file || ("data/" + id + ".json.gz");
-    beachRegionInflight[id] = fetchJsonMaybeGzip(url).then(function (part) {
+    beachRegionInflight[id] = idbGetRegionRows(id).then(function (cached) {
+      if (cached && cached.length) {
+        if (!beachRegionsLoaded[id]) {
+          beachRegionsLoaded[id] = true;
+          mergeBeachRows(cached);
+        }
+        return cached;
+      }
+      return fetchJsonMaybeGzip(url).then(function (part) {
+        if (beachRegionsLoaded[id]) return null;
+        beachRegionsLoaded[id] = true;
+        var rows = Array.isArray(part) ? part : (part && Array.isArray(part.beaches) ? part.beaches : null);
+        if (rows && rows.length) {
+          var compact = Array.isArray(rows[0]) ? rows : toCompactRows(parseBeachDb(rows));
+          mergeBeachRows(compact);
+          idbPutRegionRows(id, compact).catch(function () {});
+        } else if (rows) {
+          mergeBeachRows(rows);
+        }
+        return part;
+      });
+    }).then(function (part) {
       delete beachRegionInflight[id];
-      if (beachRegionsLoaded[id]) return null;
-      beachRegionsLoaded[id] = true;
-      if (Array.isArray(part)) mergeBeachRows(part);
       return part;
     }).catch(function (err) {
       delete beachRegionInflight[id];
@@ -992,14 +1156,25 @@
     }
     if (!need.length) return Promise.resolve(beachDb || []);
     if (statusMsg) setStatus(statusMsg);
-    return Promise.all(need.map(function (reg) {
-      return fetchOneRegion(reg).catch(function (err) {
-        console.error(err);
-        return null;
+    var YIELD_EVERY = 4;
+    var idx = 0;
+    function step() {
+      if (idx >= need.length) return Promise.resolve(beachDb || []);
+      var batch = [];
+      while (batch.length < YIELD_EVERY && idx < need.length) {
+        batch.push(need[idx++]);
+      }
+      return Promise.all(batch.map(function (reg) {
+        return fetchOneRegion(reg).catch(function (err) {
+          console.error(err);
+          return null;
+        });
+      })).then(function () {
+        if (idx >= need.length) return beachDb || [];
+        return yieldMain().then(step);
       });
-    })).then(function () {
-      return beachDb || [];
-    });
+    }
+    return step();
   }
 
   function ensureRegionsFor(lat, lon, radiusKm) {
@@ -1007,13 +1182,13 @@
     return loadBeachManifest().then(function (manifest) {
       if (manifest.regions && manifest.regions.length) {
         var regs = pickRegionsAround(lat, lon, radiusKm == null ? 120 : radiusKm, 1);
-        return ensureRegionsList(regs, "Loading nearby beaches…");
+        return ensureRegionsList(regs, "Loading beaches for this area…");
       }
       // legacy flat files — load all once
       if (beachDbComplete && beachDb) return beachDb;
       var files = manifest.files;
       if (!files || !files.length) throw new Error("beach list");
-      setStatus("Loading nearby beaches…");
+      setStatus("Loading beaches for this area…");
       return Promise.all(files.map(function (f) {
         return fetchJsonMaybeGzip(f);
       })).then(function (parts) {
@@ -1024,50 +1199,48 @@
         }
         mergeBeachRows(rows);
         beachDbComplete = true;
-        idbPutBeachRows(toCompactRows(beachDb)).catch(function () {});
+        idbPutBeachRowsLegacy(toCompactRows(beachDb)).catch(function () {});
         return beachDb;
       });
     });
   }
 
-  function ensureRegionsForBbox(south, north, west, east) {
+  function ensureRegionsForBbox(south, north, west, east, quiet) {
     if (beachDbComplete && beachDb) return Promise.resolve(beachDb);
     return loadBeachManifest().then(function (manifest) {
       if (manifest.regions && manifest.regions.length) {
         var regs = pickRegionsForBbox(south, north, west, east, 1);
-        return ensureRegionsList(regs, "Loading beaches in view…");
+        return ensureRegionsList(regs, quiet ? null : "Loading beaches for this area…");
       }
       return ensureRegionsFor((south + north) / 2, (west + east) / 2, 200);
     });
   }
 
-  function startBackgroundRegionLoad(quiet) {
+  function startBackgroundRegionLoad(quiet, lat, lon) {
     if (beachBgStarted || beachDbComplete) return;
     beachBgStarted = true;
+    if (lat == null || lon == null) {
+      if (origin) { lat = origin.lat; lon = origin.lon; }
+      else { lat = DEFAULT_WARM_LAT; lon = DEFAULT_WARM_LON; }
+    }
     loadBeachManifest().then(function (manifest) {
       var regions = manifest.regions;
       if (!regions || !regions.length) return;
-      var pending = [];
+      /* Nearby ring only — never background-fetch the whole planet (~198 regions). */
+      var pending = pickRegionsAround(lat, lon, BG_RING_KM, BG_PAD_CELLS);
+      var filtered = [];
       var i, r;
-      for (i = 0; i < regions.length; i++) {
-        r = regions[i];
-        if (r && r.id && !beachRegionsLoaded[r.id]) pending.push(r);
+      for (i = 0; i < pending.length; i++) {
+        r = pending[i];
+        if (r && r.id && !beachRegionsLoaded[r.id]) filtered.push(r);
       }
-      if (!pending.length) {
-        beachDbComplete = true;
-        return;
-      }
-      if (!quiet) setStatus("Loading more beaches in the background…");
+      pending = filtered;
+      if (!pending.length) return;
+      if (!quiet) setStatus("Loading beaches for this area…");
       var idx = 0;
-      var CONCURRENCY = 4;
+      var CONCURRENCY = 3;
       function pump() {
-        if (idx >= pending.length) {
-          beachDbComplete = true;
-          if (beachDb && beachDb.length) {
-            idbPutBeachRows(toCompactRows(beachDb)).catch(function () {});
-          }
-          return;
-        }
+        if (idx >= pending.length) return;
         var batch = [];
         while (batch.length < CONCURRENCY && idx < pending.length) {
           batch.push(pending[idx++]);
@@ -1078,14 +1251,8 @@
             return null;
           });
         })).then(function () {
-          if (typeof requestIdleCallback === "function") {
-            return new Promise(function (resolve) {
-              requestIdleCallback(function () { resolve(pump()); }, { timeout: 1200 });
-            });
-          }
-          return new Promise(function (resolve) {
-            setTimeout(function () { resolve(pump()); }, 40);
-          });
+          if (idx >= pending.length) return;
+          return yieldMain().then(pump);
         });
       }
       return pump();
@@ -1099,6 +1266,7 @@
     beachDb = null;
     beachGrid = null;
     beachSeenIds = Object.create(null);
+    beachByIdMap = Object.create(null);
     mergeBeachRows(data);
     markAllRegionsLoaded();
     return beachDb;
@@ -1135,15 +1303,15 @@
         .then(function (data) {
           mergeBeachRows(data);
           beachDbComplete = true;
-          idbPutBeachRows(toCompactRows(beachDb)).catch(function () {});
+          idbPutBeachRowsLegacy(toCompactRows(beachDb)).catch(function () {});
           return beachDb;
         });
     }
 
     function priorityThenBackground() {
-      dbStatus("Loading nearby beaches…");
+      dbStatus("Loading beaches for this area…");
       return ensureRegionsFor(lat, lon, 150).then(function (db) {
-        startBackgroundRegionLoad(quiet);
+        startBackgroundRegionLoad(quiet, lat, lon);
         return db || beachDb || [];
       }).catch(function (err) {
         console.error(err);
@@ -1154,7 +1322,7 @@
     // Already have some rows (priority loaded) — still fine to resolve; callers that need
     // more geography should use ensureRegionsFor / ensureRegionsForBbox.
     if (beachDb && beachDb.length) {
-      startBackgroundRegionLoad(true);
+      startBackgroundRegionLoad(true, lat, lon);
       return ensureRegionsFor(lat, lon, 150).then(function () {
         return beachDb;
       });
@@ -1166,14 +1334,10 @@
       });
     }
 
-    dbStatus("Loading nearby beaches…");
-    beachDbPromise = idbGetBeachRows().then(function (cached) {
-      if (cached && Array.isArray(cached) && cached.length) {
-        dbStatus("Using saved beach list…");
-        finishFromFullCache(cached);
-        loadBeachManifest().then(function () { markAllRegionsLoaded(); }).catch(function () {});
-        return beachDb;
-      }
+    dbStatus("Loading beaches for this area…");
+    /* Per-region IDB: no full-planet hydrate. Priority fetch + nearby ring. */
+    beachDbPromise = idbGetVer().then(function (ver) {
+      void ver;
       return priorityThenBackground();
     }).catch(function () {
       return priorityThenBackground();
@@ -1454,27 +1618,59 @@
     return sampled;
   }
 
+  function paintCullKey(vis, usePoint) {
+    var n = vis.length;
+    var firstId = n ? String(vis[0].id) : "";
+    var lastId = n ? String(vis[n - 1].id) : "";
+    var west = 0, east = 0, south = 0, north = 0;
+    try {
+      var b = map.getBounds();
+      west = b.getWest();
+      east = b.getEast();
+      south = b.getSouth();
+      north = b.getNorth();
+    } catch (eB) {}
+    var hash = 0;
+    var lim = n < 24 ? n : 24;
+    var i, s, c, j;
+    for (i = 0; i < lim; i++) {
+      s = String(vis[i].id);
+      for (j = 0; j < s.length; j++) {
+        c = s.charCodeAt(j);
+        hash = ((hash << 5) - hash + c) | 0;
+      }
+    }
+    return n + "|" + (usePoint ? "pt" : "poly") + "|" + firstId + "|" + lastId + "|" +
+      west.toFixed(2) + "," + south.toFixed(2) + "," + east.toFixed(2) + "," + north.toFixed(2) +
+      "|" + (hash >>> 0) + "|" + viewGen;
+  }
+
   function paintBeaches(list) {
     ensureBeachLayers();
-    var vis = cullToView(beachesForMode(list || beaches));
+    var srcList = list || beaches;
+    noteBeachObjects(srcList);
+    var vis = cullToView(beachesForMode(srcList));
     var z = 3;
     try { z = map.getZoom(); } catch (eZ) {}
     var usePoint = z < 9;
-    var key = vis.map(function (b) { return String(b.id); }).join(",") + "|" + (usePoint ? "pt" : "poly");
+    var key = paintCullKey(vis, usePoint);
     if (key === lastPaintKey) return;
     lastPaintKey = key;
-    var features = vis.map(function (b) {
-      var geom = b.geom;
+    var features = [];
+    var i, b, geom;
+    for (i = 0; i < vis.length; i++) {
+      b = vis[i];
+      geom = b.geom;
       if (usePoint || !geom) {
         geom = { type: "Point", coordinates: [b.lon, b.lat] };
       }
-      return {
+      features.push({
         type: "Feature",
         id: b.id,
         properties: { id: String(b.id) },
         geometry: geom
-      };
-    });
+      });
+    }
     map.getSource("beaches").setData({ type: "FeatureCollection", features: features });
   }
 
@@ -1501,8 +1697,15 @@
   }
 
   function beachById(id) {
-    var i, sid = String(id);
-    for (i = 0; i < beaches.length; i++) if (String(beaches[i].id) === sid) return beaches[i];
+    var sid = String(id);
+    if (beachByIdMap[sid]) return beachByIdMap[sid];
+    var i;
+    for (i = 0; i < beaches.length; i++) {
+      if (String(beaches[i].id) === sid) {
+        beachByIdMap[sid] = beaches[i];
+        return beaches[i];
+      }
+    }
     return null;
   }
 
@@ -1528,7 +1731,17 @@
     });
   }
 
-  function enrichBeach(b) {
+  function enrichBeach(b, withWiki) {
+    /* withWiki default true for map hover-dwell / click popup path only */
+    if (withWiki === false) {
+      return fetchHourly(b.lat, b.lon).then(function (data) {
+        var forecast = sunForecast(data);
+        showPopup(b, [b.lon, b.lat], forecast, "");
+        return data;
+      }).catch(function () {
+        showPopup(b, [b.lon, b.lat], "Couldn't get the sun forecast.", "");
+      });
+    }
     return Promise.all([
       fetchHourly(b.lat, b.lon).then(sunForecast).catch(function () { return "Couldn't get the sun forecast."; }),
       fetchWiki(b)
@@ -1696,7 +1909,8 @@
     map.flyTo({ center: [b.lon, b.lat], zoom: Math.max(map.getZoom(), 11), speed: 0.9 });
     showPopup(b);
     var prefix = kind === "sunny" ? "Sunny: " : "Nearest: ";
-    enrichBeach(b).then(function () {
+    /* No Wikipedia on Find / list / preview cycle — hourly only. Wiki via map dwell/click. */
+    enrichBeach(b, false).then(function () {
       return fetchHourly(b.lat, b.lon);
     }).then(function (data) {
       var line = sunForecast(data);
@@ -1723,11 +1937,16 @@
     return rows.filter(isSunnyBeach).sort(function (a, b) { return a.dist - b.dist; });
   }
 
-  function weatherCollectSunny(list, assumeForeign, wantCount) {
+  function weatherCollectSunny(list, assumeForeign, wantCount, genToken) {
     var want = wantCount || SUNNY_PICK_CAP;
     var found = [];
     var i = 0;
+    var myGen = genToken != null ? genToken : wxSearchGen;
+    function stale() {
+      return myGen !== wxSearchGen;
+    }
     function absorb(wx) {
+      if (stale()) return;
       filterSunnyRows(wx, assumeForeign).forEach(function (b) {
         if (found.length >= want) return;
         if (found.some(function (x) { return x.id === b.id; })) return;
@@ -1735,6 +1954,7 @@
       });
     }
     function step() {
+      if (stale()) return Promise.resolve([]);
       if (found.length >= want || i >= list.length) {
         found.sort(function (a, b) { return a.dist - b.dist; });
         return Promise.resolve(found.slice(0, want));
@@ -1757,6 +1977,7 @@
         }));
       }
       return Promise.all(jobs).then(function (parts) {
+        if (stale()) return [];
         var wx = [];
         var p;
         for (p = 0; p < parts.length; p++) {
@@ -1925,9 +2146,11 @@
     var code = only ? null : excludeCode();
     var where = isIntl() ? " outside " + countryLabel() : "";
     var km = Math.round(maxR / 1000);
+    var myGen = ++wxSearchGen;
     setStatus((wantSunny ? "No sun close by. " : "") + "Looking" + where + ", within " + km + " km…");
     fetchBeaches(origin.lat, origin.lon, maxR, false, code, null, 400, null, only)
       .then(function (list) {
+        if (myGen !== wxSearchGen) { unlockSearch(); return; }
         if (!wantSunny) {
           var nearList = modeSortedBeaches(list, true).slice(0, SUNNY_PICK_CAP);
           unlockSearch();
@@ -1944,7 +2167,8 @@
           setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
           return;
         }
-        return weatherCollectSunny(list, true, SUNNY_PICK_CAP).then(function (rows) {
+        return weatherCollectSunny(list, true, SUNNY_PICK_CAP, myGen).then(function (rows) {
+          if (myGen !== wxSearchGen) { unlockSearch(); return; }
           unlockSearch();
           if (rows && rows.length) {
             setStatus(rows.length === 1 ? "1 sunny beach found." : rows.length + " sunny beaches found. Pick one.");
@@ -1998,6 +2222,7 @@
       if (!b || seen[b.id]) return;
       if (origin) b.dist = haversineKm(origin.lat, origin.lon, b.lat, b.lon);
       beaches.push(b);
+      beachByIdMap[String(b.id)] = b;
       seen[b.id] = true;
     });
   }
@@ -2097,6 +2322,7 @@
     if (!origin || searchingSunny) return;
     // Repeated Find: cycle next beach in the open sheet (wrap); else search.
     if (advanceSunnySheet()) return;
+    wxSearchGen += 1;
     ensureHomeCountry().then(function () {
       var wantSunny = sunnyModeOn();
       if (wantSunny) {
@@ -2260,10 +2486,10 @@
     btnPlay.classList.add("is-on");
     playTimer = setInterval(function () {
       if (tabHidden) return;
-      var next = cloudIndex + 1;
-      if (next > sliderMax()) {
-        setCloudFrame(sliderMax());
+      var next = cloudIndex + FRAME_PLAY_STEP;
+      if (next >= sliderMax()) {
         stopPlay();
+        setCloudFrame(sliderMax(), { forceHires: true });
         return;
       }
       setCloudFrame(next);
@@ -2281,7 +2507,15 @@
     if (moveTimer) clearTimeout(moveTimer);
     moveTimer = setTimeout(function () {
       paintBeaches(beaches);
-      if (allMode) loadViewBeaches();
+      if (allMode) {
+        loadViewBeaches();
+      } else {
+        /* On-demand: warm cells under the view without full-planet fetch */
+        try {
+          var qb = viewBbox();
+          ensureRegionsForBbox(qb.south, qb.north, qb.west, qb.east, true).catch(function () {});
+        } catch (eMove) {}
+      }
     }, 180);
   });
 
@@ -2324,6 +2558,14 @@
       if (e && e.stopPropagation) e.stopPropagation();
     }
     toggleSunny.addEventListener("click", stopSunBubble);
+    toggleSunny.addEventListener("change", function () {
+      wxSearchGen += 1;
+      if (searchingSunny) {
+        searchingSunny = false;
+        unlockSearch();
+        setStatus(sunnyModeOn() ? "Sunny on — hit Find again." : "Sunny off — hit Find for nearest beaches.");
+      }
+    });
     if (toggleSunny.parentNode) {
       toggleSunny.parentNode.addEventListener("click", stopSunBubble);
     }
@@ -2332,10 +2574,10 @@
   btnPlay.addEventListener("click", togglePlay);
   slider.addEventListener("input", function () {
     stopPlay();
-    setCloudFrame(clampIndex(slider.value));
+    setCloudFrame(clampIndex(slider.value), { forceHires: true });
   });
   slider.addEventListener("change", function () {
-    setCloudFrame(clampIndex(slider.value));
+    setCloudFrame(clampIndex(slider.value), { forceHires: true });
   });
   cloudOpacityEl.addEventListener("input", function () {
     cloudOpacity = Math.max(0, Math.min(1, Number(cloudOpacityEl.value) / 100));
