@@ -107,6 +107,41 @@ html, body {
   line-height: 1.15;
 }
 
+.sun-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  max-width: 168px;
+}
+
+.sun-opt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font: 650 0.78rem/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sun-opt input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--sun);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
 .timeline {
   position: fixed;
   z-index: 2;
@@ -367,8 +402,11 @@ html, body {
 @media (max-width: 640px) {
   .timeline {
     right: max(12px, env(safe-area-inset-right));
-    bottom: 290px;
+    bottom: 318px;
     max-width: none;
+  }
+  .sun-stack {
+    max-width: 144px;
   }
   .ctrl-sun {
     min-width: 132px;
@@ -376,6 +414,10 @@ html, body {
   }
   .beach-emoji {
     font-size: 68px;
+  }
+  .sun-opt {
+    padding: 5px 8px;
+    font-size: 0.74rem;
   }
 }
 

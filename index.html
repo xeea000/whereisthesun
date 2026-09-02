@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="styles.css?v=cache1">
+  <link rel="stylesheet" href="styles.css?v=unify1">
 </head>
 <body>
   <div id="map"></div>
@@ -40,11 +40,13 @@
   <div class="controls">
     <button id="btn-locate" class="ctrl" type="button">Locate me</button>
     <button id="btn-all" class="ctrl" type="button" aria-pressed="false">All beaches</button>
-    <button id="btn-near" class="ctrl" type="button" disabled>Nearest beach</button>
-    <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled>
-      <span class="beach-emoji" aria-hidden="true">🏖️</span>
-      <span class="ctrl-label">Find Nearest Sunny Beaches</span>
-    </button>
+    <div class="sun-stack">
+      <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled>
+        <span class="beach-emoji" aria-hidden="true">🏖️</span>
+        <span class="ctrl-label">Find Nearest Beaches</span>
+      </button>
+      <label class="sun-opt"><input id="toggle-sunny" type="checkbox" checked> Sunny</label>
+    </div>
   </div>
   <aside id="sunny-sheet" class="sunny-panel" hidden aria-labelledby="sunny-sheet-title">
     <div class="sunny-panel-head">
@@ -55,6 +57,6 @@
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
   <script src="vendor/maplibre-gl.js"></script>
-  <script src="app.js?v=cache1"></script>
+  <script src="app.js?v=unify1"></script>
 </body>
 </html>

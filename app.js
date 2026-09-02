@@ -16,10 +16,11 @@
 
   var statusEl = document.getElementById("status");
   var btnLocate = document.getElementById("btn-locate");
-  var btnNear = document.getElementById("btn-near");
   var btnAll = document.getElementById("btn-all");
   var btnSun = document.getElementById("btn-sun");
+  var toggleSunny = document.getElementById("toggle-sunny");
   var sunnySheet = document.getElementById("sunny-sheet");
+  var sunnySheetTitle = document.getElementById("sunny-sheet-title");
   var sunnySheetList = document.getElementById("sunny-sheet-list");
   var sunnySheetSub = document.getElementById("sunny-sheet-sub");
   var sunnySheetClose = document.getElementById("sunny-sheet-close");
@@ -58,7 +59,10 @@
   var resumePlay = false;
   var beachDb = null;
   var beachDbPromise = null;
+  var beachGrid = null;
+  var GRID_DEG = 1;
   var WX_BATCH = 60;
+  var sheetSunnyMode = true;
 
   var lastPaintKey = "";
   var overlayReady = false;
@@ -543,6 +547,74 @@
     return out;
   }
 
+  function buildBeachGrid(db) {
+    beachGrid = Object.create(null);
+    var i, row, key;
+    for (i = 0; i < db.length; i++) {
+      row = db[i];
+      key = Math.floor(row.lat / GRID_DEG) * GRID_DEG + "," + Math.floor(row.lon / GRID_DEG) * GRID_DEG;
+      if (!beachGrid[key]) beachGrid[key] = [];
+      beachGrid[key].push(row);
+    }
+  }
+
+  function forEachGridKey(south, north, west, east, fn) {
+    var pad = GRID_DEG;
+    var lat0 = Math.floor((south - pad) / GRID_DEG) * GRID_DEG;
+    var lat1 = Math.floor((north + pad) / GRID_DEG) * GRID_DEG;
+    if (lat0 < -90) lat0 = Math.floor(-90 / GRID_DEG) * GRID_DEG;
+    if (lat1 > 90) lat1 = Math.floor(90 / GRID_DEG) * GRID_DEG;
+    var w = west - pad;
+    var e = east + pad;
+    var lonSpans = [];
+    if (e - w >= 360) {
+      lonSpans.push([-180, 180]);
+    } else {
+      while (w < -180 && e < -180) { w += 360; e += 360; }
+      while (w > 180 && e > 180) { w -= 360; e -= 360; }
+      if (w < -180) {
+        lonSpans.push([w + 360, 180]);
+        lonSpans.push([-180, e]);
+      } else if (e > 180) {
+        lonSpans.push([w, 180]);
+        lonSpans.push([-180, e - 360]);
+      } else if (e < w) {
+        lonSpans.push([w, 180]);
+        lonSpans.push([-180, e]);
+      } else {
+        lonSpans.push([w, e]);
+      }
+    }
+    var lat, lon, s, lon0, lon1;
+    for (lat = lat0; lat <= lat1; lat += GRID_DEG) {
+      for (s = 0; s < lonSpans.length; s++) {
+        lon0 = Math.floor(lonSpans[s][0] / GRID_DEG) * GRID_DEG;
+        lon1 = Math.floor(lonSpans[s][1] / GRID_DEG) * GRID_DEG;
+        for (lon = lon0; lon <= lon1; lon += GRID_DEG) {
+          fn(lat + "," + lon);
+        }
+      }
+    }
+  }
+
+  function rowsFromGrid(south, north, west, east) {
+    if (!beachGrid) return beachDb || [];
+    var out = [];
+    var seen = Object.create(null);
+    forEachGridKey(south, north, west, east, function (key) {
+      var cell = beachGrid[key];
+      if (!cell) return;
+      var i, row;
+      for (i = 0; i < cell.length; i++) {
+        row = cell[i];
+        if (seen[row.id]) continue;
+        seen[row.id] = 1;
+        out.push(row);
+      }
+    });
+    return out;
+  }
+
   function fetchJsonGzip(url) {
     return fetch(url).then(function (res) {
       if (!res.ok) throw new Error("beach list");
@@ -637,9 +709,15 @@
     return out;
   }
 
-  function loadBeachDb() {
+  function loadBeachDb(opts) {
+    var quiet = opts && opts.quiet;
     if (beachDb) return Promise.resolve(beachDb);
     if (beachDbPromise) return beachDbPromise;
+
+    function dbStatus(msg) {
+      if (quiet) return;
+      setStatus(msg);
+    }
 
     function fromJson() {
       return fetch("data/beaches.json").then(function (res) {
@@ -657,11 +735,11 @@
         if (!files || !files.length) throw new Error("beach list");
         var total = files.length;
         var done = 0;
-        setStatus("Loading beach list…");
+        dbStatus("Loading beach list…");
         return Promise.all(files.map(function (f) {
           return fetchJsonMaybeGzip(f).then(function (part) {
             done += 1;
-            setStatus("Loading beaches… " + done + "/" + total);
+            dbStatus("Loading beaches… " + done + "/" + total);
             return part;
           });
         }));
@@ -683,6 +761,7 @@
 
     function finish(data, fromCache) {
       beachDb = parseBeachDb(data);
+      buildBeachGrid(beachDb);
       if (!fromCache) {
         var compact = Array.isArray(data) && data.length && Array.isArray(data[0])
           ? data
@@ -692,10 +771,10 @@
       return beachDb;
     }
 
-    setStatus("Loading beach list…");
+    dbStatus("Loading beach list…");
     beachDbPromise = idbGetBeachRows().then(function (cached) {
       if (cached && Array.isArray(cached) && cached.length) {
-        setStatus("Using saved beach list…");
+        dbStatus("Using saved beach list…");
         return finish(cached, true);
       }
       return fromNetwork().then(function (data) { return finish(data, false); });
@@ -741,9 +820,22 @@
     return loadBeachDb().then(function (db) {
       abortIf(signal);
       var list = [];
-      var i, row, country, distM, b;
-      for (i = 0; i < db.length; i++) {
-        row = db[i];
+      var i, row, country, distM, b, candidates, south, north, west, east, degLat, degLon, cosLat;
+      if (bbox) {
+        candidates = rowsFromGrid(bbox.south, bbox.north, bbox.west, bbox.east);
+      } else {
+        degLat = (radiusM / 1000) / 111;
+        cosLat = Math.cos(lat * Math.PI / 180);
+        degLon = cosLat > 0.05 ? degLat / cosLat : 180;
+        south = lat - degLat;
+        north = lat + degLat;
+        west = lon - degLon;
+        east = lon + degLon;
+        candidates = rowsFromGrid(south, north, west, east);
+      }
+      if (!candidates || !candidates.length) candidates = db;
+      for (i = 0; i < candidates.length; i++) {
+        row = candidates[i];
         if (bbox) {
           if (!inBbox(row.lat, row.lon, bbox)) continue;
         } else {
@@ -1217,7 +1309,6 @@
   function unlockSearch() {
     searchingSunny = false;
     btnSun.disabled = false;
-    if (btnNear) btnNear.disabled = false;
     if (btnAll) btnAll.disabled = false;
   }
 
@@ -1235,23 +1326,42 @@
     var want = wantCount || SUNNY_PICK_CAP;
     var found = [];
     var i = 0;
+    function absorb(wx) {
+      filterSunnyRows(wx, assumeForeign).forEach(function (b) {
+        if (found.length >= want) return;
+        if (found.some(function (x) { return x.id === b.id; })) return;
+        found.push(b);
+      });
+    }
     function step() {
       if (found.length >= want || i >= list.length) {
         found.sort(function (a, b) { return a.dist - b.dist; });
         return Promise.resolve(found.slice(0, want));
       }
-      var chunk = list.slice(i, i + WX_BATCH);
+      var chunkA = list.slice(i, i + WX_BATCH);
       i += WX_BATCH;
+      var chunkB = list.slice(i, i + WX_BATCH);
+      if (chunkB.length) i += WX_BATCH;
       setStatus("Checking the sun… " + Math.min(i, list.length) + "/" + list.length);
-      return fetchCurrentWeather(chunk).then(function (wx) {
-        filterSunnyRows(wx, assumeForeign).forEach(function (b) {
-          if (found.length >= want) return;
-          if (found.some(function (x) { return x.id === b.id; })) return;
-          found.push(b);
-        });
-        return step();
-      }).catch(function (err) {
-        console.error(err);
+      var jobs = [
+        fetchCurrentWeather(chunkA).catch(function (err) {
+          console.error(err);
+          return [];
+        })
+      ];
+      if (chunkB.length) {
+        jobs.push(fetchCurrentWeather(chunkB).catch(function (err) {
+          console.error(err);
+          return [];
+        }));
+      }
+      return Promise.all(jobs).then(function (parts) {
+        var wx = [];
+        var p;
+        for (p = 0; p < parts.length; p++) {
+          if (parts[p] && parts[p].length) wx.push.apply(wx, parts[p]);
+        }
+        absorb(wx);
         return step();
       });
     }
@@ -1274,26 +1384,36 @@
 
   function previewSunnyBeach(b, btn) {
     markSunnyActive(btn);
-    finishBeach(b, "sunny");
+    finishBeach(b, sheetSunnyMode ? "sunny" : "near");
   }
 
-  function openSunnySheet(list) {
+  function openSunnySheet(list, sunnyMode) {
+    sheetSunnyMode = sunnyMode !== false;
     if (!sunnySheet || !sunnySheetList) {
-      if (list && list[0]) finishBeach(list[0], "sunny");
+      if (list && list[0]) finishBeach(list[0], sheetSunnyMode ? "sunny" : "near");
       return;
+    }
+    if (sunnySheetTitle) {
+      sunnySheetTitle.textContent = sheetSunnyMode ? "Sunny beaches" : "Nearest beaches";
     }
     sunnySheetList.innerHTML = "";
     if (sunnySheetSub) {
-      sunnySheetSub.textContent = list.length === 1
-        ? "1 sunny beach. Tap to show on map."
-        : list.length + " sunny beaches. Tap one, map stays live.";
+      if (sheetSunnyMode) {
+        sunnySheetSub.textContent = list.length === 1
+          ? "1 sunny beach. Tap to show on map."
+          : list.length + " sunny beaches. Tap one, map stays live.";
+      } else {
+        sunnySheetSub.textContent = list.length === 1
+          ? "1 beach. Tap to show on map."
+          : list.length + " nearest beaches. Tap one, map stays live.";
+      }
     }
     list.forEach(function (b, idx) {
       var li = document.createElement("li");
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "sheet-item";
-      var cloud = b.cloud != null ? Math.round(b.cloud) + "% cloudy" : "sunny";
+      var cloud = b.cloud != null ? Math.round(b.cloud) + "% cloudy" : "—";
       btn.innerHTML = "<span>" + escapeHtml(b.name || "Beach") + "</span>" +
         "<span class=\"dist\">" + escapeHtml(formatKm(b.dist)) + "</span>" +
         "<span class=\"meta\">#" + (idx + 1) + " · " + escapeHtml(cloud) + "</span>";
@@ -1324,6 +1444,17 @@
     });
   }
 
+  function modeSortedBeaches(list, assumeForeign) {
+    var rows = list || [];
+    if (isIntl()) {
+      rows = rows.filter(function (b) { return isForeignBeach(b, assumeForeign); });
+    } else {
+      rows = beachesForMode(rows);
+    }
+    rows = rows.slice().sort(function (a, b) { return a.dist - b.dist; });
+    return rows;
+  }
+
   function searchBeachesFar(wantSunny) {
     var radii = searchRadii();
     var maxR = radii[radii.length - 1];
@@ -1335,10 +1466,14 @@
     fetchBeaches(origin.lat, origin.lon, maxR, false, code, null, 400, null, only)
       .then(function (list) {
         if (!wantSunny) {
-          var near = pickNearestBeachFrom(list, true);
+          var nearList = modeSortedBeaches(list, true).slice(0, SUNNY_PICK_CAP);
           unlockSearch();
-          if (near) finishBeach(near, "near");
-          else setStatus("Couldn't find a beach" + where + " within " + km + " km.");
+          if (nearList.length) {
+            setStatus(nearList.length === 1 ? "1 beach found. Pick it on the list." : nearList.length + " beaches found. Pick one.");
+            openSunnySheet(nearList, false);
+          } else {
+            setStatus("Couldn't find a beach" + where + " within " + km + " km.");
+          }
           return;
         }
         if (!list || !list.length) {
@@ -1350,7 +1485,7 @@
           unlockSearch();
           if (rows && rows.length) {
             setStatus(rows.length === 1 ? "1 sunny beach found." : rows.length + " sunny beaches found. Pick one.");
-            openSunnySheet(rows);
+            openSunnySheet(rows, true);
           } else {
             setStatus("Couldn't find a sunny beach" + where + " within " + km + " km right now.");
           }
@@ -1491,37 +1626,42 @@
     loadViewBeaches();
   }
 
-  function goNearestBeach() {
-    if (!origin || searchingSunny) return;
-    ensureHomeCountry().then(function () {
-      var b = pickNearestBeachFrom(nearbyBeaches, false);
-      if (b) {
-        finishBeach(b, "near");
-        return;
-      }
-      searchingSunny = true;
-      btnSun.disabled = true;
-      if (btnNear) btnNear.disabled = true;
-      searchBeachesFar(false);
-    });
+  function sunnyModeOn() {
+    return !toggleSunny || toggleSunny.checked;
   }
 
-  function goNearestSunny() {
+  function goNearestBeaches() {
     if (!origin || searchingSunny) return;
     ensureHomeCountry().then(function () {
-      var localSunny = filterSunnyRows(nearbyBeaches, false);
-      if (localSunny.length >= 3) {
-        setStatus(localSunny.length + " sunny beaches nearby. Pick one.");
-        openSunnySheet(localSunny.slice(0, SUNNY_PICK_CAP));
+      var wantSunny = sunnyModeOn();
+      if (wantSunny) {
+        var localSunny = filterSunnyRows(nearbyBeaches, false);
+        if (localSunny.length >= 3) {
+          setStatus(localSunny.length + " sunny beaches nearby. Pick one.");
+          openSunnySheet(localSunny.slice(0, SUNNY_PICK_CAP), true);
+          return;
+        }
+        searchingSunny = true;
+        btnSun.disabled = true;
+        if (localSunny.length) {
+          setStatus("Found " + localSunny.length + " nearby. Looking farther for more…");
+        }
+        searchBeachesFar(true);
+        return;
+      }
+      var localNear = modeSortedBeaches(nearbyBeaches, false);
+      if (localNear.length >= 3) {
+        var pick = localNear.slice(0, SUNNY_PICK_CAP);
+        setStatus(pick.length === 1 ? "1 beach nearby. Pick it on the list." : pick.length + " beaches nearby. Pick one.");
+        openSunnySheet(pick, false);
         return;
       }
       searchingSunny = true;
       btnSun.disabled = true;
-      if (btnNear) btnNear.disabled = true;
-      if (localSunny.length) {
-        setStatus("Found " + localSunny.length + " nearby. Looking farther for more…");
+      if (localNear.length) {
+        setStatus("Found " + localNear.length + " nearby. Looking farther for more…");
       }
-      searchBeachesFar(true);
+      searchBeachesFar(false);
     });
   }
 
@@ -1541,7 +1681,6 @@
     homeCountry = null;
     waitingForTap = false;
     btnSun.disabled = true;
-    if (btnNear) btnNear.disabled = true;
     beaches = [];
     nearbyBeaches = [];
     placeUserMarker();
@@ -1571,7 +1710,6 @@
             paintBeaches(beaches);
           }
           btnSun.disabled = false;
-          if (btnNear) btnNear.disabled = false;
           if (btnAll) btnAll.disabled = false;
           setStatus("No beaches within 50 km. All beaches can still look at the map.");
           return null;
@@ -1586,7 +1724,6 @@
         }
         paintBeaches(beaches);
         btnSun.disabled = false;
-        if (btnNear) btnNear.disabled = false;
         if (btnAll) btnAll.disabled = false;
         var n0 = beachesForMode(nearbyBeaches).length;
         setStatus((n0 === 1 ? "1 beach nearby. " : n0 + " beaches nearby. ") + "Checking the sun…");
@@ -1620,7 +1757,6 @@
           paintBeaches([]);
         }
         btnSun.disabled = false;
-        if (btnNear) btnNear.disabled = false;
         if (btnAll) btnAll.disabled = false;
         setStatus(beachDb ? "Couldn't load nearby beaches. Clouds are still up — try Locate me again." : "Couldn't load the beach list. Try a refresh.");
       });
@@ -1690,6 +1826,7 @@
     if (overlayVisible()) restackOverlay();
     setCloudFrame(sliderMax());
     applyBaseMap();
+    loadBeachDb({ quiet: true }).catch(function () {});
     locate();
   });
 
@@ -1712,8 +1849,16 @@
 
   btnLocate.addEventListener("click", locate);
   if (btnAll) btnAll.addEventListener("click", showAllBeaches);
-  if (btnNear) btnNear.addEventListener("click", goNearestBeach);
-  btnSun.addEventListener("click", goNearestSunny);
+  btnSun.addEventListener("click", goNearestBeaches);
+  if (toggleSunny) {
+    function stopSunBubble(e) {
+      if (e && e.stopPropagation) e.stopPropagation();
+    }
+    toggleSunny.addEventListener("click", stopSunBubble);
+    if (toggleSunny.parentNode) {
+      toggleSunny.parentNode.addEventListener("click", stopSunBubble);
+    }
+  }
   if (sunnySheetClose) sunnySheetClose.addEventListener("click", closeSunnySheet);
   btnPlay.addEventListener("click", togglePlay);
   slider.addEventListener("input", function () {
