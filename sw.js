@@ -1,13 +1,13 @@
 /* SUNNY service worker — network-first shell so deploys stick; beach data network-first. */
-var CACHE = "sunny-v-opt9b";
+var CACHE = "sunny-v-opt9c";
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt9b",
-  "app.js?v=opt9b",
-  "beach-worker.js?v=opt9b",
-  "vendor/maplibre-gl.js?v=opt9b",
-  "vendor/maplibre-gl.css?v=opt9b"
+  "styles.css?v=opt9c",
+  "app.js?v=opt9c",
+  "beach-worker.js?v=opt9c",
+  "vendor/maplibre-gl.js?v=opt9c",
+  "vendor/maplibre-gl.css?v=opt9c"
 ];
 
 self.addEventListener("install", function (event) {
