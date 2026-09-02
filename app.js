@@ -286,14 +286,15 @@
     });
   }
 
-/* === BEGIN CLOUD STATIC + PLAY IMAGE OVERLAY (opt6/7 + opt8 smooth) === */
+/* === BEGIN CLOUD STATIC + PLAY IMAGE OVERLAY (opt11: clouds under beaches) === */
   /*
-   * opt6: Abandon MapLibre tile animation for Play (opt5 double-buffer flickered
-   * because clearTiles / source rebuild blanked the visible buffer).
-   * - Static / scrub: single GIBS WMTS raster on #cloud-map. setTiles WITHOUT
-   *   clearTiles (brief stale tiles OK). remove+add only when host/layer changes.
-   * - Play: hide MapLibre cloud layers; drive #cloud-play-layer (two <img>s) from
+   * opt11: Static/scrub GIBS on MAIN map (raster before beaches/labels) so canvas
+   * beach dots + Labels draw on top. Do NOT cover the WebGL canvas with #cloud-map.
+   * - Static / scrub: gibs/modis/viirs/iem-vis on `map`, insert before beaches-fill
+   *   (and under Labels overlay). setTiles WITHOUT clearTiles.
+   * - Play: hide MapLibre cloud rasters; drive #cloud-play-layer (two <img>s) from
    *   NASA GIBS WMS GetMap, mix-blend-mode:screen, double-buffer crossfade.
+   *   Play layer is sibling of canvas-container (markers z-index above it).
    *   Never clear to empty — hold previous image until next onload.
    */
   var CLOUD_FADE_MS = 520; /* rAF crossfade ~450–600ms */
@@ -328,80 +329,75 @@
   var frameWaitStarted = 0;
 
   function cloudTargetMap() {
-    return cloudMap || map;
+    /* opt11: static clouds always on main map */
+    return map;
   }
 
   function isPlaying() {
     return playMode || !!(btnPlay && btnPlay.getAttribute("aria-pressed") === "true");
   }
 
-  function ensureCloudMap() {
-    if (cloudMap) return cloudMap;
+  function hideUnusedCloudMapEl() {
     var el = document.getElementById("cloud-map");
-    if (!el || typeof maplibregl === "undefined") return null;
+    if (!el) return;
+    el.style.display = "none";
+    el.setAttribute("aria-hidden", "true");
+    el.classList.add("is-unused");
+    /* never reparent into canvas-container */
     try {
-      var canvasBox = map.getCanvasContainer && map.getCanvasContainer();
-      if (canvasBox && el.parentNode !== canvasBox) {
-        canvasBox.appendChild(el);
-        el.style.position = "absolute";
-        el.style.inset = "0";
-        el.style.width = "100%";
-        el.style.height = "100%";
+      if (el.parentNode && map && map.getContainer && el.parentNode === map.getCanvasContainer()) {
+        document.body.appendChild(el);
       }
-    } catch (ePar) {}
-    cloudMap = new maplibregl.Map({
-      container: "cloud-map",
-      style: {
-        version: 8,
-        sources: {},
-        layers: [
-          {
-            id: "cloud-bg",
-            type: "background",
-            paint: { "background-color": "#000000", "background-opacity": 1 }
-          }
-        ]
-      },
-      center: map.getCenter(),
-      zoom: map.getZoom(),
-      interactive: false,
-      attributionControl: false,
-      fadeDuration: 0,
-      refreshExpiredTiles: false,
-      maxTileCacheSize: 64,
-      maxPitch: 0,
-      dragRotate: false,
-      pitchWithRotate: false,
-      preserveDrawingBuffer: false
-    });
-    cloudMap.on("load", function () {
-      cloudSourcesReady = true;
-      syncCloudMap(true);
-      try { cloudMap.resize(); } catch (eRz) {}
-    });
+    } catch (eHide) {}
+  }
+
+  function ensureCloudMap() {
+    /* opt11: no second MapLibre — hide leftover #cloud-map DOM */
+    cloudMap = null;
+    hideUnusedCloudMapEl();
     ensurePlayLayer();
-    return cloudMap;
+    return null;
   }
 
   function syncCloudMap(force) {
-    if (!cloudMap || !map) return;
-    if (tabHidden) return;
-    /* opt8 E: during Play skip continuous sync; only debounced moveend passes force */
-    if (playMode && !force) return;
-    try {
-      var c = map.getCenter();
-      var z = map.getZoom();
-      var b = map.getBearing();
-      var p = map.getPitch();
-      cloudMap.jumpTo({ center: c, zoom: z, bearing: b, pitch: p });
-    } catch (eSync) {}
+    void force;
+    /* opt11: no secondary cloud map to sync */
+  }
+
+  function cloudStackBefore() {
+    /* Insert cloud rasters under Labels overlay if present, else under beaches */
+    var i, id;
+    for (i = 0; i < overlayIds.length; i++) {
+      id = overlayIds[i];
+      if (map.getLayer(id)) return id;
+    }
+    if (map.getLayer("beaches-fill")) return "beaches-fill";
+    return undefined;
+  }
+
+  function restackCloudRasters() {
+    if (!map) return;
+    var before = cloudStackBefore();
+    var ids = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      if (map.getLayer(ids[i])) {
+        try { map.moveLayer(ids[i], before); } catch (eMv) {}
+      }
+    }
   }
 
   function cloudRasterPaint(opacity) {
+    /* Approximate former CSS screen+filter look via MapLibre raster paint */
+    var solid = cloudOpacity >= 0.82;
     return {
       "raster-opacity": opacity == null ? 0 : opacity,
       "raster-resampling": "linear",
-      "raster-fade-duration": 0
+      "raster-fade-duration": 0,
+      "raster-brightness-min": solid ? 0 : 0.02,
+      "raster-brightness-max": solid ? 1 : 0.92,
+      "raster-contrast": solid ? 0.08 : 0.18,
+      "raster-saturation": solid ? 0 : -0.15
     };
   }
 
@@ -425,17 +421,16 @@
   }
 
   function applyCloudSolidMode() {
-    /* screen blend can never fully obscure the basemap; at high opacity use normal */
+    /* Play overlay: screen blend cannot fully obscure; at high opacity use normal.
+       Static clouds use main-map raster paint (brightness/contrast) instead of CSS screen. */
     var solid = cloudOpacity >= 0.82;
-    var cm = document.getElementById("cloud-map");
     var pl = document.getElementById("cloud-play-layer");
-    if (cm) {
-      if (solid) cm.classList.add("clouds-solid");
-      else cm.classList.remove("clouds-solid");
-    }
     if (pl) {
       if (solid) pl.classList.add("clouds-solid");
       else pl.classList.remove("clouds-solid");
+    }
+    if (map && map.getLayer(GIBS_LAYER) && !playMode) {
+      applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
     }
   }
 
@@ -594,15 +589,18 @@
 
   function ensurePlayLayer() {
     var layer = document.getElementById("cloud-play-layer");
-    if (!layer) return null;
+    if (!layer || !map) return null;
     try {
-      var canvasBox = map.getCanvasContainer && map.getCanvasContainer();
-      if (canvasBox && layer.parentNode !== canvasBox) {
-        canvasBox.appendChild(layer);
+      /* Sibling of canvas-container so markers/popups (z-index 5) stay above Play */
+      var host = map.getContainer && map.getContainer();
+      if (host && layer.parentNode !== host) {
+        host.appendChild(layer);
         layer.style.position = "absolute";
         layer.style.inset = "0";
         layer.style.width = "100%";
         layer.style.height = "100%";
+        layer.style.zIndex = "2";
+        layer.style.pointerEvents = "none";
       }
     } catch (ePl) {}
     return layer;
@@ -627,18 +625,19 @@
 
   function setMapLibreCloudsHidden(hidden) {
     var m = cloudTargetMap();
-    var el = document.getElementById("cloud-map");
-    if (el) {
-      if (hidden) el.classList.add("is-play-hidden");
-      else el.classList.remove("is-play-hidden");
-    }
     if (!m) return;
-    if (m.getLayer(GIBS_LAYER)) {
+    var ids = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+    var i, id;
+    for (i = 0; i < ids.length; i++) {
+      id = ids[i];
+      if (!m.getLayer(id)) continue;
       try {
-        m.setLayoutProperty(GIBS_LAYER, "visibility", hidden ? "none" : "visible");
+        m.setLayoutProperty(id, "visibility", hidden ? "none" : "visible");
       } catch (eV) {}
-      if (!hidden) applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
-      else applyCloudPaint(GIBS_LAYER, 0);
+      if (id === GIBS_LAYER) {
+        if (!hidden) applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+        else applyCloudPaint(GIBS_LAYER, 0);
+      }
     }
   }
 
@@ -677,6 +676,7 @@
   function addGibsStatic(url) {
     var m = cloudTargetMap();
     if (!m) return;
+    var before = cloudStackBefore();
     if (!m.getSource(GIBS_SRC)) {
       m.addSource(GIBS_SRC, {
         type: "raster",
@@ -692,18 +692,21 @@
         type: "raster",
         source: GIBS_SRC,
         paint: cloudRasterPaint(gibsEffectiveOpacity())
-      });
+      }, before);
     } else {
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+      try { m.moveLayer(GIBS_LAYER, before); } catch (eOrd) {}
     }
     lastGibsUrl = url;
     lastGibsHostLayer = gibsHostLayerKey(url);
     cloudSourcesReady = true;
+    restackCloudRasters();
   }
 
   function rebuildStaticGibs(url) {
     var m = cloudTargetMap();
     if (!m) return;
+    var before = cloudStackBefore();
     if (m.getLayer(GIBS_LAYER)) m.removeLayer(GIBS_LAYER);
     if (m.getSource(GIBS_SRC)) m.removeSource(GIBS_SRC);
     m.addSource(GIBS_SRC, {
@@ -718,9 +721,10 @@
       type: "raster",
       source: GIBS_SRC,
       paint: cloudRasterPaint(gibsEffectiveOpacity())
-    });
+    }, before);
     lastGibsUrl = url;
     lastGibsHostLayer = gibsHostLayerKey(url);
+    restackCloudRasters();
   }
 
   function setStaticGibsTiles(url) {
@@ -770,9 +774,11 @@
     }
     if (url === lastGibsUrl) {
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+      restackCloudRasters();
       return Promise.resolve(true);
     }
     setStaticGibsTiles(url);
+    restackCloudRasters();
     return Promise.resolve(true);
   }
 
@@ -1104,10 +1110,6 @@
     showPlayOverlay();
     setMapLibreCloudsHidden(true);
     setPlayLayerOpacity();
-    /* opt8 E: pause cloud MapLibre render loop during Play */
-    if (cloudMap && typeof cloudMap.stop === "function") {
-      try { cloudMap.stop(); } catch (eStop) {}
-    }
   }
 
   function exitPlayMode() {
@@ -1117,19 +1119,13 @@
     if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
     hidePlayOverlay();
     setMapLibreCloudsHidden(false);
-    /* opt8 E: resume cloud map paint after Play */
-    if (cloudMap) {
-      try {
-        if (typeof cloudMap.resize === "function") cloudMap.resize();
-        if (typeof cloudMap.triggerRepaint === "function") cloudMap.triggerRepaint();
-      } catch (eRes) {}
-      syncCloudMap(true);
-    }
-    /* restore MapLibre to current slider time WITHOUT clearTiles flicker */
+    /* restore main-map GIBS to current slider time WITHOUT clearTiles flicker */
     if (cloudTimes.length) {
       var url = gibsTiles(cloudTimes[cloudIndex], origin ? origin.lon : null);
       presentStaticGibs(url);
     }
+    restackCloudRasters();
+    if (overlayVisible()) restackOverlay();
   }
 
   function onPlayViewChanged() {
@@ -1269,6 +1265,7 @@
     }
     /* Single GIBS layer — never collapse opacity to blank */
     applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+    restackCloudRasters();
   }
 
   function basemapLayerId(mode) {
@@ -1336,7 +1333,7 @@
 
   function addHiresSources() {
     if (tabHidden) return;
-    var before = map.getLayer("beaches-fill") ? "beaches-fill" : undefined;
+    var before = cloudStackBefore();
     if (!map.getSource("modis")) {
       map.addSource("modis", {
         type: "raster",
@@ -1400,6 +1397,7 @@
         }
       }, before);
     }
+    restackCloudRasters();
   }
 
   /* legacy aliases */
@@ -1418,6 +1416,7 @@
 
   function restackOverlay() {
     restackBasemap();
+    restackCloudRasters();
     if (!overlayVisible()) {
       applyOverlay();
       return;
@@ -1428,6 +1427,8 @@
     overlayIds.forEach(function (id) {
       if (map.getLayer(id)) map.moveLayer(id, before);
     });
+    /* Keep clouds under Labels: basemap → clouds/hires → labels → beaches */
+    restackCloudRasters();
     applyOverlay();
   }
 
@@ -1534,6 +1535,7 @@
         "text-halo-blur": 0.3
       }
     }, before);
+    restackCloudRasters();
   }
 
   function ensureBeachLayers() {
@@ -2018,7 +2020,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt10");
+      beachWorker = new Worker("beach-worker.js?v=opt11");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3703,13 +3705,6 @@
 
   map.on("resize", function () {
     schedulePlayImageSizeRefresh();
-    if (playMode) {
-      return;
-    }
-    if (cloudMap) {
-      try { cloudMap.resize(); } catch (eR) {}
-      syncCloudMap(true);
-    }
   });
   window.addEventListener("orientationchange", schedulePlayImageSizeRefresh);
 
@@ -3744,28 +3739,13 @@
     ensureBeachLayers();
     applyCloudSolidMode();
     setBasemapMode(basemapMode);
+    ensureCloudMap(); /* hide unused #cloud-map; mount play layer on map container */
+    var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
+    addGibsStatic(url);
+    setCloudFrame(sliderMax());
+    applyBaseMap();
     if (overlayVisible()) restackOverlay();
-    ensureCloudMap();
-    var cloudsBooted = false;
-    function bootClouds() {
-      if (cloudsBooted) return;
-      cloudsBooted = true;
-      syncCloudMap(true);
-      var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
-      addGibsStatic(url);
-      setCloudFrame(sliderMax());
-      applyBaseMap();
-    }
-    if (cloudMap) {
-      cloudMap.once("load", bootClouds);
-      try {
-        if ((cloudMap.loaded && cloudMap.loaded()) || (cloudMap.isStyleLoaded && cloudMap.isStyleLoaded())) {
-          bootClouds();
-        }
-      } catch (eBoot) {}
-    } else {
-      bootClouds();
-    }
+    else restackCloudRasters();
     var lastGps = readLastLocate();
     var bootLat = lastGps ? lastGps.lat : DEFAULT_WARM_LAT;
     var bootLon = lastGps ? lastGps.lon : DEFAULT_WARM_LON;
@@ -3881,17 +3861,13 @@
       }
       try {
         if (map && typeof map.stop === "function") map.stop();
-        if (cloudMap && typeof cloudMap.stop === "function") cloudMap.stop();
       } catch (eStop) {}
     } else {
       tabHidden = false;
       try {
         if (map && typeof map.resume === "function") map.resume();
-        if (cloudMap && typeof cloudMap.resume === "function") cloudMap.resume();
-        syncCloudMap(true);
         setCloudFrame(cloudIndex);
         if (map && typeof map.triggerRepaint === "function") map.triggerRepaint();
-        if (cloudMap && typeof cloudMap.triggerRepaint === "function") cloudMap.triggerRepaint();
       } catch (eRes) {}
       if (resumePlay) {
         resumePlay = false;
@@ -3915,7 +3891,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt10").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt11").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
