@@ -22,10 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="preload" href="vendor/maplibre-gl.slim.css?v=opt16" as="style">
-  <link rel="preload" href="vendor/maplibre-gl.js?v=opt16" as="script">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt16">
-  <link rel="stylesheet" href="styles.css?v=opt16">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt17">
+  <link rel="stylesheet" href="styles.css?v=opt17">
 </head>
 <body>
   <div id="map"></div>
@@ -97,7 +95,8 @@
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
-  <!-- MapLibre JS preloaded; still loaded async from app.js (?v=opt16) -->
-  <script src="app.js?v=opt16"></script>
+  <!-- MapLibre deferred before app.js (opt17: no preload — avoids SW cross-world mismatch) -->
+  <script defer src="vendor/maplibre-gl.js?v=opt17"></script>
+  <script defer src="app.js?v=opt17"></script>
 </body>
 </html>
