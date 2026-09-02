@@ -1,0 +1,16 @@
+SUNNY opt11/opt12 layer order (main MapLibre map)
+===========================================
+basemap (osm / base-sat / base-dark)
+  → cloud rasters: gibs → modis → viirs → iem-vis
+  → Labels overlay (ov-road-casing, ov-road, ov-road-name, ov-place) when on
+  → beaches-fill → beaches-line → beaches-dot
+
+Static/scrub: GIBS on main map under beaches+Labels (canvas dots visible on top).
+#cloud-map: unused/hidden (no second MapLibre covering the canvas).
+Play: #cloud-play-layer DOM images on map.getContainer() (z-index 2);
+      markers/popups z-index 5. Canvas beach dots may sit under Play frames.
+
+opt12: settings/view persistence, PWA manifest+icons, FPS meter, DOM reuse —
+layer order unchanged.
+opt13: earlier NOW hires, zoom product emphasis, Play WMS up to 2048 desktop,
+nearest resampling z≥8 — layer order unchanged.
