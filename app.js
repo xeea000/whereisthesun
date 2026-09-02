@@ -43,6 +43,8 @@
   var cloudTimes = [];
   var cloudIndex = 0;
   var hourlyCache = {};
+  var currentWxCache = {};
+  var CURRENT_WX_TTL_MS = 20 * 60 * 1000;
   var wikiCache = {};
   var cloudOpacity = 0.88;
   var searchingSunny = false;
@@ -549,24 +551,118 @@
     });
   }
 
+  function fetchJsonMaybeGzip(url) {
+    return fetch(url).then(function (res) {
+      if (!res.ok) throw new Error("beach list");
+      var enc = (res.headers.get("Content-Encoding") || "").toLowerCase();
+      var wantGunzip = /\.gz$/i.test(url) && enc.indexOf("gzip") === -1 && enc.indexOf("br") === -1;
+      if (!wantGunzip) return res.json();
+      if (typeof DecompressionStream === "undefined") throw new Error("no decompress");
+      return res.arrayBuffer().then(function (buf) {
+        var u8 = new Uint8Array(buf);
+        // gzip magic 1f 8b — if missing, body was already inflated by the host
+        if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
+          var stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+          return new Response(stream).json();
+        }
+        return JSON.parse(new TextDecoder().decode(u8));
+      });
+    });
+  }
+
+  var BEACH_DB_IDB = "sunny";
+  var BEACH_DB_STORE = "beachdb";
+  var BEACH_DB_KEY = "rows";
+  var BEACH_DB_VER = "names1-gz1";
+
+  function idbOpenBeach() {
+    return new Promise(function (resolve, reject) {
+      if (typeof indexedDB === "undefined") {
+        reject(new Error("no idb"));
+        return;
+      }
+      var req = indexedDB.open(BEACH_DB_IDB, 1);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(BEACH_DB_STORE)) {
+          db.createObjectStore(BEACH_DB_STORE);
+        }
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error("idb")); };
+    });
+  }
+
+  function idbGetBeachRows() {
+    return idbOpenBeach().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(BEACH_DB_STORE, "readonly");
+        var store = tx.objectStore(BEACH_DB_STORE);
+        var verReq = store.get("v");
+        verReq.onsuccess = function () {
+          if (verReq.result !== BEACH_DB_VER) {
+            resolve(null);
+            return;
+          }
+          var rowReq = store.get(BEACH_DB_KEY);
+          rowReq.onsuccess = function () { resolve(rowReq.result || null); };
+          rowReq.onerror = function () { reject(rowReq.error || new Error("idb")); };
+        };
+        verReq.onerror = function () { reject(verReq.error || new Error("idb")); };
+      });
+    });
+  }
+
+  function idbPutBeachRows(rows) {
+    return idbOpenBeach().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(BEACH_DB_STORE, "readwrite");
+        var store = tx.objectStore(BEACH_DB_STORE);
+        store.put(BEACH_DB_VER, "v");
+        store.put(rows, BEACH_DB_KEY);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error || new Error("idb")); };
+        tx.onabort = function () { reject(tx.error || new Error("idb")); };
+      });
+    });
+  }
+
+  function toCompactRows(parsed) {
+    var out = [];
+    var i, r;
+    for (i = 0; i < parsed.length; i++) {
+      r = parsed[i];
+      out.push([r.id, r.name, r.lat, r.lon, r.country == null ? "" : r.country]);
+    }
+    return out;
+  }
+
   function loadBeachDb() {
     if (beachDb) return Promise.resolve(beachDb);
     if (beachDbPromise) return beachDbPromise;
+
     function fromJson() {
       return fetch("data/beaches.json").then(function (res) {
         if (!res.ok) throw new Error("beach list");
         return res.json();
       });
     }
+
     function fromShards() {
       return fetch("data/manifest.json").then(function (res) {
         if (!res.ok) throw new Error("beach list");
         return res.json();
-      }).then(function (files) {
-        return Promise.all((files || []).map(function (f) {
-          return fetch(f).then(function (res) {
-            if (!res.ok) throw new Error("beach list");
-            return res.json();
+      }).then(function (manifest) {
+        var files = Array.isArray(manifest) ? manifest : (manifest && manifest.files);
+        if (!files || !files.length) throw new Error("beach list");
+        var total = files.length;
+        var done = 0;
+        setStatus("Loading beach list…");
+        return Promise.all(files.map(function (f) {
+          return fetchJsonMaybeGzip(f).then(function (part) {
+            done += 1;
+            setStatus("Loading beaches… " + done + "/" + total);
+            return part;
           });
         }));
       }).then(function (parts) {
@@ -578,12 +674,33 @@
         return rows;
       });
     }
-    var start = (typeof DecompressionStream === "undefined")
-      ? fromJson().catch(fromShards)
-      : fetchJsonGzip("data/beaches.json.gz").catch(fromJson).catch(fromShards);
-    beachDbPromise = start.then(function (data) {
+
+    function fromNetwork() {
+      return fromShards()
+        .catch(function () { return fetchJsonGzip("data/beaches.json.gz"); })
+        .catch(fromJson);
+    }
+
+    function finish(data, fromCache) {
       beachDb = parseBeachDb(data);
+      if (!fromCache) {
+        var compact = Array.isArray(data) && data.length && Array.isArray(data[0])
+          ? data
+          : toCompactRows(beachDb);
+        idbPutBeachRows(compact).catch(function () {});
+      }
       return beachDb;
+    }
+
+    setStatus("Loading beach list…");
+    beachDbPromise = idbGetBeachRows().then(function (cached) {
+      if (cached && Array.isArray(cached) && cached.length) {
+        setStatus("Using saved beach list…");
+        return finish(cached, true);
+      }
+      return fromNetwork().then(function (data) { return finish(data, false); });
+    }).catch(function () {
+      return fromNetwork().then(function (data) { return finish(data, false); });
     }).catch(function (err) {
       beachDbPromise = null;
       throw err;
@@ -664,20 +781,57 @@
     return { cloud: row.current.cloud_cover, uv: uv, isDay: isDay };
   }
 
+  function wxCacheKey(lat, lon) {
+    return lat.toFixed(3) + "," + lon.toFixed(3);
+  }
+
+  function getCachedCurrentWx(lat, lon) {
+    var ent = currentWxCache[wxCacheKey(lat, lon)];
+    if (!ent) return null;
+    if (Date.now() - ent.t > CURRENT_WX_TTL_MS) {
+      delete currentWxCache[wxCacheKey(lat, lon)];
+      return null;
+    }
+    return ent.wx;
+  }
+
+  function putCachedCurrentWx(lat, lon, wx) {
+    currentWxCache[wxCacheKey(lat, lon)] = { t: Date.now(), wx: wx };
+  }
+
   function fetchCurrentWeather(points) {
     if (!points.length) return Promise.resolve([]);
-    var lats = points.map(function (p) { return p.lat.toFixed(4); }).join(",");
-    var lons = points.map(function (p) { return p.lon.toFixed(4); }).join(",");
+    var out = new Array(points.length);
+    var missing = [];
+    var missingIdx = [];
+    var i, hit;
+    for (i = 0; i < points.length; i++) {
+      hit = getCachedCurrentWx(points[i].lat, points[i].lon);
+      if (hit) {
+        out[i] = Object.assign({}, points[i], hit);
+      } else {
+        missing.push(points[i]);
+        missingIdx.push(i);
+      }
+    }
+    if (!missing.length) return Promise.resolve(out);
+
+    var lats = missing.map(function (p) { return p.lat.toFixed(4); }).join(",");
+    var lons = missing.map(function (p) { return p.lon.toFixed(4); }).join(",");
     var url = METEO_URL + "?latitude=" + lats + "&longitude=" + lons + "&current=cloud_cover,uv_index,is_day";
     return fetch(url).then(function (res) {
       if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
       return res.json();
     }).then(function (data) {
       var rows = Array.isArray(data) ? data : [data];
-      if (rows.length !== points.length) throw new Error("Open-Meteo count mismatch");
-      return rows.map(function (row, i) {
-        return Object.assign({}, points[i], parseCurrent(row));
-      });
+      if (rows.length !== missing.length) throw new Error("Open-Meteo count mismatch");
+      var j, wx;
+      for (j = 0; j < missing.length; j++) {
+        wx = parseCurrent(rows[j]);
+        putCachedCurrentWx(missing[j].lat, missing[j].lon, wx);
+        out[missingIdx[j]] = Object.assign({}, missing[j], wx);
+      }
+      return out;
     });
   }
 
@@ -693,6 +847,11 @@
       return res.json();
     }).then(function (data) {
       hourlyCache[key] = data;
+      try {
+        if (data && data.current && data.current.cloud_cover != null) {
+          putCachedCurrentWx(lat, lon, parseCurrent(data));
+        }
+      } catch (e) {}
       return data;
     });
   }
@@ -1385,7 +1544,6 @@
     if (btnNear) btnNear.disabled = true;
     beaches = [];
     nearbyBeaches = [];
-    hourlyCache = {};
     placeUserMarker();
     placeDest(null);
     if (popup) { popup.remove(); popup = null; }
