@@ -12,8 +12,10 @@
   <link rel="dns-prefetch" href="https://tiles.openfreemap.org">
   <link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
   <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
-  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=opt9d">
-  <link rel="stylesheet" href="styles.css?v=opt9d">
+  <link rel="preload" href="vendor/maplibre-gl.slim.css?v=opt10" as="style">
+  <link rel="preload" href="vendor/maplibre-gl.js?v=opt10" as="script">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt10">
+  <link rel="stylesheet" href="styles.css?v=opt10">
 </head>
 <body>
   <div id="map"></div>
@@ -79,7 +81,7 @@
     <p id="sunny-sheet-sub" class="sheet-sub"></p>
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
-  <!-- MapLibre loaded async from app.js (?v=opt9d) so first paint stays light -->
-  <script src="app.js?v=opt9d"></script>
+  <!-- MapLibre JS preloaded; still loaded async from app.js (?v=opt10) -->
+  <script src="app.js?v=opt10"></script>
 </body>
 </html>

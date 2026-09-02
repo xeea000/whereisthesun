@@ -88,6 +88,10 @@
   var viewAbort = null;
   var resumePlay = false;
   var tabHidden = false;
+  var LOCATE_KEY = "sunny-last-locate";
+  var playSizeCache = null; /* {w,h} — recompute only on real resize/orientation */
+  var playSizeResizeTimer = null;
+  var beachRegionRevalidated = Object.create(null); /* session SWR once per region */
   var beachDb = null;
   var beachDbPromise = null;
   var beachGrid = null;
@@ -102,7 +106,7 @@
   var GRID_DEG = 1;
   var DEFAULT_WARM_LAT = 43.65;
   var DEFAULT_WARM_LON = -79.38;
-  var WX_BATCH = 60;
+  var WX_BATCH = 80;
   var sheetSunnyMode = true;
   var sheetListRows = [];
   var wxSearchGen = 0;
@@ -381,6 +385,7 @@
 
   function syncCloudMap(force) {
     if (!cloudMap || !map) return;
+    if (tabHidden) return;
     /* opt8 E: during Play skip continuous sync; only debounced moveend passes force */
     if (playMode && !force) return;
     try {
@@ -484,7 +489,7 @@
     return cap;
   }
 
-  function playImageSize() {
+  function computePlayImageSize() {
     var el = map.getContainer ? map.getContainer() : document.getElementById("map");
     var w = (el && el.clientWidth) || window.innerWidth || 800;
     var h = (el && el.clientHeight) || window.innerHeight || 600;
@@ -498,6 +503,27 @@
     w = Math.max(64, Math.min(cap, Math.round(w)));
     h = Math.max(64, Math.min(cap, Math.round(h)));
     return { w: w, h: h };
+  }
+
+  function playImageSize() {
+    /* opt10: cache WMS size; only recompute on real resize/orientation (debounced) */
+    if (playSizeCache) return playSizeCache;
+    playSizeCache = computePlayImageSize();
+    return playSizeCache;
+  }
+
+  function invalidatePlayImageSize() {
+    playSizeCache = null;
+  }
+
+  function schedulePlayImageSizeRefresh() {
+    if (playSizeResizeTimer) clearTimeout(playSizeResizeTimer);
+    playSizeResizeTimer = setTimeout(function () {
+      playSizeResizeTimer = null;
+      invalidatePlayImageSize();
+      playImageSize();
+      if (playMode && !tabHidden) onPlayViewChanged();
+    }, 180);
   }
 
   function roundPlayBbox(box) {
@@ -788,10 +814,15 @@
 
   function loadImageSrc(url, preferCors, cacheKey) {
     var key = cacheKey || url;
+    if (tabHidden) return Promise.resolve({ ok: false, url: url, img: null, key: key });
     var hit = playLruGet(key);
     if (hit) return Promise.resolve(hit);
     if (playLoadPending[key]) return playLoadPending[key];
     var p = new Promise(function (resolve) {
+      if (tabHidden) {
+        resolve({ ok: false, url: url, img: null, key: key });
+        return;
+      }
       var img = new Image();
       var settled = false;
       function finish(ok) {
@@ -938,7 +969,7 @@
   }
 
   function prefetchPlayIndices(fromIndex) {
-    if (!cloudTimes.length || playUseOpenMeteo) return;
+    if (tabHidden || !cloudTimes.length || playUseOpenMeteo) return;
     var lon = origin ? origin.lon : null;
     var n;
     for (n = 1; n <= PLAY_PREFETCH; n++) {
@@ -1987,7 +2018,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt9d");
+      beachWorker = new Worker("beach-worker.js?v=opt10");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -2130,36 +2161,62 @@
     pump();
   }
 
+  function networkFetchRegion(region) {
+    var id = region.id;
+    var candidates = regionFileCandidates(region);
+    function tryNext(i) {
+      if (i >= candidates.length) throw new Error("beach list");
+      var c = candidates[i];
+      return fetchRegionBytes(c.url, c.format).then(function (rows) {
+        if (rows && rows.length) {
+          var compact = Array.isArray(rows[0]) ? rows : toCompactRows(parseBeachDb(rows));
+          if (!beachRegionsLoaded[id]) {
+            beachRegionsLoaded[id] = true;
+            mergeBeachRows(compact);
+          } else {
+            mergeBeachRows(compact);
+          }
+          idbPutRegionRows(id, compact).catch(function () {});
+        } else if (!beachRegionsLoaded[id]) {
+          beachRegionsLoaded[id] = true;
+        }
+        return rows;
+      }).catch(function () {
+        return tryNext(i + 1);
+      });
+    }
+    return tryNext(0);
+  }
+
+  function revalidateRegionInBackground(region) {
+    var id = region && region.id;
+    if (!id || beachRegionRevalidated[id] || tabHidden) return;
+    beachRegionRevalidated[id] = 1;
+    networkFetchRegion(region).catch(function () {
+      /* keep serving cached rows; allow a later retry next session */
+      delete beachRegionRevalidated[id];
+    });
+  }
+
   function fetchOneRegion(region) {
     var id = region.id;
-    if (beachRegionsLoaded[id]) return Promise.resolve(null);
+    if (beachRegionsLoaded[id]) {
+      /* already merged this session — optional SWR once */
+      revalidateRegionInBackground(region);
+      return Promise.resolve(null);
+    }
     if (beachRegionInflight[id]) return beachRegionInflight[id];
     beachRegionInflight[id] = idbGetRegionRows(id).then(function (cached) {
       if (cached && cached.length) {
+        /* opt10: stronger IDB SWR — serve cached region immediately */
         if (!beachRegionsLoaded[id]) {
           beachRegionsLoaded[id] = true;
           mergeBeachRows(cached);
         }
+        revalidateRegionInBackground(region);
         return cached;
       }
-      var candidates = regionFileCandidates(region);
-      function tryNext(i) {
-        if (i >= candidates.length) throw new Error("beach list");
-        var c = candidates[i];
-        return fetchRegionBytes(c.url, c.format).then(function (rows) {
-          if (beachRegionsLoaded[id]) return null;
-          beachRegionsLoaded[id] = true;
-          if (rows && rows.length) {
-            var compact = Array.isArray(rows[0]) ? rows : toCompactRows(parseBeachDb(rows));
-            mergeBeachRows(compact);
-            idbPutRegionRows(id, compact).catch(function () {});
-          }
-          return rows;
-        }).catch(function () {
-          return tryNext(i + 1);
-        });
-      }
-      return tryNext(0);
+      return networkFetchRegion(region);
     }).then(function (part) {
       delete beachRegionInflight[id];
       return part;
@@ -3495,6 +3552,38 @@
       });
   }
 
+  function saveLastLocate(lat, lon) {
+    try {
+      localStorage.setItem(LOCATE_KEY, JSON.stringify({ lat: lat, lon: lon, t: Date.now() }));
+    } catch (eLoc) {}
+  }
+
+  function readLastLocate() {
+    try {
+      var raw = localStorage.getItem(LOCATE_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      if (!o || !isFinite(o.lat) || !isFinite(o.lon)) return null;
+      if (o.lat < -90 || o.lat > 90 || o.lon < -180 || o.lon > 180) return null;
+      return { lat: Number(o.lat), lon: Number(o.lon) };
+    } catch (eRead) {
+      return null;
+    }
+  }
+
+  function preloadRegionsNearLastGps() {
+    /* opt10: before full idle ring, ensure 1–2 region cells covering last GPS */
+    var last = readLastLocate();
+    if (!last) return;
+    loadBeachManifest().then(function (manifest) {
+      if (!manifest || !manifest.regions || !manifest.regions.length) return;
+      var regs = pickRegionsAround(last.lat, last.lon, 40, 0);
+      if (!regs.length) return;
+      var few = regs.slice(0, 2);
+      return ensureRegionsList(few, null);
+    }).catch(function () {});
+  }
+
   function locate() {
     if (!navigator.geolocation) {
       waitingForTap = true;
@@ -3503,7 +3592,10 @@
     }
     setStatus("Finding you…");
     navigator.geolocation.getCurrentPosition(
-      function (pos) { loadAround(pos.coords.latitude, pos.coords.longitude); },
+      function (pos) {
+        saveLastLocate(pos.coords.latitude, pos.coords.longitude);
+        loadAround(pos.coords.latitude, pos.coords.longitude);
+      },
       function () {
         waitingForTap = true;
         setStatus("Location is off. Tap the map to drop a pin.");
@@ -3610,8 +3702,8 @@
   });
 
   map.on("resize", function () {
+    schedulePlayImageSizeRefresh();
     if (playMode) {
-      onPlayViewChanged();
       return;
     }
     if (cloudMap) {
@@ -3619,6 +3711,7 @@
       syncCloudMap(true);
     }
   });
+  window.addEventListener("orientationchange", schedulePlayImageSizeRefresh);
 
   map.on("moveend", function () {
     if (playMode) {
@@ -3673,7 +3766,11 @@
     } else {
       bootClouds();
     }
-    loadBeachDb({ quiet: true, lat: DEFAULT_WARM_LAT, lon: DEFAULT_WARM_LON }).catch(function () {});
+    var lastGps = readLastLocate();
+    var bootLat = lastGps ? lastGps.lat : DEFAULT_WARM_LAT;
+    var bootLon = lastGps ? lastGps.lon : DEFAULT_WARM_LON;
+    preloadRegionsNearLastGps();
+    loadBeachDb({ quiet: true, lat: bootLat, lon: bootLon }).catch(function () {});
     locate();
   });
 
@@ -3695,6 +3792,7 @@
 
   map.on("click", function (e) {
     if (!waitingForTap) return;
+    saveLastLocate(e.lngLat.lat, e.lngLat.lng);
     loadAround(e.lngLat.lat, e.lngLat.lng);
   });
 
@@ -3773,6 +3871,10 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       tabHidden = true;
+      /* opt10: abort/ignore Play WMS prefetch + in-flight frame loads */
+      playLoadGen += 1;
+      playLoadPending = Object.create(null);
+      cancelPlayFade();
       if (playTimer || playMode) {
         resumePlay = true;
         stopPlay();
@@ -3813,7 +3915,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt9d").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt10").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
