@@ -1105,6 +1105,19 @@
     if (sunnySheetList) sunnySheetList.innerHTML = "";
   }
 
+  function markSunnyActive(btn) {
+    if (!sunnySheetList) return;
+    var items = sunnySheetList.querySelectorAll(".sheet-item");
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle("is-active", items[i] === btn);
+    }
+  }
+
+  function previewSunnyBeach(b, btn) {
+    markSunnyActive(btn);
+    finishBeach(b, "sunny");
+  }
+
   function openSunnySheet(list) {
     if (!sunnySheet || !sunnySheetList) {
       if (list && list[0]) finishBeach(list[0], "sunny");
@@ -1113,8 +1126,8 @@
     sunnySheetList.innerHTML = "";
     if (sunnySheetSub) {
       sunnySheetSub.textContent = list.length === 1
-        ? "1 sunny beach, nearest first."
-        : list.length + " sunny beaches, nearest first. Tap one.";
+        ? "1 sunny beach. Tap to show on map."
+        : list.length + " sunny beaches. Tap one, map stays live.";
     }
     list.forEach(function (b, idx) {
       var li = document.createElement("li");
@@ -1126,13 +1139,16 @@
         "<span class=\"dist\">" + escapeHtml(formatKm(b.dist)) + "</span>" +
         "<span class=\"meta\">#" + (idx + 1) + " · " + escapeHtml(cloud) + "</span>";
       btn.addEventListener("click", function () {
-        closeSunnySheet();
-        finishBeach(b, "sunny");
+        previewSunnyBeach(b, btn);
       });
       li.appendChild(btn);
       sunnySheetList.appendChild(li);
     });
     sunnySheet.hidden = false;
+    if (list[0]) {
+      var firstBtn = sunnySheetList.querySelector(".sheet-item");
+      previewSunnyBeach(list[0], firstBtn);
+    }
   }
 
   function escapeHtml(s) {
@@ -1541,11 +1557,6 @@
   if (btnNear) btnNear.addEventListener("click", goNearestBeach);
   btnSun.addEventListener("click", goNearestSunny);
   if (sunnySheetClose) sunnySheetClose.addEventListener("click", closeSunnySheet);
-  if (sunnySheet) {
-    sunnySheet.addEventListener("click", function (e) {
-      if (e.target && e.target.getAttribute("data-close")) closeSunnySheet();
-    });
-  }
   btnPlay.addEventListener("click", togglePlay);
   slider.addEventListener("input", function () {
     stopPlay();
