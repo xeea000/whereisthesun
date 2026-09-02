@@ -136,7 +136,10 @@
   var GRID_DEG = 1;
   var DEFAULT_WARM_LAT = 43.65;
   var DEFAULT_WARM_LON = -79.38;
-  var WX_BATCH = 80;
+  var WX_BATCH = 40; /* opt14: smaller batches; was 80×2 and could hang */
+  var WX_PARALLEL = 1; /* one Open-Meteo batch at a time */
+  var WX_FETCH_TIMEOUT_MS = 12000;
+  var wxFetchAbort = null; /* aborted when search gen bumps / cancel */
   var sheetSunnyMode = true;
   var sheetListRows = [];
   var wxSearchGen = 0;
@@ -281,6 +284,119 @@
   function utcDate(offsetDays) {
     var d = new Date(Date.now() - (offsetDays || 0) * 86400000);
     return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate());
+  }
+
+  /*
+   * opt14: Daily MODIS/VIIRS CorrectedReflectance often lags "today" (UTC) by 1+ days.
+   * Prefer yesterday, probe back up to 5 days with one lightweight tile GET, cache the
+   * working date. Never spray a viewport of 404s for an unpublished day. GOES GeoColor
+   * and IEM VIS stay on their near-real-time paths (no daily date).
+   */
+  var HIRES_DAY_TTL_MS = 3 * 3600 * 1000;
+  var HIRES_PROBE_BACK = 5;
+  var hiresDayCache = { modis: null, viirs: null }; /* {date, t} */
+  var hiresDayProbe = null; /* in-flight Promise */
+
+  function hiresDaySync(kind) {
+    var ent = hiresDayCache[kind];
+    if (ent && ent.date) return ent.date;
+    return utcDate(1); /* prefer yesterday until probe settles */
+  }
+
+  function probeGibsDailyTile(layerId, date) {
+    /* Mid-Atlantic z5 tile — small JPEG; 404/empty => unavailable day */
+    var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layerId +
+      "/default/" + date + "/GoogleMapsCompatible_Level9/5/10/15.jpg";
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    var p = fetch(url, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      if (!res.ok) return false;
+      return res.blob().then(function (b) {
+        return !!(b && b.size > 800);
+      });
+    }).catch(function () {
+      return false;
+    });
+    if (ctrl) {
+      timer = setTimeout(function () {
+        try { ctrl.abort(); } catch (eA) {}
+      }, 8000);
+      p = p.then(function (ok) {
+        clearTimeout(timer);
+        return ok;
+      }, function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
+    }
+    return p;
+  }
+
+  function resolveOneHiresDay(kind, layerId) {
+    var ent = hiresDayCache[kind];
+    if (ent && ent.date && (Date.now() - ent.t) < HIRES_DAY_TTL_MS) {
+      return Promise.resolve(ent.date);
+    }
+    /* offsets: yesterday … −5, then today last resort */
+    var offsets = [];
+    var o;
+    for (o = 1; o <= HIRES_PROBE_BACK; o++) offsets.push(o);
+    offsets.push(0);
+    function tryAt(idx) {
+      if (idx >= offsets.length) {
+        var fb = utcDate(1);
+        hiresDayCache[kind] = { date: fb, t: Date.now() };
+        return Promise.resolve(fb);
+      }
+      var day = utcDate(offsets[idx]);
+      return probeGibsDailyTile(layerId, day).then(function (ok) {
+        if (ok) {
+          hiresDayCache[kind] = { date: day, t: Date.now() };
+          return day;
+        }
+        return tryAt(idx + 1);
+      });
+    }
+    return tryAt(0);
+  }
+
+  function ensureHiresDays() {
+    if (hiresDayProbe) return hiresDayProbe;
+    hiresDayProbe = Promise.all([
+      resolveOneHiresDay("modis", "MODIS_Terra_CorrectedReflectance_TrueColor"),
+      resolveOneHiresDay("viirs", "VIIRS_SNPP_CorrectedReflectance_TrueColor")
+    ]).then(function (pair) {
+      hiresDayProbe = null;
+      return { modis: pair[0], viirs: pair[1] };
+    }).catch(function () {
+      hiresDayProbe = null;
+      return { modis: hiresDaySync("modis"), viirs: hiresDaySync("viirs") };
+    });
+    return hiresDayProbe;
+  }
+
+  function refreshHiresRaster(srcId, url) {
+    if (!map || !map.getSource) return;
+    var src = map.getSource(srcId);
+    if (src && typeof src.setTiles === "function") {
+      try {
+        var cur = src.tiles && src.tiles[0];
+        if (cur !== url) src.setTiles([url]);
+      } catch (eRef) {
+        try { src.setTiles([url]); } catch (e2) {}
+      }
+    }
+  }
+
+  function applyResolvedHiresDates(dates) {
+    if (!dates || tabHidden || playMode) return;
+    refreshHiresRaster("modis", modisTiles(dates.modis || hiresDaySync("modis")));
+    refreshHiresRaster("viirs", viirsTiles(dates.viirs || hiresDaySync("viirs")));
   }
 
   function modisTiles(date) {
@@ -1268,21 +1384,14 @@
       if (playMode) return shown;
       /* Hires (MODIS/VIIRS/IEM) only at NOW — not while scrubbing history / play */
       if (atNow) {
-        var day = utcDate(0);
-        function refreshRaster(srcId, url) {
-          var src = map.getSource(srcId);
-          if (src && typeof src.setTiles === "function") {
-            try {
-              var cur = src.tiles && src.tiles[0];
-              if (cur !== url) src.setTiles([url]);
-            } catch (eRef) {
-              src.setTiles([url]);
-            }
-          }
-        }
-        refreshRaster("modis", modisTiles(day));
-        refreshRaster("viirs", viirsTiles(day));
-        refreshRaster("iem-vis", iemVisTiles(origin ? origin.lon : null));
+        /* opt14: daily products use probed/cached day (not blind calendar today) */
+        refreshHiresRaster("modis", modisTiles(hiresDaySync("modis")));
+        refreshHiresRaster("viirs", viirsTiles(hiresDaySync("viirs")));
+        refreshHiresRaster("iem-vis", iemVisTiles(origin ? origin.lon : null));
+        ensureHiresDays().then(function (dates) {
+          applyResolvedHiresDates(dates);
+          applyHires();
+        }).catch(function () { applyHires(); });
         applyHires();
       } else {
         ["modis", "viirs", "iem-vis"].forEach(function (id) {
@@ -1300,10 +1409,12 @@
   function applyCloudPaintMain(layerId, opacity) {
     if (!map.getLayer(layerId)) return;
     var z = typeof map.getZoom === "function" ? map.getZoom() : 0;
+    /* opt14: short fade on daily hires softens granule edges; GOES stays snappy via applyCloudPaint */
+    var fade = (layerId === "modis" || layerId === "viirs" || layerId === "iem-vis") ? 280 : 0;
     var paint = {
       "raster-opacity": opacity,
       "raster-resampling": cloudResamplingForZoom(z),
-      "raster-fade-duration": 0
+      "raster-fade-duration": fade
     };
     var key;
     for (key in paint) {
@@ -1323,12 +1434,14 @@
     var wantSharp = atNow && z >= HIRES_Z;
     if (wantSharp) {
       addHiresSources();
+      ensureHiresDays().then(function (dates) { applyResolvedHiresDates(dates); }).catch(function () {});
       var sharp = Math.min(0.96, cloudOpacity);
-      /* 0 at z=5.5 → 1 at z≈7.5 */
-      var t = Math.max(0, Math.min(1, (z - HIRES_Z) / 2.0));
+      /* 0 at z=5.5 → 1 at z≈7.5; smoothstep softens granule/zoom edges (opt14) */
+      var tLin = Math.max(0, Math.min(1, (z - HIRES_Z) / 2.0));
+      var t = tLin * tLin * (3 - 2 * tLin);
       /* Stronger when zoomed; still respect slider (don't bury basemap at low opacity) */
-      var modisOp = Math.min(sharp * (0.40 + 0.32 * t), cloudOpacity * 0.88);
-      var viirsOp = Math.min(sharp * (0.30 + 0.28 * t), cloudOpacity * 0.78);
+      var modisOp = Math.min(sharp * (0.28 + 0.44 * t), cloudOpacity * 0.88);
+      var viirsOp = Math.min(sharp * (0.20 + 0.38 * t), cloudOpacity * 0.78);
       if (map.getLayer("modis")) {
         map.setLayoutProperty("modis", "visibility", "visible");
         applyCloudPaintMain("modis", modisOp);
@@ -1433,7 +1546,7 @@
     if (!map.getSource("modis")) {
       map.addSource("modis", {
         type: "raster",
-        tiles: [modisTiles(utcDate(0))],
+        tiles: [modisTiles(hiresDaySync("modis"))],
         tileSize: 256,
         maxzoom: 9,
         attribution: "NASA GIBS / MODIS"
@@ -1442,7 +1555,7 @@
     if (!map.getSource("viirs")) {
       map.addSource("viirs", {
         type: "raster",
-        tiles: [viirsTiles(utcDate(0))],
+        tiles: [viirsTiles(hiresDaySync("viirs"))],
         tileSize: 256,
         maxzoom: 9,
         attribution: "NASA GIBS / VIIRS SNPP"
@@ -2116,7 +2229,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt13");
+      beachWorker = new Worker("beach-worker.js?v=opt14");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -2638,7 +2751,36 @@
     currentWxCache[wxCacheKey(lat, lon)] = { t: Date.now(), wx: wx };
   }
 
-  function fetchCurrentWeather(points) {
+  function fetchWithTimeout(url, ms, outerSignal) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    function abortInner() {
+      if (ctrl) {
+        try { ctrl.abort(); } catch (eA) {}
+      }
+    }
+    if (outerSignal) {
+      if (outerSignal.aborted) {
+        return Promise.reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      }
+      outerSignal.addEventListener("abort", abortInner);
+    }
+    if (ctrl && ms > 0) {
+      timer = setTimeout(abortInner, ms);
+    }
+    var init = ctrl ? { signal: ctrl.signal } : {};
+    return fetch(url, init).then(function (res) {
+      if (timer) clearTimeout(timer);
+      if (outerSignal) outerSignal.removeEventListener("abort", abortInner);
+      return res;
+    }, function (err) {
+      if (timer) clearTimeout(timer);
+      if (outerSignal) outerSignal.removeEventListener("abort", abortInner);
+      throw err;
+    });
+  }
+
+  function fetchCurrentWeather(points, signal) {
     if (!points.length) return Promise.resolve([]);
     var out = new Array(points.length);
     var missing = [];
@@ -2655,10 +2797,39 @@
     }
     if (!missing.length) return Promise.resolve(out);
 
+    /* Cap per-request size so one hung Open-Meteo call can't freeze Find */
+    var CAP = WX_BATCH;
+    if (missing.length > CAP) {
+      var start = 0;
+      var chain = Promise.resolve();
+      while (start < missing.length) {
+        (function (slicePts, sliceIdx) {
+          chain = chain.then(function () {
+            if (signal && signal.aborted) return;
+            return fetchCurrentWeather(slicePts, signal).then(function (rows) {
+              var r;
+              for (r = 0; r < rows.length; r++) {
+                if (rows[r]) out[sliceIdx[r]] = rows[r];
+              }
+            }).catch(function () { /* partial OK */ });
+          });
+        })(missing.slice(start, start + CAP), missingIdx.slice(start, start + CAP));
+        start += CAP;
+      }
+      return chain.then(function () {
+        var filled = [];
+        var fi;
+        for (fi = 0; fi < out.length; fi++) {
+          filled.push(out[fi] || Object.assign({}, points[fi]));
+        }
+        return filled;
+      });
+    }
+
     var lats = missing.map(function (p) { return p.lat.toFixed(4); }).join(",");
     var lons = missing.map(function (p) { return p.lon.toFixed(4); }).join(",");
     var url = METEO_URL + "?latitude=" + lats + "&longitude=" + lons + "&current=cloud_cover,uv_index,is_day";
-    return fetch(url).then(function (res) {
+    return fetchWithTimeout(url, WX_FETCH_TIMEOUT_MS, signal).then(function (res) {
       if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
       return res.json();
     }).then(function (data) {
@@ -2666,11 +2837,17 @@
       if (rows.length !== missing.length) throw new Error("Open-Meteo count mismatch");
       var j, wx;
       for (j = 0; j < missing.length; j++) {
-        wx = parseCurrent(rows[j]);
-        putCachedCurrentWx(missing[j].lat, missing[j].lon, wx);
-        out[missingIdx[j]] = Object.assign({}, missing[j], wx);
+        try {
+          wx = parseCurrent(rows[j]);
+          putCachedCurrentWx(missing[j].lat, missing[j].lon, wx);
+          out[missingIdx[j]] = Object.assign({}, missing[j], wx);
+        } catch (eRow) {
+          out[missingIdx[j]] = Object.assign({}, missing[j]);
+        }
       }
-      return out;
+      return out.map(function (row, idx) {
+        return row || Object.assign({}, points[idx]);
+      });
     });
   }
 
@@ -3138,11 +3315,24 @@
     return rows.filter(isSunnyBeach).sort(sunnySortCmp);
   }
 
+  function bumpWxSearchGen() {
+    wxSearchGen += 1;
+    if (wxFetchAbort) {
+      try { wxFetchAbort.abort(); } catch (eAb) {}
+      wxFetchAbort = null;
+    }
+  }
+
   function weatherCollectSunny(list, assumeForeign, wantCount, genToken) {
     var want = wantCount || SUNNY_PICK_CAP;
     var found = [];
     var i = 0;
     var myGen = genToken != null ? genToken : wxSearchGen;
+    if (wxFetchAbort) {
+      try { wxFetchAbort.abort(); } catch (eOld) {}
+    }
+    wxFetchAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var signal = wxFetchAbort ? wxFetchAbort.signal : null;
     function stale() {
       return myGen !== wxSearchGen;
     }
@@ -3155,40 +3345,33 @@
       });
     }
     function step() {
-      if (stale()) return Promise.resolve([]);
+      if (stale()) return Promise.resolve(found.slice(0, want));
       if (found.length >= want || i >= list.length) {
         found.sort(sunnySortCmp);
         return Promise.resolve(found.slice(0, want));
       }
-      var chunkA = list.slice(i, i + WX_BATCH);
-      i += WX_BATCH;
-      var chunkB = list.slice(i, i + WX_BATCH);
-      if (chunkB.length) i += WX_BATCH;
+      var chunk = list.slice(i, i + WX_BATCH);
+      i += chunk.length;
       setStatus("Checking the sun… " + Math.min(i, list.length) + "/" + list.length);
-      var jobs = [
-        fetchCurrentWeather(chunkA).catch(function (err) {
-          console.error(err);
-          return [];
-        })
-      ];
-      if (chunkB.length) {
-        jobs.push(fetchCurrentWeather(chunkB).catch(function (err) {
-          console.error(err);
-          return [];
-        }));
-      }
-      return Promise.all(jobs).then(function (parts) {
-        if (stale()) return [];
-        var wx = [];
-        var p;
-        for (p = 0; p < parts.length; p++) {
-          if (parts[p] && parts[p].length) wx.push.apply(wx, parts[p]);
-        }
-        absorb(wx);
+      /* opt14: one batch at a time + timeout; always settle so UI never sticks at N/400 */
+      return fetchCurrentWeather(chunk, signal).catch(function (err) {
+        if (err && err.name === "AbortError") return [];
+        console.error(err);
+        return [];
+      }).then(function (wx) {
+        if (stale()) return found.slice(0, want);
+        if (wx && wx.length) absorb(wx);
+        /* keep going even if this batch was empty/timed out */
         return step();
       });
     }
-    return step();
+    return step().then(function (rows) {
+      return rows || found.slice(0, want);
+    }).catch(function (err) {
+      console.error(err);
+      found.sort(sunnySortCmp);
+      return found.slice(0, want);
+    });
   }
 
   function closeSunnySheet() {
@@ -3397,7 +3580,8 @@
     var code = only ? null : excludeCode();
     var where = isIntl() ? " outside " + countryLabel() : "";
     var km = Math.round(maxR / 1000);
-    var myGen = ++wxSearchGen;
+    bumpWxSearchGen();
+    var myGen = wxSearchGen;
     setStatus((wantSunny ? "No sun close by. " : "") + "Looking" + where + ", within " + km + " km…");
     fetchBeaches(origin.lat, origin.lon, maxR, false, code, null, 400, null, only)
       .then(function (list) {
@@ -3573,7 +3757,7 @@
     if (!origin || searchingSunny) return;
     // Repeated Find: cycle next beach in the open sheet (wrap); else search.
     if (advanceSunnySheet()) return;
-    wxSearchGen += 1;
+    bumpWxSearchGen();
     ensureHomeCountry().then(function () {
       var wantSunny = sunnyModeOn();
       if (wantSunny) {
@@ -3989,7 +4173,7 @@
     }
     toggleSunny.addEventListener("click", stopSunBubble);
     toggleSunny.addEventListener("change", function () {
-      wxSearchGen += 1;
+      bumpWxSearchGen();
       if (searchingSunny) {
         searchingSunny = false;
         unlockSearch();
@@ -4143,7 +4327,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt13").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt14").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
