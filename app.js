@@ -47,9 +47,18 @@
   var currentWxCache = {};
   var CURRENT_WX_TTL_MS = 20 * 60 * 1000;
   var wikiCache = {};
-  var cloudOpacity = 0.88;
+  var cloudOpacity = 0.72;
   var searchingSunny = false;
   var overlayIds = ["ov-road-casing", "ov-road", "ov-road-name", "ov-place"];
+  var BASEMAP_KEY = "sunny-basemap";
+  var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
+  var basemapMode = "roads";
+  try {
+    var savedBasemap = localStorage.getItem(BASEMAP_KEY);
+    if (savedBasemap === "roads" || savedBasemap === "satellite" || savedBasemap === "dark") {
+      basemapMode = savedBasemap;
+    }
+  } catch (eBasemap) {}
   var lastGibsUrl = null;
   var allMode = false;
   var nearbyBeaches = [];
@@ -80,9 +89,27 @@
           tileSize: 256,
           attribution: "&copy; OpenStreetMap",
           maxzoom: 19
+        },
+        "base-sat": {
+          type: "raster",
+          tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+          tileSize: 256,
+          attribution: "Esri World Imagery",
+          maxzoom: 19
+        },
+        "base-dark": {
+          type: "raster",
+          tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
+          tileSize: 256,
+          attribution: "&copy; CARTO &middot; &copy; OpenStreetMap",
+          maxzoom: 20
         }
       },
-      layers: [{ id: "osm", type: "raster", source: "osm" }]
+      layers: [
+        { id: "osm", type: "raster", source: "osm", layout: { visibility: "visible" } },
+        { id: "base-sat", type: "raster", source: "base-sat", layout: { visibility: "none" } },
+        { id: "base-dark", type: "raster", source: "base-dark", layout: { visibility: "none" } }
+      ]
     },
     center: [-79.38, 43.65],
     zoom: 3,
@@ -97,7 +124,7 @@
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
-    new maplibregl.AttributionControl({ compact: true, customAttribution: "NASA GIBS / NOAA GOES · Open-Meteo" }),
+    new maplibregl.AttributionControl({ compact: true, customAttribution: "NASA GIBS / NOAA GOES · Open-Meteo · free tiles" }),
     "bottom-left"
   );
 
@@ -207,6 +234,82 @@
     });
   }
 
+  function cloudRasterPaint(opacity) {
+    return {
+      "raster-opacity": opacity,
+      "raster-resampling": "linear",
+      "raster-fade-duration": 0,
+      "raster-brightness-min": 0.2,
+      "raster-contrast": 0.1
+    };
+  }
+
+  function applyCloudPaint(layerId, opacity) {
+    if (!map.getLayer(layerId)) return;
+    var paint = cloudRasterPaint(opacity);
+    var key;
+    for (key in paint) {
+      if (Object.prototype.hasOwnProperty.call(paint, key)) {
+        map.setPaintProperty(layerId, key, paint[key]);
+      }
+    }
+  }
+
+  function basemapLayerId(mode) {
+    if (mode === "satellite") return "base-sat";
+    if (mode === "dark") return "base-dark";
+    return "osm";
+  }
+
+  function restackBasemap() {
+    var layers = map.getStyle() && map.getStyle().layers;
+    if (!layers || !layers.length) return;
+    var firstOther = null;
+    var i, id;
+    for (i = 0; i < layers.length; i++) {
+      id = layers[i].id;
+      if (BASEMAP_IDS.indexOf(id) === -1) {
+        firstOther = id;
+        break;
+      }
+    }
+    if (!firstOther) return;
+    for (i = 0; i < BASEMAP_IDS.length; i++) {
+      id = BASEMAP_IDS[i];
+      if (map.getLayer(id)) map.moveLayer(id, firstOther);
+    }
+  }
+
+  function applyBaseMap() {
+    var active = basemapLayerId(basemapMode);
+    var i, id;
+    for (i = 0; i < BASEMAP_IDS.length; i++) {
+      id = BASEMAP_IDS[i];
+      if (!map.getLayer(id)) continue;
+      map.setLayoutProperty(id, "visibility", id === active ? "visible" : "none");
+    }
+    restackBasemap();
+  }
+
+  function setBasemapMode(mode) {
+    if (mode !== "roads" && mode !== "satellite" && mode !== "dark") mode = "roads";
+    basemapMode = mode;
+    try { localStorage.setItem(BASEMAP_KEY, basemapMode); } catch (eSet) {}
+    var seg = document.getElementById("basemap-seg");
+    if (seg) {
+      var buttons = seg.querySelectorAll(".seg-btn");
+      var b, m;
+      for (b = 0; b < buttons.length; b++) {
+        m = buttons[b].getAttribute("data-basemap");
+        var on = m === basemapMode;
+        if (on) buttons[b].classList.add("is-on");
+        else buttons[b].classList.remove("is-on");
+        buttons[b].setAttribute("aria-pressed", on ? "true" : "false");
+      }
+    }
+    applyBaseMap();
+  }
+
   function applyHires() {
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
@@ -216,32 +319,26 @@
       addHiresSources();
       if (map.getLayer("modis")) {
         map.setLayoutProperty("modis", "visibility", "visible");
-        map.setPaintProperty("modis", "raster-opacity", sharp);
+        applyCloudPaint("modis", sharp);
       }
       if (map.getLayer("iem-vis")) {
         var vis = z >= 8 ? Math.min(0.28, cloudOpacity) : 0;
         map.setLayoutProperty("iem-vis", "visibility", vis > 0 ? "visible" : "none");
-        map.setPaintProperty("iem-vis", "raster-opacity", vis);
+        applyCloudPaint("iem-vis", vis);
       }
     } else {
       if (map.getLayer("modis")) {
         map.setLayoutProperty("modis", "visibility", "none");
-        map.setPaintProperty("modis", "raster-opacity", 0);
+        applyCloudPaint("modis", 0);
       }
       if (map.getLayer("iem-vis")) {
         map.setLayoutProperty("iem-vis", "visibility", "none");
-        map.setPaintProperty("iem-vis", "raster-opacity", 0);
+        applyCloudPaint("iem-vis", 0);
       }
     }
     if (map.getLayer("gibs")) {
-      map.setPaintProperty("gibs", "raster-opacity", wantSharp ? cloudOpacity * 0.42 : cloudOpacity);
+      applyCloudPaint("gibs", wantSharp ? cloudOpacity * 0.42 : cloudOpacity);
     }
-  }
-
-  function applyBaseMap() {
-    if (!map.getLayer("osm")) return;
-    var hide = cloudOpacity >= 0.35 && !overlayVisible();
-    map.setLayoutProperty("osm", "visibility", hide ? "none" : "visible");
   }
 
   function applyCloudOpacity() {
@@ -299,7 +396,7 @@
         id: "modis",
         type: "raster",
         source: "modis",
-        paint: { "raster-opacity": 0, "raster-resampling": "linear", "raster-fade-duration": 0 }
+        paint: cloudRasterPaint(0)
       }, before);
     }
     if (!map.getLayer("iem-vis")) {
@@ -307,7 +404,7 @@
         id: "iem-vis",
         type: "raster",
         source: "iem-vis",
-        paint: { "raster-opacity": 0, "raster-resampling": "linear", "raster-fade-duration": 0 }
+        paint: cloudRasterPaint(0)
       }, before);
     }
   }
@@ -327,8 +424,9 @@
       id: "gibs",
       type: "raster",
       source: "gibs",
-      paint: { "raster-opacity": cloudOpacity, "raster-resampling": "linear", "raster-fade-duration": 0 }
+      paint: cloudRasterPaint(cloudOpacity)
     }, before);
+    restackBasemap();
     applyHires();
     if (overlayVisible()) restackOverlay();
   }
@@ -339,6 +437,7 @@
   }
 
   function restackOverlay() {
+    restackBasemap();
     if (!overlayVisible()) {
       applyOverlay();
       return;
@@ -645,7 +744,7 @@
   var BEACH_DB_IDB = "sunny";
   var BEACH_DB_STORE = "beachdb";
   var BEACH_DB_KEY = "rows";
-  var BEACH_DB_VER = "names1-gz1";
+  var BEACH_DB_VER = "names2-places";
 
   function idbOpenBeach() {
     return new Promise(function (resolve, reject) {
@@ -1823,6 +1922,7 @@
     slider.max = String(sliderMax());
     slider.value = String(sliderMax());
     ensureBeachLayers();
+    setBasemapMode(basemapMode);
     if (overlayVisible()) restackOverlay();
     setCloudFrame(sliderMax());
     applyBaseMap();
@@ -1874,8 +1974,20 @@
   });
   toggleMap.addEventListener("change", function () {
     restackOverlay();
-    applyBaseMap();
   });
+  (function bindBasemapSeg() {
+    var seg = document.getElementById("basemap-seg");
+    if (!seg) return;
+    seg.addEventListener("click", function (e) {
+      var t = e.target;
+      while (t && t !== seg && !(t.getAttribute && t.getAttribute("data-basemap"))) {
+        t = t.parentNode;
+      }
+      if (!t || t === seg) return;
+      var mode = t.getAttribute("data-basemap");
+      if (mode) setBasemapMode(mode);
+    });
+  })();
   if (toggleIntl) {
     toggleIntl.addEventListener("change", function () {
       if (!isIntl()) {

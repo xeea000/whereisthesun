@@ -323,6 +323,60 @@ html, body {
 }
 
 
+
+.ov.basemap {
+  flex: 0 0 auto;
+  gap: 6px;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+
+.basemap-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.seg {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+
+.seg-btn {
+  appearance: none;
+  margin: 0;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: 650 0.72rem/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  padding: 7px 10px;
+  min-height: 30px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+
+.seg-btn:last-child {
+  border-right: 0;
+}
+
+.seg-btn.is-on {
+  background: var(--sun);
+  color: var(--sun-ink);
+}
+
+.seg-btn:focus-visible {
+  outline: 2px solid var(--sun);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
 .ov.switch {
   display: inline-flex;
   align-items: center;
@@ -400,6 +454,14 @@ html, body {
 }
 
 @media (max-width: 640px) {
+  .seg-btn {
+    padding: 6px 8px;
+    font-size: 0.68rem;
+    min-height: 28px;
+  }
+  .overlay-row {
+    gap: 10px 12px;
+  }
   .timeline {
     right: max(12px, env(safe-area-inset-right));
     bottom: 318px;

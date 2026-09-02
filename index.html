@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="styles.css?v=unify1">
+  <link rel="stylesheet" href="styles.css?v=map2">
 </head>
 <body>
   <div id="map"></div>
   <div class="hud">
-    <p id="status" class="status">Finding you…</p>
+    <p id="status" class="status">Finding you… Clouds sit lightly on the map so land stays visible.</p>
   </div>
   <div class="timeline">
     <div class="time-row">
@@ -23,12 +23,20 @@
     </div>
     <div class="overlay-row">
       <label class="ov">Clouds
-        <input id="cloud-opacity" type="range" min="0" max="100" value="88" step="1">
+        <input id="cloud-opacity" type="range" min="0" max="100" value="72" step="1">
       </label>
+      <div class="ov basemap" role="group" aria-label="Map style">
+        <span class="basemap-label">Map</span>
+        <div class="seg" id="basemap-seg">
+          <button type="button" class="seg-btn is-on" data-basemap="roads" aria-pressed="true">Roads</button>
+          <button type="button" class="seg-btn" data-basemap="satellite" aria-pressed="false">Satellite</button>
+          <button type="button" class="seg-btn" data-basemap="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
       <label class="ov switch">
         <input id="toggle-map" type="checkbox">
         <span class="knob" aria-hidden="true"></span>
-        Roads &amp; names
+        Labels
       </label>
       <label class="ov switch">
         <input id="toggle-intl" type="checkbox">
@@ -57,6 +65,6 @@
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
   <script src="vendor/maplibre-gl.js"></script>
-  <script src="app.js?v=unify1"></script>
+  <script src="app.js?v=map2"></script>
 </body>
 </html>
