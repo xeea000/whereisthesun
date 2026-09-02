@@ -78,6 +78,8 @@
   var LABELS_KEY = "sunny-labels";
   var INTL_KEY = "sunny-intl";
   var RADAR_KEY = "sunny-radar";
+  /* opt18: radar XOR clouds — remember opacity while radar mutes clouds */
+  var cloudOpacitySavedForRadar = null; /* 0–100 or null */
   var VIEW_KEY = "sunny-last-view";
   var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
   var basemapMode = "roads";
@@ -1550,6 +1552,11 @@
     var suffix = atNow ? " · NOW" : "";
     timeLabel.textContent = formatFrameLabel(iso) + suffix;
     if (tabHidden) return Promise.resolve();
+    /* opt18: radar on → no GIBS/hires/Play tile work (mutex) */
+    if (radarOn()) {
+      setMapLibreCloudsHidden(true);
+      return Promise.resolve();
+    }
 
     var p;
     if (playMode) {
@@ -1609,7 +1616,7 @@
   }
 
   function applyHires() {
-    if (tabHidden || playMode) return;
+    if (tabHidden || playMode || radarOn()) return;
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
     /* opt13: hires only at NOW. Far=GeoColor; mid=light VIIRS/MODIS; close=favor sharp+IEM. */
@@ -1725,7 +1732,7 @@
   }
 
   function addHiresSources() {
-    if (tabHidden) return;
+    if (tabHidden || radarOn()) return;
     var before = cloudStackBefore();
     if (!map.getSource("modis")) {
       map.addSource("modis", {
@@ -2419,7 +2426,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt17");
+      beachWorker = new Worker("beach-worker.js?v=opt18");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4215,16 +4222,71 @@
     });
   }
 
+  function muteCloudsForRadar() {
+    /* Save user opacity once; zero visually; hide rasters; stop Play. */
+    if (cloudOpacitySavedForRadar == null) {
+      var fromEl = cloudOpacityEl ? Number(cloudOpacityEl.value) : Math.round(cloudOpacity * 100);
+      if (!isFinite(fromEl) || fromEl <= 0) {
+        try {
+          var sOp = localStorage.getItem(OPACITY_KEY);
+          if (sOp != null && isFinite(Number(sOp)) && Number(sOp) > 0) fromEl = Number(sOp);
+          else fromEl = 90;
+        } catch (eBk) {
+          fromEl = 90;
+        }
+      }
+      cloudOpacitySavedForRadar = Math.max(0, Math.min(100, Math.round(fromEl)));
+    }
+    stopPlay();
+    cloudOpacity = 0;
+    if (cloudOpacityEl) {
+      cloudOpacityEl.value = "0";
+      cloudOpacityEl.classList.add("is-radar-muted");
+      try {
+        var lab = cloudOpacityEl.closest ? cloudOpacityEl.closest("label") : null;
+        if (lab) lab.classList.add("is-radar-muted");
+      } catch (eLabM) {}
+    }
+    setMapLibreCloudsHidden(true);
+    try { applyCloudSolidMode(); } catch (eSol) {}
+    try { hidePlayOverlay(); } catch (eHide) {}
+  }
+
+  function unmuteCloudsAfterRadar() {
+    var restore = cloudOpacitySavedForRadar != null ? cloudOpacitySavedForRadar : 90;
+    cloudOpacitySavedForRadar = null;
+    cloudOpacity = Math.max(0, Math.min(1, restore / 100));
+    if (cloudOpacityEl) {
+      cloudOpacityEl.value = String(restore);
+      cloudOpacityEl.classList.remove("is-radar-muted");
+      try {
+        var lab2 = cloudOpacityEl.closest ? cloudOpacityEl.closest("label") : null;
+        if (lab2) lab2.classList.remove("is-radar-muted");
+      } catch (eLabU) {}
+    }
+    setMapLibreCloudsHidden(false);
+    try { applyCloudOpacity(); } catch (eApp) {}
+    try {
+      if (!tabHidden && cloudTimes.length) setCloudFrame(cloudIndex);
+    } catch (eFrame) {}
+  }
+
   function setRadarEnabled(on) {
     if (on) {
+      muteCloudsForRadar();
       fetchAndApplyRadar({ quiet: false }).then(function (ok) {
         if (ok && radarOn() && !tabHidden) startRadarRefresh();
       });
     } else {
       hideRadarLayer();
+      var muted = cloudOpacitySavedForRadar != null;
+      try {
+        if (!muted && cloudOpacityEl && cloudOpacityEl.classList.contains("is-radar-muted")) muted = true;
+      } catch (eM) {}
+      if (muted) unmuteCloudsAfterRadar();
     }
   }
-  /* === END RAINVIEWER RADAR (opt16) === */
+  /* === END RAINVIEWER RADAR (opt16) + XOR clouds (opt18) === */
 
   function saveSetting(key, val) {
     try { localStorage.setItem(key, val); } catch (eSave) {}
@@ -4341,6 +4403,12 @@
 
   function startPlay() {
     if (playTimer || playBusy) return;
+    /* opt18: Play needs clouds — turn radar off first */
+    if (radarOn()) {
+      if (toggleRadar) toggleRadar.checked = false;
+      saveSetting(RADAR_KEY, "0");
+      setRadarEnabled(false);
+    }
     btnPlay.textContent = "Pause";
     btnPlay.setAttribute("aria-pressed", "true");
     btnPlay.classList.add("is-on");
@@ -4466,14 +4534,22 @@
     applyCloudSolidMode();
     ensureCloudMap(); /* hide unused #cloud-map; mount play layer on map container */
     restorePersistedSettingsAfterMapReady();
-    var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
-    addGibsStatic(url);
-    setCloudFrame(sliderMax());
-    /* opt15: probe last published GOES slot; rebuild NOW if lag was optimistic */
-    resolveGoesLatestIso(origin ? origin.lon : -79).then(function (iso) {
-      applyGoesLatestToTimeline(iso);
-      if (!playMode && !tabHidden) setCloudFrame(cloudIndex);
-    }).catch(function () {});
+    /* opt18: if Radar restored on, skip cloud tile boot (mutex) */
+    if (!radarOn()) {
+      var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
+      addGibsStatic(url);
+      setCloudFrame(sliderMax());
+      /* opt15: probe last published GOES slot; rebuild NOW if lag was optimistic */
+      resolveGoesLatestIso(origin ? origin.lon : -79).then(function (iso) {
+        applyGoesLatestToTimeline(iso);
+        if (!playMode && !tabHidden && !radarOn()) setCloudFrame(cloudIndex);
+      }).catch(function () {});
+    } else {
+      try {
+        var isoBoot = cloudTimes[cloudTimes.length - 1];
+        timeLabel.textContent = formatFrameLabel(isoBoot) + " · NOW";
+      } catch (eBoot) {}
+    }
     applyBaseMap();
     if (overlayVisible()) restackOverlay();
     else {
@@ -4540,9 +4616,25 @@
     setCloudFrame(clampIndex(slider.value), { forceHires: true });
   });
   cloudOpacityEl.addEventListener("input", function () {
-    cloudOpacity = Math.max(0, Math.min(1, Number(cloudOpacityEl.value) / 100));
+    var pct = Math.max(0, Math.min(100, Math.round(Number(cloudOpacityEl.value))));
+    if (!isFinite(pct)) pct = 0;
+    /* opt18: raising Clouds while Radar on → turn Radar off */
+    if (radarOn()) {
+      if (pct <= 0) {
+        cloudOpacity = 0;
+        return;
+      }
+      cloudOpacitySavedForRadar = pct;
+      cloudOpacity = pct / 100;
+      saveSetting(OPACITY_KEY, String(pct));
+      if (toggleRadar) toggleRadar.checked = false;
+      saveSetting(RADAR_KEY, "0");
+      setRadarEnabled(false);
+      return;
+    }
+    cloudOpacity = pct / 100;
     applyCloudOpacity();
-    saveSetting(OPACITY_KEY, String(Math.round(cloudOpacity * 100)));
+    saveSetting(OPACITY_KEY, String(pct));
   });
   toggleMap.addEventListener("change", function () {
     restackOverlay();
@@ -4655,15 +4747,16 @@
       try { if (window.__sunnyFpsStart) window.__sunnyFpsStart(); } catch (eFps2) {}
       try {
         if (map && typeof map.resume === "function") map.resume();
-        setCloudFrame(cloudIndex);
+        if (!radarOn()) setCloudFrame(cloudIndex);
         if (map && typeof map.triggerRepaint === "function") map.triggerRepaint();
       } catch (eRes) {}
       if (radarOn()) {
+        resumePlay = false; /* opt18: clouds paused while radar */
         fetchAndApplyRadar({ quiet: true }).then(function (ok) {
           if (ok && radarOn() && !tabHidden) startRadarRefresh();
         });
       }
-      if (resumePlay) {
+      if (resumePlay && !radarOn()) {
         resumePlay = false;
         startPlay();
       }
@@ -4685,7 +4778,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt17").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt18").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
