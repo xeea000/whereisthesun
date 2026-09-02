@@ -215,6 +215,8 @@
     try {
       var msg = (e && e.error && e.error.message) ? e.error.message : "";
       if (msg.indexOf("Could not load image") !== -1) return;
+      if (msg.indexOf("Not Found") !== -1) return;
+      if (/\b404\b/.test(msg)) return;
     } catch (eIgn) {}
   });
 
@@ -254,20 +256,173 @@
 
   function pad(n) { return n < 10 ? "0" + n : String(n); }
 
+  /*
+   * opt15: GOES GeoColor time — snap to GIBS 10-min step, lag wall clock so NOW
+   * never asks for an unpublished slot, probe last published tile, remember
+   * last-known-good from Play WMS / probe. Play WMS + static WMTS share these.
+   */
+  var GOES_STEP_MS = FRAME_MIN * 60 * 1000;
+  var GOES_AVAIL_LAG_MS = 40 * 60 * 1000; /* wall−40m ceiling (industry lag band) */
+  var GOES_PROBE_TTL_MS = 20 * 60 * 1000;
+  var GOES_PROBE_BACK_STEPS = 12; /* walk back ≤2h in 10-min steps */
+  var goesTimeCache = null; /* { iso, t } */
+  var goesLastGoodIso = null;
+  var goesTimeProbe = null;
+
+  function snapGoesMs(ms) {
+    var n = Number(ms);
+    if (!isFinite(n)) n = Date.now();
+    return Math.floor(n / GOES_STEP_MS) * GOES_STEP_MS;
+  }
+
   function toGoesIso(ms) {
-    var d = new Date(ms);
+    var d = new Date(snapGoesMs(ms));
     return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) +
       "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00Z";
   }
 
+  function goesWallLatestMs() {
+    return snapGoesMs(Date.now() - GOES_AVAIL_LAG_MS);
+  }
+
+  function goesIsoMs(iso) {
+    var t = Date.parse(iso);
+    return isFinite(t) ? t : NaN;
+  }
+
+  function rememberGoesGood(iso) {
+    if (!iso || typeof iso !== "string") return;
+    var ms = goesIsoMs(iso);
+    if (!isFinite(ms)) return;
+    if (ms > goesWallLatestMs()) return;
+    goesLastGoodIso = iso;
+    goesTimeCache = { iso: iso, t: Date.now() };
+  }
+
+  function goesLatestIsoSync() {
+    var wallMs = goesWallLatestMs();
+    var wallIso = toGoesIso(wallMs);
+    if (goesLastGoodIso) {
+      var gMs = goesIsoMs(goesLastGoodIso);
+      if (isFinite(gMs) && gMs <= wallMs && (wallMs - gMs) <= 3 * 3600 * 1000) {
+        return goesLastGoodIso;
+      }
+    }
+    if (goesTimeCache && goesTimeCache.iso) {
+      var cMs = goesIsoMs(goesTimeCache.iso);
+      if (isFinite(cMs) && cMs <= wallMs) return goesTimeCache.iso;
+    }
+    return wallIso;
+  }
+
   function buildCloudTimes() {
-    var lagMs = 50 * 60 * 1000;
-    var latest = Math.floor((Date.now() - lagMs) / (FRAME_MIN * 60 * 1000)) * (FRAME_MIN * 60 * 1000);
+    var latest = goesIsoMs(goesLatestIsoSync());
+    if (!isFinite(latest)) latest = goesWallLatestMs();
+    latest = snapGoesMs(latest);
+    var wall = goesWallLatestMs();
+    if (latest > wall) latest = wall;
     var start = latest - HOURS_BACK * 3600 * 1000;
     var out = [];
     var t;
-    for (t = start; t <= latest; t += FRAME_MIN * 60 * 1000) out.push(toGoesIso(t));
+    for (t = start; t <= latest; t += GOES_STEP_MS) out.push(toGoesIso(t));
     return out;
+  }
+
+  function goesProbeTileUrl(iso, lon) {
+    var layer = goesLayer(lon == null ? -79 : lon);
+    /* Mid-disk z4 tile: East FL ~4/6/4; West CA ~4/6/2 */
+    var z = 4;
+    var y = 6;
+    var x = (lon != null && lon <= -105) ? 2 : 4;
+    return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer +
+      "/default/" + iso + "/GoogleMapsCompatible_Level7/" + z + "/" + y + "/" + x + ".png";
+  }
+
+  function probeGoesWmtsTile(iso, lon) {
+    var url = goesProbeTileUrl(iso, lon);
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    var p = fetch(url, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      if (!res.ok) return false;
+      return res.blob().then(function (b) {
+        return !!(b && b.size > 2000);
+      });
+    }).catch(function () {
+      return false;
+    });
+    if (ctrl) {
+      timer = setTimeout(function () {
+        try { ctrl.abort(); } catch (eA) {}
+      }, 6000);
+      p = p.then(function (ok) {
+        clearTimeout(timer);
+        return ok;
+      }, function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
+    }
+    return p;
+  }
+
+  function resolveGoesLatestIso(lon) {
+    if (goesTimeCache && goesTimeCache.iso && (Date.now() - goesTimeCache.t) < GOES_PROBE_TTL_MS) {
+      return Promise.resolve(goesTimeCache.iso);
+    }
+    if (goesTimeProbe) return goesTimeProbe;
+    var startMs = goesWallLatestMs();
+    goesTimeProbe = (function tryAt(step) {
+      if (step > GOES_PROBE_BACK_STEPS) {
+        var fb = goesLatestIsoSync();
+        rememberGoesGood(fb);
+        return Promise.resolve(fb);
+      }
+      var iso = toGoesIso(startMs - step * GOES_STEP_MS);
+      return probeGoesWmtsTile(iso, lon).then(function (ok) {
+        if (ok) {
+          rememberGoesGood(iso);
+          return iso;
+        }
+        return tryAt(step + 1);
+      });
+    })(0).then(function (iso) {
+      goesTimeProbe = null;
+      return iso;
+    }).catch(function () {
+      goesTimeProbe = null;
+      return goesLatestIsoSync();
+    });
+    return goesTimeProbe;
+  }
+
+  function applyGoesLatestToTimeline(iso) {
+    if (!iso) return;
+    rememberGoesGood(iso);
+    var atEnd = !cloudTimes.length || cloudIndex >= sliderMax();
+    cloudTimes = buildCloudTimes();
+    if (atEnd) cloudIndex = sliderMax();
+    else cloudIndex = clampIndex(cloudIndex);
+    if (slider) {
+      slider.min = "0";
+      slider.max = String(sliderMax());
+      slider.value = String(cloudIndex);
+    }
+  }
+
+  function goesIsoForStaticRestore() {
+    var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
+    if (atNow) return goesLatestIsoSync();
+    if (!cloudTimes.length) return goesLatestIsoSync();
+    var iso = cloudTimes[cloudIndex];
+    var ms = goesIsoMs(iso);
+    var wall = goesWallLatestMs();
+    if (isFinite(ms) && ms > wall) return goesLatestIsoSync();
+    return iso;
   }
 
   function goesLayer(lon) {
@@ -980,7 +1135,7 @@
   function testWmsCors() {
     if (playCorsOk != null) return Promise.resolve(playCorsOk);
     return new Promise(function (resolve) {
-      var iso = cloudTimes.length ? cloudTimes[cloudTimes.length - 1] : toGoesIso(Date.now());
+      var iso = cloudTimes.length ? cloudTimes[cloudTimes.length - 1] : goesLatestIsoSync();
       var url = gibsWmsUrl(iso, origin ? origin.lon : -79);
       /* <img> display does not need CORS; probe plain load first. */
       var img = new Image();
@@ -1289,6 +1444,7 @@
     }
     var meta = gibsWmsFrameMeta(iso, origin ? origin.lon : null);
     return crossfadePlayImage(meta.url, meta.key).then(function (ok) {
+      if (ok) rememberGoesGood(iso);
       if (!ok && playCorsOk === false) {
         playUseOpenMeteo = true;
         return paintOpenMeteoFrame(iso);
@@ -1314,9 +1470,10 @@
     if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
     hidePlayOverlay();
     setMapLibreCloudsHidden(false);
-    /* restore main-map GIBS to current slider time WITHOUT clearTiles flicker */
+    /* restore main-map GIBS: prefer last-known-good GOES time at NOW (opt15) */
     if (cloudTimes.length) {
-      var url = gibsTiles(cloudTimes[cloudIndex], origin ? origin.lon : null);
+      var isoExit = goesIsoForStaticRestore();
+      var url = gibsTiles(isoExit, origin ? origin.lon : null);
       presentStaticGibs(url);
     }
     restackCloudRasters();
@@ -1375,7 +1532,8 @@
         return shown;
       });
     } else {
-      var url = gibsTiles(iso, origin ? origin.lon : null);
+      var isoStatic = (atNow ? goesLatestIsoSync() : iso);
+      var url = gibsTiles(isoStatic, origin ? origin.lon : null);
       p = presentStaticGibs(url);
     }
 
@@ -2229,7 +2387,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt14");
+      beachWorker = new Worker("beach-worker.js?v=opt15");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4131,6 +4289,11 @@
     var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
     addGibsStatic(url);
     setCloudFrame(sliderMax());
+    /* opt15: probe last published GOES slot; rebuild NOW if lag was optimistic */
+    resolveGoesLatestIso(origin ? origin.lon : -79).then(function (iso) {
+      applyGoesLatestToTimeline(iso);
+      if (!playMode && !tabHidden) setCloudFrame(cloudIndex);
+    }).catch(function () {});
     applyBaseMap();
     if (overlayVisible()) restackOverlay();
     else restackCloudRasters();
@@ -4327,7 +4490,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt14").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt15").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
