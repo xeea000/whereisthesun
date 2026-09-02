@@ -154,6 +154,13 @@
     maxPitch: 0
   });
 
+    map.on("error", function (e) {
+    try {
+      var msg = (e && e.error && e.error.message) ? e.error.message : "";
+      if (msg.indexOf("Could not load image") !== -1) return;
+    } catch (eIgn) {}
+  });
+
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
     new maplibregl.AttributionControl({ compact: true, customAttribution: "NASA GIBS / NOAA GOES · Open-Meteo · free tiles" }),
@@ -1039,16 +1046,16 @@
     if (tabHidden || playMode) return;
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
-    var wantSharp = atNow && z >= 5.6;
-    var sharp = wantSharp ? Math.min(0.94, cloudOpacity) : 0;
+    /* MODIS jpg tiles 404 loudly in MapLibre — skip. IEM only at high zoom. */
+    var wantSharp = atNow && z >= 8;
     if (wantSharp) {
       addHiresSources();
       if (map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "visible");
-        applyCloudPaintMain("modis", sharp * 0.55);
+        map.setLayoutProperty("modis", "visibility", "none");
+        applyCloudPaintMain("modis", 0);
       }
       if (map.getLayer("iem-vis")) {
-        var vis = z >= 8 ? Math.min(0.28, cloudOpacity) : 0;
+        var vis = Math.min(0.28, cloudOpacity);
         map.setLayoutProperty("iem-vis", "visibility", vis > 0 ? "visible" : "none");
         applyCloudPaintMain("iem-vis", vis);
       }
@@ -1125,7 +1132,7 @@
   function applyCloudOpacity() {
     if (playMode) setPlayLayerOpacity();
     applyHires();
-    applyBaseMap();
+    if (typeof applyBaseMap === "function") applyBaseMap();
   }
 
   function addHiresSources() {
@@ -1787,7 +1794,7 @@
     if (beachWorker) return beachWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      beachWorker = new Worker("beach-worker.js?v=opt6b");
+      beachWorker = new Worker("beach-worker.js?v=opt7");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3575,9 +3582,11 @@
 
   try {
     if (typeof navigator !== "undefined" && navigator.serviceWorker) {
-      window.addEventListener("load", function () {
-        navigator.serviceWorker.register("./sw.js").catch(function () {});
-      });
+      try {
+        navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function (reg) {
+          try { reg.update(); } catch (eUp) {}
+        }).catch(function () {});
+      } catch (eSw) {}
     }
   } catch (eSw) {}
 
@@ -3586,7 +3595,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt6b").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt7").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

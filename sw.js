@@ -1,13 +1,13 @@
-/* SUNNY service worker — shell cache-first; beach data network-first with store. */
-var CACHE = "sunny-v-opt6b";
+/* SUNNY service worker — network-first shell so deploys stick; beach data network-first. */
+var CACHE = "sunny-v-opt7";
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt6b",
-  "app.js?v=opt6b",
-  "beach-worker.js?v=opt6b",
-  "vendor/maplibre-gl.js?v=opt6b",
-  "vendor/maplibre-gl.css?v=opt6b"
+  "styles.css?v=opt7",
+  "app.js?v=opt7",
+  "beach-worker.js?v=opt7",
+  "vendor/maplibre-gl.js?v=opt7",
+  "vendor/maplibre-gl.css?v=opt7"
 ];
 
 self.addEventListener("install", function (event) {
@@ -50,13 +50,13 @@ function isDataRequest(url) {
   }
 }
 
-function isSameOriginStatic(url) {
+function isShellRequest(url) {
   try {
     var u = new URL(url);
     if (u.origin !== self.location.origin) return false;
-    if (isDataRequest(url)) return false;
     var p = u.pathname;
     if (p === "/" || p.slice(-1) === "/" || p.slice(-5) === ".html") return true;
+    if (p.slice(-5) === "sw.js") return true;
     if (p.slice(-3) === ".js" || p.slice(-4) === ".css") return true;
     if (p.indexOf("/vendor/") !== -1) return true;
     return false;
@@ -65,44 +65,28 @@ function isSameOriginStatic(url) {
   }
 }
 
+function networkFirst(req) {
+  return fetch(req).then(function (res) {
+    if (res && res.ok) {
+      var copy = res.clone();
+      caches.open(CACHE).then(function (cache) {
+        cache.put(req, copy);
+      }).catch(function () {});
+    }
+    return res;
+  }).catch(function () {
+    return caches.match(req).then(function (hit) {
+      return hit || Response.error();
+    });
+  });
+}
+
 self.addEventListener("fetch", function (event) {
   var req = event.request;
   if (req.method !== "GET") return;
   var url = req.url;
 
-  if (isDataRequest(url)) {
-    event.respondWith(
-      fetch(req).then(function (res) {
-        if (res && res.ok) {
-          var copy = res.clone();
-          caches.open(CACHE).then(function (cache) {
-            cache.put(req, copy);
-          }).catch(function () {});
-        }
-        return res;
-      }).catch(function () {
-        return caches.match(req).then(function (hit) {
-          return hit || Response.error();
-        });
-      })
-    );
-    return;
-  }
-
-  if (isSameOriginStatic(url)) {
-    event.respondWith(
-      caches.match(req).then(function (hit) {
-        if (hit) return hit;
-        return fetch(req).then(function (res) {
-          if (res && res.ok) {
-            var copy = res.clone();
-            caches.open(CACHE).then(function (cache) {
-              cache.put(req, copy);
-            }).catch(function () {});
-          }
-          return res;
-        });
-      })
-    );
+  if (isDataRequest(url) || isShellRequest(url)) {
+    event.respondWith(networkFirst(req));
   }
 });

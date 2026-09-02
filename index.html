@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
-  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=opt6b">
-  <link rel="stylesheet" href="styles.css?v=opt6b">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css?v=opt7">
+  <link rel="stylesheet" href="styles.css?v=opt7">
 </head>
 <body>
   <div id="map"></div>
   <!-- Cloud overlay map: CSS mix-blend-mode:screen (MapLibre rasters have no blend-mode). -->
   <div id="cloud-map" aria-hidden="true"></div>
-  <!-- Play-only cloud image overlay (opt6): WMS GetMap double-buffer, screen blend -->
+  <!-- Play-only cloud image overlay (opt7): WMS GetMap double-buffer, screen blend -->
   <div id="cloud-play-layer" aria-hidden="true" hidden>
     <img class="cloud-play-buf cloud-play-a" alt="" draggable="false">
     <img class="cloud-play-buf cloud-play-b" alt="" draggable="false">
@@ -71,7 +71,7 @@
     <p id="sunny-sheet-sub" class="sheet-sub"></p>
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
-  <!-- MapLibre loaded async from app.js (?v=opt6b) so first paint stays light -->
-  <script src="app.js?v=opt6b"></script>
+  <!-- MapLibre loaded async from app.js (?v=opt7) so first paint stays light -->
+  <script src="app.js?v=opt7"></script>
 </body>
 </html>
