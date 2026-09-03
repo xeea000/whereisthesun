@@ -1,0 +1,13 @@
+SUNNY opt24 — Icon transport row (Speed / Loop / Play)
+======================================================
+A) One .transport-row, exact order:
+   [Speed clock] [Loop circular-arrow] [Play triangle/pause] [scrubber] [time-label]
+B) Removed .transport-meta (no text Loop/Speed labels).
+C) Speed cycles 0.5 → 1 → 1.5 → 2 → 3 → 0.5; title/aria "Speed Nx";
+   hidden #play-speed select kept in sync; persist sunny-play-speed.
+D) Loop: yellow/on when looping; aria-pressed; sunny-loop persist;
+   #toggle-loop checkbox visually hidden inside loop label.
+E) Play: SVG play/pause icons; JS toggles visibility + aria (no textContent wipe).
+   Layer/map rows unchanged. International / All beaches not moved.
+
+Cache: ?v=opt24; SW CACHE=sunny-v-opt24

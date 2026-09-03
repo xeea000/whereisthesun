@@ -43,7 +43,9 @@
   var sunnySheetSub = document.getElementById("sunny-sheet-sub");
   var sunnySheetClose = document.getElementById("sunny-sheet-close");
   var btnPlay = document.getElementById("btn-play");
+  var btnSpeed = document.getElementById("btn-speed");
   var toggleLoop = document.getElementById("toggle-loop");
+  var loopBtn = document.getElementById("loop-btn");
   var playSpeedEl = document.getElementById("play-speed");
   var slider = document.getElementById("time-slider");
   var timeLabel = document.getElementById("time-label");
@@ -705,9 +707,20 @@
     return !!playLoop;
   }
 
+  function syncLoopButtonUi() {
+    var on = playLoopOn();
+    if (loopBtn) {
+      loopBtn.setAttribute("aria-pressed", on ? "true" : "false");
+      loopBtn.title = on ? "Loop on" : "Loop off";
+      if (on) loopBtn.classList.add("is-on");
+      else loopBtn.classList.remove("is-on");
+    }
+  }
+
   function setPlayLoop(on) {
     playLoop = !!on;
     if (toggleLoop) toggleLoop.checked = playLoop;
+    syncLoopButtonUi();
     try { localStorage.setItem(LOOP_KEY, playLoop ? "1" : "0"); } catch (eL) {}
   }
 
@@ -722,10 +735,52 @@
     return normalizePlaySpeed(playSpeed);
   }
 
+  function speedLabel(sp) {
+    var n = normalizePlaySpeed(sp);
+    if (n === 0.5) return "0.5x";
+    if (n === 1.5) return "1.5x";
+    return String(n) + "x";
+  }
+
+  function syncSpeedButtonUi() {
+    var sp = getPlaySpeed();
+    var label = "Speed " + speedLabel(sp);
+    if (btnSpeed) {
+      btnSpeed.title = label;
+      btnSpeed.setAttribute("aria-label", label);
+    }
+  }
+
+  function cyclePlaySpeed() {
+    var order = [0.5, 1, 1.5, 2, 3];
+    var cur = getPlaySpeed();
+    var idx = order.indexOf(cur);
+    var next = order[(idx < 0 ? 0 : idx + 1) % order.length];
+    setPlaySpeed(next);
+  }
+
   function setPlaySpeed(v) {
     playSpeed = normalizePlaySpeed(v);
     if (playSpeedEl) playSpeedEl.value = String(playSpeed);
+    syncSpeedButtonUi();
     try { localStorage.setItem(SPEED_KEY, String(playSpeed)); } catch (eS) {}
+  }
+
+  /* opt24: toggle play/pause SVG icons — never wipe btn-play innerHTML via textContent */
+  function setPlayButtonPlaying(on) {
+    if (!btnPlay) return;
+    var playing = !!on;
+    btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
+    if (playing) btnPlay.classList.add("is-on");
+    else btnPlay.classList.remove("is-on");
+    var playIcon = btnPlay.querySelector(".icon-play");
+    var pauseIcon = btnPlay.querySelector(".icon-pause");
+    if (playIcon) playIcon.hidden = playing;
+    if (pauseIcon) pauseIcon.hidden = !playing;
+    var kind = (typeof radarOn === "function" && radarOn()) ? "radar" : "cloud";
+    var label = playing ? ("Pause " + kind + " animation") : ("Play " + kind + " animation");
+    btnPlay.setAttribute("aria-label", label);
+    btnPlay.title = playing ? "Pause" : "Play";
   }
 
   /* opt22: effective dwell from live speed; base constants stay 900 */
@@ -2612,7 +2667,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt23");
+      beachWorker = new Worker("beach-worker.js?v=opt24");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4585,22 +4640,14 @@
     radarPlaySession += 1;
     radarPlayBusy = false;
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
-    if (btnPlay) {
-      btnPlay.textContent = "Play";
-      btnPlay.setAttribute("aria-pressed", "false");
-      btnPlay.classList.remove("is-on");
-    }
+    setPlayButtonPlaying(false);
   }
 
   function stopCloudPlayOnly() {
     playSession += 1;
     playBusy = false;
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
-    if (btnPlay) {
-      btnPlay.textContent = "Play";
-      btnPlay.setAttribute("aria-pressed", "false");
-      btnPlay.classList.remove("is-on");
-    }
+    setPlayButtonPlaying(false);
     if (playMode) exitPlayMode();
   }
 
@@ -4608,9 +4655,7 @@
     if (!radarOn()) return;
     if (playTimer || radarPlayBusy) return;
     stopRadarRefresh();
-    btnPlay.textContent = "Pause";
-    btnPlay.setAttribute("aria-pressed", "true");
-    btnPlay.classList.add("is-on");
+    setPlayButtonPlaying(true);
     var session = ++radarPlaySession;
     function schedule(ms) {
       if (radarPlaySession !== session) return;
@@ -4790,9 +4835,7 @@
       startRadarPlay();
       return;
     }
-    btnPlay.textContent = "Pause";
-    btnPlay.setAttribute("aria-pressed", "true");
-    btnPlay.classList.add("is-on");
+    setPlayButtonPlaying(true);
     enterPlayMode();
     var session = ++playSession;
     var holdTarget = null;
@@ -5024,12 +5067,20 @@
       setPlayLoop(!!toggleLoop.checked);
     });
   }
+  syncLoopButtonUi();
   if (playSpeedEl) {
     playSpeedEl.value = String(normalizePlaySpeed(playSpeed));
     playSpeedEl.addEventListener("change", function () {
       setPlaySpeed(playSpeedEl.value);
     });
   }
+  syncSpeedButtonUi();
+  if (btnSpeed) {
+    btnSpeed.addEventListener("click", function () {
+      cyclePlaySpeed();
+    });
+  }
+  setPlayButtonPlaying(false);
   slider.addEventListener("input", function () {
     stopPlay();
     if (radarOn()) {
@@ -5201,7 +5252,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt23").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt24").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

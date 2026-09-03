@@ -268,98 +268,79 @@ html, body {
   min-height: 40px;
 }
 
-.transport-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  min-height: 28px;
+/* opt24: icon transport — Speed · Loop · Play before scrubber */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
-.layer-row,
-.map-row {
-  display: flex;
+.tbtn {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 12px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  cursor: pointer;
+  flex: 0 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+.tbtn:focus-visible {
+  outline: 2px solid rgba(255, 196, 64, 0.55);
+  outline-offset: 1px;
+}
+.tbtn-ico {
+  display: block;
+  pointer-events: none;
+}
+.tbtn.is-on,
+.tbtn-loop:has(#toggle-loop:checked),
+.play.is-on {
+  background: var(--sun);
+  color: var(--sun-ink);
+  border-color: #d7a72e;
+}
+.play.is-on {
+  box-shadow: inset 0 0 0 2px rgba(26, 20, 6, 0.35);
 }
 
 .play {
+  /* opt24: icon play shares .tbtn sizing; keep class for JS is-on */
   appearance: none;
-  min-width: 64px;
+  min-width: 36px;
+  width: 36px;
   height: 36px;
   min-height: 36px;
   max-height: 40px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--sun);
-  color: var(--sun-ink);
-  font: 700 0.9rem/1 system-ui, sans-serif;
-  cursor: pointer;
-  flex: 0 0 auto;
-  padding: 0 12px;
-}
-
-.loop-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  padding: 0 2px;
-  flex: 0 0 auto;
-  color: var(--text);
-  font: 650 0.78rem/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  white-space: nowrap;
-}
-.loop-opt input[type="checkbox"] {
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: var(--sun);
-  cursor: pointer;
-}
-
-.speed-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  padding: 0 2px;
-  flex: 0 0 auto;
-  color: var(--text);
-  font: 650 0.78rem/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  white-space: nowrap;
-}
-.speed-opt select {
-  appearance: none;
-  -webkit-appearance: none;
-  margin: 0;
-  padding: 6px 20px 6px 8px;
-  min-height: 32px;
-  height: 32px;
-  max-width: 4.8rem;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background-color: rgba(255,255,255,0.06);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%23c8c8c8' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 8px 5px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  font: 650 0.74rem/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font: inherit;
   cursor: pointer;
-}
-.speed-opt select:focus {
-  outline: 2px solid rgba(255, 196, 64, 0.45);
-  outline-offset: 1px;
+  flex: 0 0 auto;
+  padding: 0;
 }
 
 .track-wrap {
@@ -640,9 +621,6 @@ html, body {
   opacity: 0.72;
 }
 
-.play.is-on {
-  box-shadow: inset 0 0 0 2px rgba(26, 20, 6, 0.45);
-}
 
 @media (max-width: 640px) {
   .timeline {
@@ -656,28 +634,16 @@ html, body {
     gap: 8px;
     flex-wrap: nowrap;
   }
-  .transport-meta {
-    gap: 8px 12px;
-  }
   .layer-row,
   .map-row {
     gap: 8px 10px;
   }
+  .tbtn,
   .play {
-    height: 36px;
-    min-height: 36px;
-    min-width: 58px;
-    font-size: 0.85rem;
-  }
-  .speed-opt {
-    font-size: 0.72rem;
-  }
-  .speed-opt select {
-    padding: 4px 16px 4px 6px;
-    min-height: 30px;
-    height: 30px;
-    max-width: 4.2rem;
-    font-size: 0.7rem;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
   }
   .seg-btn {
     padding: 7px 9px;

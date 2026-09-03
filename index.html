@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt23">
-  <link rel="stylesheet" href="styles.css?v=opt23">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt24">
+  <link rel="stylesheet" href="styles.css?v=opt24">
 </head>
 <body>
   <div id="map"></div>
@@ -39,28 +39,42 @@
   </div>
   <div class="timeline">
     <div class="transport-row">
-      <button id="btn-play" class="play" type="button" aria-label="Play cloud animation" aria-pressed="false">Play</button>
+      <button id="btn-speed" class="tbtn tbtn-speed" type="button" title="Speed 1x" aria-label="Speed 1x">
+        <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.75"/>
+          <path d="M12 7.5v5l3.2 1.9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <label class="tbtn tbtn-loop" id="loop-btn" title="Loop on" aria-pressed="true">
+        <input id="toggle-loop" type="checkbox" checked class="sr-only">
+        <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+          <path d="M17.5 7.5A6.5 6.5 0 0 0 7.2 9.1" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+          <path d="M7.5 5.2v4.1h4.1" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6.5 16.5A6.5 6.5 0 0 0 16.8 14.9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+          <path d="M16.5 18.8v-4.1h-4.1" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </label>
+      <button id="btn-play" class="tbtn tbtn-play play" type="button" aria-label="Play cloud animation" aria-pressed="false" title="Play">
+        <svg class="tbtn-ico icon-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+          <path d="M8.2 5.6v12.8l11-6.4z" fill="currentColor"/>
+        </svg>
+        <svg class="tbtn-ico icon-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" hidden>
+          <rect x="7" y="5.5" width="3.4" height="13" rx="1" fill="currentColor"/>
+          <rect x="13.6" y="5.5" width="3.4" height="13" rx="1" fill="currentColor"/>
+        </svg>
+      </button>
       <div class="track-wrap">
         <span class="now-mark">NOW</span>
         <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
       </div>
       <span id="time-label">Clouds</span>
-    </div>
-    <div class="transport-meta">
-      <label class="loop-opt" title="Loop animation from the start">
-        <input id="toggle-loop" type="checkbox" checked>
-        Loop
-      </label>
-      <label class="speed-opt" title="Playback speed">
-        Speed
-        <select id="play-speed" aria-label="Play speed">
-          <option value="0.5">0.5x</option>
-          <option value="1" selected>1x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2">2x</option>
-          <option value="3">3x</option>
-        </select>
-      </label>
+      <select id="play-speed" class="sr-only" tabindex="-1" aria-hidden="true">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+        <option value="3">3x</option>
+      </select>
     </div>
     <div class="layer-row">
       <div class="ov overlay-mode" role="group" aria-label="Overlay">
@@ -116,7 +130,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt23"></script>
-  <script defer src="app.js?v=opt23"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt24"></script>
+  <script defer src="app.js?v=opt24"></script>
 </body>
 </html>
