@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt21">
-  <link rel="stylesheet" href="styles.css?v=opt21">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt22">
+  <link rel="stylesheet" href="styles.css?v=opt22">
 </head>
 <body>
   <div id="map"></div>
@@ -43,6 +43,16 @@
       <label class="loop-opt" title="Loop animation from the start">
         <input id="toggle-loop" type="checkbox" checked>
         Loop
+      </label>
+      <label class="speed-opt" title="Playback speed">
+        Speed
+        <select id="play-speed" aria-label="Play speed">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+          <option value="3">3x</option>
+        </select>
       </label>
       <div class="track-wrap">
         <span class="now-mark">NOW</span>
@@ -102,7 +112,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt21"></script>
-  <script defer src="app.js?v=opt21"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt22"></script>
+  <script defer src="app.js?v=opt22"></script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 /* SUNNY service worker — network-first shell so deploys stick; beach data network-first. */
-var CACHE = "sunny-v-opt21";
+var CACHE = "sunny-v-opt22";
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt21",
-  "app.js?v=opt21",
-  "beach-worker.js?v=opt21",
-  "vendor/maplibre-gl.js?v=opt21",
-  "vendor/maplibre-gl.slim.css?v=opt21",
+  "styles.css?v=opt22",
+  "app.js?v=opt22",
+  "beach-worker.js?v=opt22",
+  "vendor/maplibre-gl.js?v=opt22",
+  "vendor/maplibre-gl.slim.css?v=opt22",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png"

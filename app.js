@@ -44,6 +44,7 @@
   var sunnySheetClose = document.getElementById("sunny-sheet-close");
   var btnPlay = document.getElementById("btn-play");
   var toggleLoop = document.getElementById("toggle-loop");
+  var playSpeedEl = document.getElementById("play-speed");
   var slider = document.getElementById("time-slider");
   var timeLabel = document.getElementById("time-label");
   var cloudOpacityEl = document.getElementById("cloud-opacity");
@@ -82,9 +83,11 @@
   var RADAR_KEY = "sunny-radar"; /* legacy; migrated to OVERLAY_KEY */
   var OVERLAY_KEY = "sunny-overlay";
   var LOOP_KEY = "sunny-loop";
+  var SPEED_KEY = "sunny-play-speed";
   /* opt19: overlayMode clouds|radar — remember opacity while radar mutes clouds */
   var overlayMode = "clouds"; /* "clouds" | "radar" */
   var playLoop = true; /* opt21: Loop checkbox default ON */
+  var playSpeed = 1; /* opt22: 0.5|1|1.5|2|3 */
   var cloudOpacitySavedForRadar = null; /* 0–100 or null while muted */
   var VIEW_KEY = "sunny-last-view";
   var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
@@ -137,6 +140,16 @@
     else if (savedLoop === "1") playLoop = true;
     /* absent / other → default ON */
   } catch (eLoop) {}
+  try {
+    var savedSpeed = localStorage.getItem(SPEED_KEY);
+    if (savedSpeed != null) {
+      var spN = Number(savedSpeed);
+      if (spN === 0.5 || spN === 1 || spN === 1.5 || spN === 2 || spN === 3) {
+        playSpeed = spN;
+      }
+    }
+  } catch (eSpeed) {}
+  if (playSpeedEl) playSpeedEl.value = String(playSpeed);
   var allMode = false;
   var nearbyBeaches = [];
   var viewGen = 0;
@@ -642,7 +655,7 @@
    * opt21: cover crossfade (outgoing full; incoming 0→op) + Loop checkbox.
    */
   var CLOUD_FADE_MS = 600; /* rAF cover fade; opt21 */
-  var PLAY_DWELL_MS = 900; /* opt20: readable pace vs GIBS+fade */
+  var PLAY_DWELL_MS = 900; /* opt20 base; opt22: scale via playDwellMs(speed) */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
   var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
   var PLAY_PREFETCH = 5; /* opt20: keep next frames warm */
@@ -693,6 +706,32 @@
     playLoop = !!on;
     if (toggleLoop) toggleLoop.checked = playLoop;
     try { localStorage.setItem(LOOP_KEY, playLoop ? "1" : "0"); } catch (eL) {}
+  }
+
+  function normalizePlaySpeed(v) {
+    var n = Number(v);
+    if (n === 0.5 || n === 1 || n === 1.5 || n === 2 || n === 3) return n;
+    return 1;
+  }
+
+  function getPlaySpeed() {
+    if (playSpeedEl) return normalizePlaySpeed(playSpeedEl.value);
+    return normalizePlaySpeed(playSpeed);
+  }
+
+  function setPlaySpeed(v) {
+    playSpeed = normalizePlaySpeed(v);
+    if (playSpeedEl) playSpeedEl.value = String(playSpeed);
+    try { localStorage.setItem(SPEED_KEY, String(playSpeed)); } catch (eS) {}
+  }
+
+  /* opt22: effective dwell from live speed; base constants stay 900 */
+  function playDwellMs(baseMs) {
+    var base = Number(baseMs);
+    if (!isFinite(base) || base <= 0) base = 900;
+    var sp = getPlaySpeed();
+    if (!sp || sp <= 0) sp = 1;
+    return Math.max(120, Math.round(base / sp));
   }
 
   function releasePlayStaticHold() {
@@ -2482,7 +2521,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt21");
+      beachWorker = new Worker("beach-worker.js?v=opt22");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4153,7 +4192,7 @@
   var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
   var RADAR_OPTS = "1_1"; /* smoothed + snow */
   var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
-  var RADAR_PLAY_DWELL_MS = 900; /* opt20: match cloud play pace */
+  var RADAR_PLAY_DWELL_MS = 900; /* opt20 base; opt22: playDwellMs(speed) */
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
   var radarHost = null;
@@ -4524,7 +4563,7 @@
         if (radarOn() && !tabHidden) startRadarRefresh();
         return;
       }
-      schedule(RADAR_PLAY_DWELL_MS);
+      schedule(playDwellMs(RADAR_PLAY_DWELL_MS));
     }
     /* Ensure frames loaded, then always restart from far left (opt21) */
     var boot = radarPast.length ? Promise.resolve(true) : fetchAndApplyRadar({ quiet: false, jumpLatest: false });
@@ -4707,7 +4746,7 @@
         }
         /* Min dwell after reveal; next frame already prefetching into LRU */
         void t0;
-        schedule(PLAY_DWELL_MS);
+        schedule(playDwellMs(PLAY_DWELL_MS));
       }).catch(function () {
         playBusy = false;
         if (playSession === session) {
@@ -4872,6 +4911,12 @@
     toggleLoop.checked = !!playLoop;
     toggleLoop.addEventListener("change", function () {
       setPlayLoop(!!toggleLoop.checked);
+    });
+  }
+  if (playSpeedEl) {
+    playSpeedEl.value = String(normalizePlaySpeed(playSpeed));
+    playSpeedEl.addEventListener("change", function () {
+      setPlaySpeed(playSpeedEl.value);
     });
   }
   slider.addEventListener("input", function () {
@@ -5045,7 +5090,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt21").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt22").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

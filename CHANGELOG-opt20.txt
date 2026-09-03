@@ -1,4 +1,4 @@
-﻿SUNNY opt20 — slower Play dwell so tiles can keep up
+SUNNY opt20 — slower Play dwell so tiles can keep up
 =====================================================
 Play was outrunning GIBS WMS + fade: dwell 250ms vs
 CLOUD_FADE_MS 520 and only 2 prefetched frames.
