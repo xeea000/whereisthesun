@@ -2654,7 +2654,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt28");
+      beachWorker = new Worker("beach-worker.js?v=opt29");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4685,6 +4685,12 @@
     } else if (playTimer || radarPlayBusy) {
       return;
     }
+    /* opt29: Play resumes from playhead. At end + Loop off = no-op.
+       At end + Loop on = wrap to 0. Loop wrapping mid-session stays in tick. */
+    if (radarPast.length && radarIndex >= radarSliderMax() && !playLoopOn()) {
+      if (resume) stopRadarPlayOnly();
+      return;
+    }
     stopRadarRefresh();
     setPlayButtonPlaying(true);
     var session = ++radarPlaySession;
@@ -4736,7 +4742,6 @@
       }
       schedule(playDwellMs(RADAR_PLAY_DWELL_MS));
     }
-    /* opt21: first Play from far left; opt28 resume keeps current radarIndex */
     var boot = radarPast.length ? Promise.resolve(true) : fetchAndApplyRadar({ quiet: false, jumpLatest: false });
     boot.then(function (ok) {
       if (radarPlaySession !== session) return;
@@ -4745,7 +4750,14 @@
         if (statusEl) setStatus("Radar unavailable right now.");
         return;
       }
-      var startIdx = resume ? clampRadarIndex(radarIndex) : 0;
+      /* After boot, re-check end: nothing to play unless Loop wraps */
+      if (radarIndex >= radarSliderMax() && !playLoopOn()) {
+        stopRadarPlayOnly();
+        if (radarOn() && !tabHidden) startRadarRefresh();
+        return;
+      }
+      var startIdx = clampRadarIndex(radarIndex);
+      if (startIdx >= radarSliderMax() && playLoopOn()) startIdx = 0;
       applyRadarFrameAt(startIdx);
       schedule(80);
     });
@@ -4886,6 +4898,14 @@
       setPlayButtonPlaying(false);
       return;
     }
+    /* opt29: Play resumes from current playhead (never force 0 on button press).
+       At end + Loop off → no-op (do not enter playing). At end + Loop on → wrap to 0.
+       Mid-session Loop wrap still happens in tick when play hits the end. */
+    var atEnd = cloudIndex >= sliderMax();
+    if (atEnd && !playLoopOn()) {
+      if (resume) stopCloudPlayOnly();
+      return;
+    }
     setPlayButtonPlaying(true);
     if (!playMode) enterPlayMode();
     else {
@@ -4953,8 +4973,8 @@
         }
       });
     }
-    /* opt21: first Play restarts from far left; opt28 resume keeps current index */
-    var startIdx = resume ? clampIndex(cloudIndex) : 0;
+    var startIdx = clampIndex(cloudIndex);
+    if (atEnd && playLoopOn()) startIdx = 0;
     cloudIndex = startIdx;
     if (slider) {
       slider.min = "0";
@@ -5373,7 +5393,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt28").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt29").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

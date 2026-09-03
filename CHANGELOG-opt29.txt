@@ -1,0 +1,11 @@
+SUNNY opt29 — Play resumes from playhead; no-op at end
+=======================================================
+1) Play button continues from current cloudIndex / radarIndex
+   (never forces index 0 on press). Same as scrub resume.
+2) At end (far right) + Loop off → Play is a no-op (stay paused,
+   playhead stays at end; do not half-start playMode).
+3) At end + Loop on → wrap to 0 and play (Loop's job).
+4) Mid-session Loop wrap when tick hits the end unchanged.
+5) Scrub-while-playing resume (opt28) stays intact.
+
+Cache: ?v=opt29; SW CACHE=sunny-v-opt29
