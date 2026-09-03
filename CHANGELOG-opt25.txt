@@ -1,0 +1,12 @@
+SUNNY opt25 — Play/pause swap, speed popover, quieter MODIS
+===========================================================
+1) Play: single .tbtn-ico slot; setPlayButtonPlaying swaps SVG
+   innerHTML between triangle and pause bars (never two icons).
+2) Speed: upward popover (0.5/1/1.5/2/3x) above #btn-speed;
+   highlight current; click-outside + Escape close; aria-expanded;
+   persist sunny-play-speed.
+3) MODIS/VIIRS: never probe UTC today; sync fallback utcDate(2);
+   addSource/show daily rasters only after ensureHiresDays;
+   maxzoom 8; keep map error 404 filter.
+
+Cache: ?v=opt25; SW CACHE=sunny-v-opt25

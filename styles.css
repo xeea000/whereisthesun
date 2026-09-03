@@ -259,6 +259,7 @@ html, body {
   backdrop-filter: blur(10px);
   max-width: 40rem;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .transport-row {
@@ -266,9 +267,11 @@ html, body {
   align-items: center;
   gap: 10px;
   min-height: 40px;
+  overflow: visible;
+  position: relative;
 }
 
-/* opt24: icon transport — Speed · Loop · Play before scrubber */
+/* opt25: icon transport — Speed popover · Loop · Play (single SVG) */
 .sr-only {
   position: absolute !important;
   width: 1px !important;
@@ -314,6 +317,63 @@ html, body {
   display: block;
   pointer-events: none;
 }
+.tbtn-ico[hidden] {
+  display: none !important;
+}
+
+.speed-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.speed-menu {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  min-width: 4.75rem;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(14, 16, 19, 0.97);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.speed-menu[hidden] {
+  display: none !important;
+}
+.speed-opt {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 7px 12px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+}
+.speed-opt:hover,
+.speed-opt:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+.speed-opt.is-active,
+.speed-opt[aria-selected="true"] {
+  background: var(--sun);
+  color: var(--sun-ink);
+}
 .tbtn.is-on,
 .tbtn-loop:has(#toggle-loop:checked),
 .play.is-on {
@@ -326,7 +386,7 @@ html, body {
 }
 
 .play {
-  /* opt24: icon play shares .tbtn sizing; keep class for JS is-on */
+  /* opt25: icon play shares .tbtn sizing; keep class for JS is-on */
   appearance: none;
   min-width: 36px;
   width: 36px;

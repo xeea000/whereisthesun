@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt24">
-  <link rel="stylesheet" href="styles.css?v=opt24">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt25">
+  <link rel="stylesheet" href="styles.css?v=opt25">
 </head>
 <body>
   <div id="map"></div>
@@ -39,12 +39,21 @@
   </div>
   <div class="timeline">
     <div class="transport-row">
-      <button id="btn-speed" class="tbtn tbtn-speed" type="button" title="Speed 1x" aria-label="Speed 1x">
-        <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-          <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.75"/>
-          <path d="M12 7.5v5l3.2 1.9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
+      <div class="speed-wrap">
+        <button id="btn-speed" class="tbtn tbtn-speed" type="button" title="Speed 1x" aria-label="Speed 1x" aria-expanded="false" aria-haspopup="listbox" aria-controls="speed-menu">
+          <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <path d="M12 7.5v5l3.2 1.9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div id="speed-menu" class="speed-menu" role="listbox" aria-label="Playback speed" hidden>
+          <button type="button" class="speed-opt" role="option" data-speed="0.5" aria-selected="false">0.5x</button>
+          <button type="button" class="speed-opt" role="option" data-speed="1" aria-selected="true">1x</button>
+          <button type="button" class="speed-opt" role="option" data-speed="1.5" aria-selected="false">1.5x</button>
+          <button type="button" class="speed-opt" role="option" data-speed="2" aria-selected="false">2x</button>
+          <button type="button" class="speed-opt" role="option" data-speed="3" aria-selected="false">3x</button>
+        </div>
+      </div>
       <label class="tbtn tbtn-loop" id="loop-btn" title="Loop on" aria-pressed="true">
         <input id="toggle-loop" type="checkbox" checked class="sr-only">
         <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
@@ -55,12 +64,8 @@
         </svg>
       </label>
       <button id="btn-play" class="tbtn tbtn-play play" type="button" aria-label="Play cloud animation" aria-pressed="false" title="Play">
-        <svg class="tbtn-ico icon-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+        <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
           <path d="M8.2 5.6v12.8l11-6.4z" fill="currentColor"/>
-        </svg>
-        <svg class="tbtn-ico icon-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" hidden>
-          <rect x="7" y="5.5" width="3.4" height="13" rx="1" fill="currentColor"/>
-          <rect x="13.6" y="5.5" width="3.4" height="13" rx="1" fill="currentColor"/>
         </svg>
       </button>
       <div class="track-wrap">
@@ -130,7 +135,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt24"></script>
-  <script defer src="app.js?v=opt24"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt25"></script>
+  <script defer src="app.js?v=opt25"></script>
 </body>
 </html>

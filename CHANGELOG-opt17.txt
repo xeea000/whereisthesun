@@ -1,0 +1,14 @@
+SUNNY opt17 — drop MapLibre preload (SW mismatch)
+=================================================
+Cause: index.html <link rel="preload" … maplibre-gl.js> raced dynamic
+loadScript via the service worker → Chrome "cross-world service worker
+resource mismatch" + unused preload warning. slim.css preload was also
+redundant (already a stylesheet link).
+
+Fix (industry standard):
+- Removed preload links for maplibre-gl.js and maplibre-gl.slim.css.
+- Load MapLibre with <script defer> before app.js (both deferred).
+- Kept if (maplibregl) startSunny(); else loadScript(...) fallback.
+
+Cache: ?v=opt17; SW CACHE=sunny-v-opt17
+Preserved: opt16 RainViewer radar, opt15 GOES lag/probe, layer order.

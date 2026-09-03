@@ -496,7 +496,12 @@
   function hiresDaySync(kind) {
     var ent = hiresDayCache[kind];
     if (ent && ent.date) return ent.date;
-    return utcDate(1); /* prefer yesterday until probe settles */
+    return utcDate(2); /* opt25: safer than yesterday alone until probe settles */
+  }
+
+  function hiresDaysResolved() {
+    return !!(hiresDayCache.modis && hiresDayCache.modis.date &&
+      hiresDayCache.viirs && hiresDayCache.viirs.date);
   }
 
   function probeGibsDailyTile(layerId, date) {
@@ -538,14 +543,13 @@
     if (ent && ent.date && (Date.now() - ent.t) < HIRES_DAY_TTL_MS) {
       return Promise.resolve(ent.date);
     }
-    /* offsets: yesterday … −5, then today last resort */
+    /* opt25: never probe UTC today (offset 0) — partial days 404 loudly */
     var offsets = [];
     var o;
     for (o = 1; o <= HIRES_PROBE_BACK; o++) offsets.push(o);
-    offsets.push(0);
     function tryAt(idx) {
       if (idx >= offsets.length) {
-        var fb = utcDate(1);
+        var fb = utcDate(2);
         hiresDayCache[kind] = { date: fb, t: Date.now() };
         return Promise.resolve(fb);
       }
@@ -742,6 +746,25 @@
     return String(n) + "x";
   }
 
+  var speedMenuEl = document.getElementById("speed-menu");
+  var PLAY_ICO_HTML = '<path d="M8.2 5.6v12.8l11-6.4z" fill="currentColor"/>';
+  var PAUSE_ICO_HTML =
+    '<rect x="7" y="5.5" width="3.4" height="13" rx="1" fill="currentColor"/>' +
+    '<rect x="13.6" y="5.5" width="3.4" height="13" rx="1" fill="currentColor"/>';
+
+  function syncSpeedMenuUi() {
+    if (!speedMenuEl) return;
+    var cur = String(getPlaySpeed());
+    var opts = speedMenuEl.querySelectorAll(".speed-opt");
+    var i;
+    for (i = 0; i < opts.length; i++) {
+      var on = opts[i].getAttribute("data-speed") === cur;
+      if (on) opts[i].classList.add("is-active");
+      else opts[i].classList.remove("is-active");
+      opts[i].setAttribute("aria-selected", on ? "true" : "false");
+    }
+  }
+
   function syncSpeedButtonUi() {
     var sp = getPlaySpeed();
     var label = "Speed " + speedLabel(sp);
@@ -749,14 +772,29 @@
       btnSpeed.title = label;
       btnSpeed.setAttribute("aria-label", label);
     }
+    syncSpeedMenuUi();
   }
 
-  function cyclePlaySpeed() {
-    var order = [0.5, 1, 1.5, 2, 3];
-    var cur = getPlaySpeed();
-    var idx = order.indexOf(cur);
-    var next = order[(idx < 0 ? 0 : idx + 1) % order.length];
-    setPlaySpeed(next);
+  function speedMenuOpen() {
+    return !!(speedMenuEl && !speedMenuEl.hidden);
+  }
+
+  function closeSpeedMenu() {
+    if (!speedMenuEl) return;
+    speedMenuEl.hidden = true;
+    if (btnSpeed) btnSpeed.setAttribute("aria-expanded", "false");
+  }
+
+  function openSpeedMenu() {
+    if (!speedMenuEl || !btnSpeed) return;
+    syncSpeedMenuUi();
+    speedMenuEl.hidden = false;
+    btnSpeed.setAttribute("aria-expanded", "true");
+  }
+
+  function toggleSpeedMenu() {
+    if (speedMenuOpen()) closeSpeedMenu();
+    else openSpeedMenu();
   }
 
   function setPlaySpeed(v) {
@@ -766,17 +804,15 @@
     try { localStorage.setItem(SPEED_KEY, String(playSpeed)); } catch (eS) {}
   }
 
-  /* opt24: toggle play/pause SVG icons — never wipe btn-play innerHTML via textContent */
+  /* opt25: one .tbtn-ico slot — swap path between triangle and pause bars */
   function setPlayButtonPlaying(on) {
     if (!btnPlay) return;
     var playing = !!on;
     btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
     if (playing) btnPlay.classList.add("is-on");
     else btnPlay.classList.remove("is-on");
-    var playIcon = btnPlay.querySelector(".icon-play");
-    var pauseIcon = btnPlay.querySelector(".icon-pause");
-    if (playIcon) playIcon.hidden = playing;
-    if (pauseIcon) pauseIcon.hidden = !playing;
+    var ico = btnPlay.querySelector(".tbtn-ico");
+    if (ico) ico.innerHTML = playing ? PAUSE_ICO_HTML : PLAY_ICO_HTML;
     var kind = (typeof radarOn === "function" && radarOn()) ? "radar" : "cloud";
     var label = playing ? ("Pause " + kind + " animation") : ("Play " + kind + " animation");
     btnPlay.setAttribute("aria-label", label);
@@ -1816,10 +1852,12 @@
       if (playMode) return shown;
       /* Hires (MODIS/VIIRS/IEM) only at NOW — not while scrubbing history / play */
       if (atNow) {
-        /* opt14: daily products use probed/cached day (not blind calendar today) */
-        refreshHiresRaster("modis", modisTiles(hiresDaySync("modis")));
-        refreshHiresRaster("viirs", viirsTiles(hiresDaySync("viirs")));
+        /* opt25: refresh daily rasters only after probe; IEM can update immediately */
         refreshHiresRaster("iem-vis", iemVisTiles(origin ? origin.lon : null));
+        if (hiresDaysResolved()) {
+          refreshHiresRaster("modis", modisTiles(hiresDaySync("modis")));
+          refreshHiresRaster("viirs", viirsTiles(hiresDaySync("viirs")));
+        }
         ensureHiresDays().then(function (dates) {
           applyResolvedHiresDates(dates);
           applyHires();
@@ -1865,8 +1903,29 @@
     var IEM_Z = 6.0;
     var wantSharp = atNow && z >= HIRES_Z;
     if (wantSharp) {
-      addHiresSources();
-      ensureHiresDays().then(function (dates) { applyResolvedHiresDates(dates); }).catch(function () {});
+      /* opt25: IEM ok immediately; MODIS/VIIRS only after ensureHiresDays */
+      addHiresSources({ daily: hiresDaysResolved() });
+      ensureHiresDays().then(function (dates) {
+        applyResolvedHiresDates(dates);
+        addHiresSources({ daily: true });
+        if (tabHidden || playMode || radarOn()) return;
+        var z2 = map.getZoom();
+        var atNow2 = !cloudTimes.length || cloudIndex >= sliderMax();
+        if (!(atNow2 && z2 >= HIRES_Z)) return;
+        var sharp2 = Math.min(0.96, cloudOpacity);
+        var tLin2 = Math.max(0, Math.min(1, (z2 - HIRES_Z) / 2.0));
+        var t2 = tLin2 * tLin2 * (3 - 2 * tLin2);
+        var modisOp2 = Math.min(sharp2 * (0.28 + 0.44 * t2), cloudOpacity * 0.88);
+        var viirsOp2 = Math.min(sharp2 * (0.20 + 0.38 * t2), cloudOpacity * 0.78);
+        if (map.getLayer("modis")) {
+          map.setLayoutProperty("modis", "visibility", "visible");
+          applyCloudPaintMain("modis", modisOp2);
+        }
+        if (map.getLayer("viirs")) {
+          map.setLayoutProperty("viirs", "visibility", "visible");
+          applyCloudPaintMain("viirs", viirsOp2);
+        }
+      }).catch(function () {});
       var sharp = Math.min(0.96, cloudOpacity);
       /* 0 at z=5.5 → 1 at z≈7.5; smoothstep softens granule/zoom edges (opt14) */
       var tLin = Math.max(0, Math.min(1, (z - HIRES_Z) / 2.0));
@@ -1874,13 +1933,19 @@
       /* Stronger when zoomed; still respect slider (don't bury basemap at low opacity) */
       var modisOp = Math.min(sharp * (0.28 + 0.44 * t), cloudOpacity * 0.88);
       var viirsOp = Math.min(sharp * (0.20 + 0.38 * t), cloudOpacity * 0.78);
-      if (map.getLayer("modis")) {
+      if (hiresDaysResolved() && map.getLayer("modis")) {
         map.setLayoutProperty("modis", "visibility", "visible");
         applyCloudPaintMain("modis", modisOp);
+      } else if (map.getLayer("modis")) {
+        map.setLayoutProperty("modis", "visibility", "none");
+        applyCloudPaintMain("modis", 0);
       }
-      if (map.getLayer("viirs")) {
+      if (hiresDaysResolved() && map.getLayer("viirs")) {
         map.setLayoutProperty("viirs", "visibility", "visible");
         applyCloudPaintMain("viirs", viirsOp);
+      } else if (map.getLayer("viirs")) {
+        map.setLayoutProperty("viirs", "visibility", "none");
+        applyCloudPaintMain("viirs", 0);
       }
       if (map.getLayer("iem-vis")) {
         var iemT = z >= IEM_Z ? Math.max(0, Math.min(1, (z - IEM_Z) / 1.5)) : 0;
@@ -1972,24 +2037,26 @@
     if (typeof applyBaseMap === "function") applyBaseMap();
   }
 
-  function addHiresSources() {
+  function addHiresSources(opts) {
     if (tabHidden || radarOn()) return;
+    opts = opts || {};
+    var allowDaily = opts.daily === true || (opts.daily !== false && hiresDaysResolved());
     var before = cloudStackBefore();
-    if (!map.getSource("modis")) {
+    if (allowDaily && !map.getSource("modis")) {
       map.addSource("modis", {
         type: "raster",
         tiles: [modisTiles(hiresDaySync("modis"))],
         tileSize: 256,
-        maxzoom: 9,
+        maxzoom: 8,
         attribution: "NASA GIBS / MODIS"
       });
     }
-    if (!map.getSource("viirs")) {
+    if (allowDaily && !map.getSource("viirs")) {
       map.addSource("viirs", {
         type: "raster",
         tiles: [viirsTiles(hiresDaySync("viirs"))],
         tileSize: 256,
-        maxzoom: 9,
+        maxzoom: 8,
         attribution: "NASA GIBS / VIIRS SNPP"
       });
     }
@@ -2002,11 +2069,12 @@
         attribution: "Iowa Environmental Mesonet / NOAA GOES"
       });
     }
-    if (!map.getLayer("modis")) {
+    if (allowDaily && !map.getLayer("modis") && map.getSource("modis")) {
       map.addLayer({
         id: "modis",
         type: "raster",
         source: "modis",
+        layout: { visibility: "none" },
         paint: {
           "raster-opacity": 0,
           "raster-resampling": "linear",
@@ -2014,11 +2082,12 @@
         }
       }, before);
     }
-    if (!map.getLayer("viirs")) {
+    if (allowDaily && !map.getLayer("viirs") && map.getSource("viirs")) {
       map.addLayer({
         id: "viirs",
         type: "raster",
         source: "viirs",
+        layout: { visibility: "none" },
         paint: {
           "raster-opacity": 0,
           "raster-resampling": "linear",
@@ -2667,7 +2736,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt24");
+      beachWorker = new Worker("beach-worker.js?v=opt25");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -5076,10 +5145,35 @@
   }
   syncSpeedButtonUi();
   if (btnSpeed) {
-    btnSpeed.addEventListener("click", function () {
-      cyclePlaySpeed();
+    btnSpeed.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      toggleSpeedMenu();
     });
   }
+  if (speedMenuEl) {
+    speedMenuEl.addEventListener("click", function (ev) {
+      var t = ev.target;
+      while (t && t !== speedMenuEl && !(t.getAttribute && t.getAttribute("data-speed"))) {
+        t = t.parentNode;
+      }
+      if (!t || t === speedMenuEl) return;
+      var sp = t.getAttribute("data-speed");
+      if (sp == null) return;
+      setPlaySpeed(sp);
+      closeSpeedMenu();
+      ev.stopPropagation();
+    });
+  }
+  document.addEventListener("click", function (ev) {
+    if (!speedMenuOpen()) return;
+    var t = ev.target;
+    if (btnSpeed && (t === btnSpeed || (btnSpeed.contains && btnSpeed.contains(t)))) return;
+    if (speedMenuEl && (t === speedMenuEl || (speedMenuEl.contains && speedMenuEl.contains(t)))) return;
+    closeSpeedMenu();
+  });
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" || ev.keyCode === 27) closeSpeedMenu();
+  });
   setPlayButtonPlaying(false);
   slider.addEventListener("input", function () {
     stopPlay();
@@ -5252,7 +5346,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt24").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt25").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
