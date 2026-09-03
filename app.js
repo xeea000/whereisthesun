@@ -48,7 +48,7 @@
   var cloudOpacityEl = document.getElementById("cloud-opacity");
   var toggleMap = document.getElementById("toggle-map");
   var toggleIntl = document.getElementById("toggle-intl");
-  var toggleRadar = document.getElementById("toggle-radar");
+  var overlaySeg = document.getElementById("overlay-seg");
 
   var origin = null;
   var homeCountry = null;
@@ -77,9 +77,11 @@
   var OPACITY_KEY = "sunny-cloud-opacity";
   var LABELS_KEY = "sunny-labels";
   var INTL_KEY = "sunny-intl";
-  var RADAR_KEY = "sunny-radar";
-  /* opt18: radar XOR clouds — remember opacity while radar mutes clouds */
-  var cloudOpacitySavedForRadar = null; /* 0–100 or null */
+  var RADAR_KEY = "sunny-radar"; /* legacy; migrated to OVERLAY_KEY */
+  var OVERLAY_KEY = "sunny-overlay";
+  /* opt19: overlayMode clouds|radar — remember opacity while radar mutes clouds */
+  var overlayMode = "clouds"; /* "clouds" | "radar" */
+  var cloudOpacitySavedForRadar = null; /* 0–100 or null while muted */
   var VIEW_KEY = "sunny-last-view";
   var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
   var basemapMode = "roads";
@@ -116,9 +118,13 @@
     }
   } catch (eIntl) {}
   try {
-    var savedRadar = localStorage.getItem(RADAR_KEY);
-    if (toggleRadar && (savedRadar === "1" || savedRadar === "0")) {
-      toggleRadar.checked = savedRadar === "1";
+    var savedOverlay = localStorage.getItem(OVERLAY_KEY);
+    if (savedOverlay === "clouds" || savedOverlay === "radar") {
+      overlayMode = savedOverlay;
+    } else {
+      var savedRadar = localStorage.getItem(RADAR_KEY);
+      if (savedRadar === "1") overlayMode = "radar";
+      else overlayMode = "clouds";
     }
   } catch (eRadar) {}
   var allMode = false;
@@ -1552,7 +1558,7 @@
     var suffix = atNow ? " · NOW" : "";
     timeLabel.textContent = formatFrameLabel(iso) + suffix;
     if (tabHidden) return Promise.resolve();
-    /* opt18: radar on → no GIBS/hires/Play tile work (mutex) */
+    /* opt19: radar overlay → no GIBS/hires/Play tile work (mutex) */
     if (radarOn()) {
       setMapLibreCloudsHidden(true);
       return Promise.resolve();
@@ -2426,7 +2432,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt18");
+      beachWorker = new Worker("beach-worker.js?v=opt19");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4089,21 +4095,59 @@
 
 
 
-  /* === BEGIN RAINVIEWER RADAR (opt16) === */
+  /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) === */
   var RADAR_SRC = "radar";
   var RADAR_LAYER = "radar";
   var RADAR_OPACITY = 0.7;
-  var RADAR_REFRESH_MS = 6 * 60 * 1000; /* ~6 min while Radar on + tab visible */
+  var RADAR_REFRESH_MS = 6 * 60 * 1000; /* ~6 min while Radar on + tab visible + not playing */
   var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
   var RADAR_OPTS = "1_1"; /* smoothed + snow */
   var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
+  var RADAR_PLAY_DWELL_MS = 350;
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
   var radarHost = null;
   var radarPath = null;
+  var radarPast = []; /* {time, path}[] from manifest */
+  var radarIndex = 0;
+  var radarPlaySession = 0;
+  var radarPlayBusy = false;
 
   function radarOn() {
-    return !!(toggleRadar && toggleRadar.checked);
+    return overlayMode === "radar";
+  }
+
+  function syncOverlaySeg() {
+    if (!overlaySeg) return;
+    var btns = overlaySeg.querySelectorAll("[data-overlay]");
+    var i, b, mode, on;
+    for (i = 0; i < btns.length; i++) {
+      b = btns[i];
+      mode = b.getAttribute("data-overlay");
+      on = mode === overlayMode;
+      if (on) b.classList.add("is-on");
+      else b.classList.remove("is-on");
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  }
+
+  function setCloudSliderDisabled(disabled) {
+    if (!cloudOpacityEl) return;
+    cloudOpacityEl.disabled = !!disabled;
+    if (disabled) {
+      cloudOpacityEl.setAttribute("aria-disabled", "true");
+      cloudOpacityEl.classList.add("is-radar-muted");
+    } else {
+      cloudOpacityEl.removeAttribute("aria-disabled");
+      cloudOpacityEl.classList.remove("is-radar-muted");
+    }
+    try {
+      var lab = cloudOpacityEl.closest ? cloudOpacityEl.closest("label") : null;
+      if (lab) {
+        if (disabled) lab.classList.add("is-radar-muted");
+        else lab.classList.remove("is-radar-muted");
+      }
+    } catch (eLab) {}
   }
 
   function radarTileUrl(host, path) {
@@ -4113,10 +4157,38 @@
   function pickRadarFrame(data) {
     var past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past : [];
     var nowcast = (data && data.radar && Array.isArray(data.radar.nowcast)) ? data.radar.nowcast : [];
-    /* Prefer latest past for stability; nowcast only if past empty */
     if (past.length) return past[past.length - 1];
     if (nowcast.length) return nowcast[nowcast.length - 1];
     return null;
+  }
+
+  function radarSliderMax() {
+    return Math.max(0, radarPast.length - 1);
+  }
+
+  function clampRadarIndex(i) {
+    var n = Number(i);
+    if (!isFinite(n)) n = 0;
+    return Math.max(0, Math.min(Math.floor(n), radarSliderMax()));
+  }
+
+  function formatRadarLabel(frame) {
+    if (!frame || !frame.time) return "Radar";
+    var d = new Date(Number(frame.time) * 1000);
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  function syncRadarTimelineUi() {
+    if (!slider || !radarPast.length) return;
+    radarIndex = clampRadarIndex(radarIndex);
+    slider.min = "0";
+    slider.max = String(radarSliderMax());
+    slider.value = String(radarIndex);
+    var frame = radarPast[radarIndex];
+    var atNow = radarIndex >= radarSliderMax();
+    if (timeLabel) {
+      timeLabel.textContent = formatRadarLabel(frame) + (atNow ? " · NOW" : "");
+    }
   }
 
   function stopRadarRefresh() {
@@ -4129,11 +4201,13 @@
   function startRadarRefresh() {
     stopRadarRefresh();
     if (!radarOn() || tabHidden) return;
+    if (btnPlay && btnPlay.getAttribute("aria-pressed") === "true") return;
     radarRefreshTimer = setInterval(function () {
       if (!radarOn() || tabHidden) {
         stopRadarRefresh();
         return;
       }
+      if (btnPlay && btnPlay.getAttribute("aria-pressed") === "true") return;
       fetchAndApplyRadar({ quiet: true });
     }, RADAR_REFRESH_MS);
   }
@@ -4184,6 +4258,8 @@
     radarFetchGen += 1;
     radarHost = null;
     radarPath = null;
+    radarPast = [];
+    radarIndex = 0;
     if (!map) return;
     if (map.getLayer(RADAR_LAYER)) {
       try { map.removeLayer(RADAR_LAYER); } catch (eRmL) {}
@@ -4191,6 +4267,28 @@
     if (map.getSource(RADAR_SRC)) {
       try { map.removeSource(RADAR_SRC); } catch (eRmS) {}
     }
+  }
+
+  function applyRadarFrameAt(i) {
+    if (!radarOn() || !radarPast.length || !radarHost) return false;
+    radarIndex = clampRadarIndex(i);
+    var frame = radarPast[radarIndex];
+    if (!frame || !frame.path) return false;
+    radarPath = frame.path;
+    ensureRadarLayer(radarTileUrl(radarHost, frame.path));
+    syncRadarTimelineUi();
+    return true;
+  }
+
+  function setRadarFrame(i) {
+    if (!radarOn()) return Promise.resolve(false);
+    if (!radarPast.length || !radarHost) {
+      return fetchAndApplyRadar({ quiet: false }).then(function (ok) {
+        if (!ok) return false;
+        return applyRadarFrameAt(i);
+      });
+    }
+    return Promise.resolve(applyRadarFrameAt(i));
   }
 
   function fetchAndApplyRadar(opts) {
@@ -4202,20 +4300,23 @@
       return res.json();
     }).then(function (data) {
       if (gen !== radarFetchGen || !radarOn()) return false;
-      var frame = pickRadarFrame(data);
-      if (!frame || !frame.path || !data.host) throw new Error("radar frame");
+      var past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past.slice() : [];
+      if (!past.length || !data.host) throw new Error("radar frame");
       radarHost = data.host;
+      radarPast = past;
+      if (opts.jumpLatest || radarIndex > radarSliderMax()) {
+        radarIndex = radarSliderMax();
+      }
+      var frame = radarPast[clampRadarIndex(radarIndex)] || pickRadarFrame(data);
+      if (!frame || !frame.path) throw new Error("radar frame");
       radarPath = frame.path;
       ensureRadarLayer(radarTileUrl(data.host, frame.path));
+      syncRadarTimelineUi();
       return true;
     }).catch(function () {
-      /* fail soft — do not break the map */
       if (!opts.quiet && statusEl && radarOn()) {
         try {
-          var prev = statusEl.textContent || "";
-          if (prev.indexOf("Radar") === -1) {
-            statusEl.textContent = (prev ? prev + " " : "") + "Radar unavailable right now.";
-          }
+          statusEl.textContent = "Radar unavailable right now.";
         } catch (eSt) {}
       }
       return false;
@@ -4223,10 +4324,11 @@
   }
 
   function muteCloudsForRadar() {
-    /* Save user opacity once; zero visually; hide rasters; stop Play. */
+    /* Keep slider value visible; disable it; hide rasters; stop cloud Play. */
     if (cloudOpacitySavedForRadar == null) {
       var fromEl = cloudOpacityEl ? Number(cloudOpacityEl.value) : Math.round(cloudOpacity * 100);
-      if (!isFinite(fromEl) || fromEl <= 0) {
+      if (!isFinite(fromEl) || fromEl < 0) fromEl = 90;
+      if (fromEl <= 0) {
         try {
           var sOp = localStorage.getItem(OPACITY_KEY);
           if (sOp != null && isFinite(Number(sOp)) && Number(sOp) > 0) fromEl = Number(sOp);
@@ -4234,36 +4336,27 @@
         } catch (eBk) {
           fromEl = 90;
         }
+        if (cloudOpacityEl) cloudOpacityEl.value = String(Math.round(fromEl));
+        cloudOpacity = fromEl / 100;
       }
       cloudOpacitySavedForRadar = Math.max(0, Math.min(100, Math.round(fromEl)));
     }
-    stopPlay();
-    cloudOpacity = 0;
-    if (cloudOpacityEl) {
-      cloudOpacityEl.value = "0";
-      cloudOpacityEl.classList.add("is-radar-muted");
-      try {
-        var lab = cloudOpacityEl.closest ? cloudOpacityEl.closest("label") : null;
-        if (lab) lab.classList.add("is-radar-muted");
-      } catch (eLabM) {}
-    }
+    stopCloudPlayOnly();
+    setCloudSliderDisabled(true);
     setMapLibreCloudsHidden(true);
     try { applyCloudSolidMode(); } catch (eSol) {}
     try { hidePlayOverlay(); } catch (eHide) {}
   }
 
   function unmuteCloudsAfterRadar() {
-    var restore = cloudOpacitySavedForRadar != null ? cloudOpacitySavedForRadar : 90;
+    var restore = cloudOpacitySavedForRadar != null ? cloudOpacitySavedForRadar : (
+      cloudOpacityEl ? Number(cloudOpacityEl.value) : Math.round(cloudOpacity * 100)
+    );
+    if (!isFinite(restore) || restore < 0) restore = 90;
     cloudOpacitySavedForRadar = null;
     cloudOpacity = Math.max(0, Math.min(1, restore / 100));
-    if (cloudOpacityEl) {
-      cloudOpacityEl.value = String(restore);
-      cloudOpacityEl.classList.remove("is-radar-muted");
-      try {
-        var lab2 = cloudOpacityEl.closest ? cloudOpacityEl.closest("label") : null;
-        if (lab2) lab2.classList.remove("is-radar-muted");
-      } catch (eLabU) {}
-    }
+    if (cloudOpacityEl) cloudOpacityEl.value = String(Math.round(restore));
+    setCloudSliderDisabled(false);
     setMapLibreCloudsHidden(false);
     try { applyCloudOpacity(); } catch (eApp) {}
     try {
@@ -4271,22 +4364,125 @@
     } catch (eFrame) {}
   }
 
-  function setRadarEnabled(on) {
-    if (on) {
+  function setOverlayMode(mode, opts) {
+    opts = opts || {};
+    if (mode !== "clouds" && mode !== "radar") return;
+    var prev = overlayMode;
+    if (mode === prev && !opts.force) {
+      syncOverlaySeg();
+      return;
+    }
+    overlayMode = mode;
+    syncOverlaySeg();
+    saveSetting(OVERLAY_KEY, mode);
+    saveSetting(RADAR_KEY, mode === "radar" ? "1" : "0");
+    if (mode === "radar") {
+      /* Switching to Radar: stop cloud Play; mute clouds; do not zero slider */
       muteCloudsForRadar();
-      fetchAndApplyRadar({ quiet: false }).then(function (ok) {
+      if (btnPlay) btnPlay.setAttribute("aria-label", "Play radar animation");
+      fetchAndApplyRadar({ quiet: false, jumpLatest: true }).then(function (ok) {
         if (ok && radarOn() && !tabHidden) startRadarRefresh();
+        if (!opts.silent && statusEl) {
+          setStatus(ok ? "Radar on — Play loops rain." : "Radar unavailable right now.");
+        }
       });
     } else {
+      /* Switching to Clouds: stop radar play/refresh; remove radar; restore clouds */
+      stopRadarPlayOnly();
       hideRadarLayer();
-      var muted = cloudOpacitySavedForRadar != null;
-      try {
-        if (!muted && cloudOpacityEl && cloudOpacityEl.classList.contains("is-radar-muted")) muted = true;
-      } catch (eM) {}
-      if (muted) unmuteCloudsAfterRadar();
+      unmuteCloudsAfterRadar();
+      if (btnPlay) btnPlay.setAttribute("aria-label", "Play cloud animation");
+      if (!opts.silent && statusEl) setStatus("Clouds on.");
     }
   }
-  /* === END RAINVIEWER RADAR (opt16) + XOR clouds (opt18) === */
+
+  function setRadarEnabled(on) {
+    /* Compat shim — prefer setOverlayMode */
+    setOverlayMode(on ? "radar" : "clouds", { force: true });
+  }
+
+  function stopRadarPlayOnly() {
+    radarPlaySession += 1;
+    radarPlayBusy = false;
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    if (btnPlay) {
+      btnPlay.textContent = "Play";
+      btnPlay.setAttribute("aria-pressed", "false");
+      btnPlay.classList.remove("is-on");
+    }
+  }
+
+  function stopCloudPlayOnly() {
+    playSession += 1;
+    playBusy = false;
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    if (btnPlay) {
+      btnPlay.textContent = "Play";
+      btnPlay.setAttribute("aria-pressed", "false");
+      btnPlay.classList.remove("is-on");
+    }
+    if (playMode) exitPlayMode();
+  }
+
+  function startRadarPlay() {
+    if (!radarOn()) return;
+    if (playTimer || radarPlayBusy) return;
+    stopRadarRefresh();
+    btnPlay.textContent = "Pause";
+    btnPlay.setAttribute("aria-pressed", "true");
+    btnPlay.classList.add("is-on");
+    var session = ++radarPlaySession;
+    function schedule(ms) {
+      if (radarPlaySession !== session) return;
+      playTimer = setTimeout(tick, ms);
+    }
+    function tick() {
+      playTimer = null;
+      if (radarPlaySession !== session || tabHidden || !radarOn()) return;
+      if (!radarPast.length) {
+        stopRadarPlayOnly();
+        return;
+      }
+      if (radarIndex >= radarSliderMax()) {
+        stopRadarPlayOnly();
+        applyRadarFrameAt(radarSliderMax());
+        if (radarOn() && !tabHidden) startRadarRefresh();
+        return;
+      }
+      radarPlayBusy = true;
+      var next = radarIndex + 1;
+      if (next > radarSliderMax()) next = radarSliderMax();
+      var ok = applyRadarFrameAt(next);
+      radarPlayBusy = false;
+      if (radarPlaySession !== session) return;
+      if (!ok) {
+        schedule(400);
+        return;
+      }
+      if (radarIndex >= radarSliderMax()) {
+        stopRadarPlayOnly();
+        if (radarOn() && !tabHidden) startRadarRefresh();
+        return;
+      }
+      schedule(RADAR_PLAY_DWELL_MS);
+    }
+    /* Ensure frames loaded, then animate from current (or start) toward latest */
+    var boot = radarPast.length ? Promise.resolve(true) : fetchAndApplyRadar({ quiet: false, jumpLatest: false });
+    boot.then(function (ok) {
+      if (radarPlaySession !== session) return;
+      if (!ok || !radarPast.length) {
+        stopRadarPlayOnly();
+        if (statusEl) setStatus("Radar unavailable right now.");
+        return;
+      }
+      if (radarIndex >= radarSliderMax()) {
+        /* Restart loop from beginning when already at NOW */
+        applyRadarFrameAt(0);
+      }
+      schedule(80);
+    });
+  }
+  /* === END RAINVIEWER RADAR (opt16) + overlay mode (opt19) === */
 
   function saveSetting(key, val) {
     try { localStorage.setItem(key, val); } catch (eSave) {}
@@ -4326,7 +4522,7 @@
       else applyOverlay();
     } catch (e3) {}
     try {
-      if (radarOn()) setRadarEnabled(true);
+      setOverlayMode(overlayMode, { force: true, silent: true });
     } catch (eRadarR) {}
     try {
       var raw = localStorage.getItem(VIEW_KEY);
@@ -4392,22 +4588,20 @@
   }
 
   function stopPlay() {
-    playSession += 1;
-    playBusy = false;
-    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
-    btnPlay.textContent = "Play";
-    btnPlay.setAttribute("aria-pressed", "false");
-    btnPlay.classList.remove("is-on");
-    if (playMode) exitPlayMode();
+    if (radarOn()) {
+      stopRadarPlayOnly();
+      if (radarOn() && !tabHidden) startRadarRefresh();
+      return;
+    }
+    stopCloudPlayOnly();
   }
 
   function startPlay() {
-    if (playTimer || playBusy) return;
-    /* opt18: Play needs clouds — turn radar off first */
+    if (playTimer || playBusy || radarPlayBusy) return;
+    /* opt19: Play stays in active overlay mode — never flips Clouds/Radar */
     if (radarOn()) {
-      if (toggleRadar) toggleRadar.checked = false;
-      saveSetting(RADAR_KEY, "0");
-      setRadarEnabled(false);
+      startRadarPlay();
+      return;
     }
     btnPlay.textContent = "Pause";
     btnPlay.setAttribute("aria-pressed", "true");
@@ -4534,7 +4728,7 @@
     applyCloudSolidMode();
     ensureCloudMap(); /* hide unused #cloud-map; mount play layer on map container */
     restorePersistedSettingsAfterMapReady();
-    /* opt18: if Radar restored on, skip cloud tile boot (mutex) */
+    /* opt19: if Radar overlay restored, skip cloud tile boot (mutex) */
     if (!radarOn()) {
       var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
       addGibsStatic(url);
@@ -4610,28 +4804,23 @@
   btnPlay.addEventListener("click", togglePlay);
   slider.addEventListener("input", function () {
     stopPlay();
+    if (radarOn()) {
+      setRadarFrame(clampRadarIndex(slider.value));
+      return;
+    }
     setCloudFrame(clampIndex(slider.value), { forceHires: true });
   });
   slider.addEventListener("change", function () {
+    if (radarOn()) {
+      setRadarFrame(clampRadarIndex(slider.value));
+      return;
+    }
     setCloudFrame(clampIndex(slider.value), { forceHires: true });
   });
   cloudOpacityEl.addEventListener("input", function () {
+    if (radarOn() || cloudOpacityEl.disabled) return;
     var pct = Math.max(0, Math.min(100, Math.round(Number(cloudOpacityEl.value))));
     if (!isFinite(pct)) pct = 0;
-    /* opt18: raising Clouds while Radar on → turn Radar off */
-    if (radarOn()) {
-      if (pct <= 0) {
-        cloudOpacity = 0;
-        return;
-      }
-      cloudOpacitySavedForRadar = pct;
-      cloudOpacity = pct / 100;
-      saveSetting(OPACITY_KEY, String(pct));
-      if (toggleRadar) toggleRadar.checked = false;
-      saveSetting(RADAR_KEY, "0");
-      setRadarEnabled(false);
-      return;
-    }
     cloudOpacity = pct / 100;
     applyCloudOpacity();
     saveSetting(OPACITY_KEY, String(pct));
@@ -4676,12 +4865,19 @@
       });
     });
   }
-  if (toggleRadar) {
-    toggleRadar.addEventListener("change", function () {
-      saveSetting(RADAR_KEY, toggleRadar.checked ? "1" : "0");
-      setRadarEnabled(!!toggleRadar.checked);
+  (function bindOverlaySeg() {
+    syncOverlaySeg();
+    if (!overlaySeg) return;
+    overlaySeg.addEventListener("click", function (e) {
+      var t = e.target;
+      while (t && t !== overlaySeg && !(t.getAttribute && t.getAttribute("data-overlay"))) {
+        t = t.parentNode;
+      }
+      if (!t || t === overlaySeg) return;
+      var mode = t.getAttribute("data-overlay");
+      if (mode) setOverlayMode(mode);
     });
-  }
+  })();
 
 
   /* opt12: small FPS meter (rAF, ~4 Hz text, pause when hidden) */
@@ -4751,12 +4947,11 @@
         if (map && typeof map.triggerRepaint === "function") map.triggerRepaint();
       } catch (eRes) {}
       if (radarOn()) {
-        resumePlay = false; /* opt18: clouds paused while radar */
-        fetchAndApplyRadar({ quiet: true }).then(function (ok) {
+        fetchAndApplyRadar({ quiet: true, preserveIndex: true }).then(function (ok) {
           if (ok && radarOn() && !tabHidden) startRadarRefresh();
         });
       }
-      if (resumePlay && !radarOn()) {
+      if (resumePlay) {
         resumePlay = false;
         startPlay();
       }
@@ -4778,7 +4973,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt18").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt19").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

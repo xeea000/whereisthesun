@@ -701,11 +701,22 @@ html, body {
 }
 
 
-/* opt18: Clouds slider dimmed while Radar owns the overlay (still draggable to dismiss radar) */
+/* opt19: Clouds opacity disabled while Radar overlay mode (value preserved) */
+.ov.overlay-mode {
+  flex: 0 0 auto;
+  gap: 6px;
+  color: var(--text);
+  flex-wrap: wrap;
+}
+#cloud-opacity:disabled,
 #cloud-opacity.is-radar-muted,
 label.ov.is-radar-muted {
   opacity: 0.45;
 }
-label.ov.is-radar-muted #cloud-opacity {
-  cursor: pointer;
+#cloud-opacity:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+label.ov.is-radar-muted {
+  cursor: not-allowed;
 }

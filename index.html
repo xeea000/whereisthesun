@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt18">
-  <link rel="stylesheet" href="styles.css?v=opt18">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt19">
+  <link rel="stylesheet" href="styles.css?v=opt19">
 </head>
 <body>
   <div id="map"></div>
@@ -47,9 +47,16 @@
       <span id="time-label">Clouds</span>
     </div>
     <div class="overlay-row">
-      <label class="ov">Clouds
+      <label class="ov" id="cloud-opacity-label">Clouds
         <input id="cloud-opacity" type="range" min="0" max="100" value="90" step="1">
       </label>
+      <div class="ov overlay-mode" role="group" aria-label="Overlay">
+        <span class="basemap-label">Overlay</span>
+        <div class="seg" id="overlay-seg">
+          <button type="button" class="seg-btn is-on" data-overlay="clouds" aria-pressed="true">Clouds</button>
+          <button type="button" class="seg-btn" data-overlay="radar" aria-pressed="false">Radar</button>
+        </div>
+      </div>
       <div class="ov basemap" role="group" aria-label="Map style">
         <span class="basemap-label">Map</span>
         <div class="seg" id="basemap-seg">
@@ -67,11 +74,6 @@
         <input id="toggle-intl" type="checkbox">
         <span class="knob" aria-hidden="true"></span>
         International
-      </label>
-      <label class="ov switch">
-        <input id="toggle-radar" type="checkbox">
-        <span class="knob" aria-hidden="true"></span>
-        Radar
       </label>
     </div>
   </div>
@@ -95,8 +97,8 @@
     <ul id="sunny-sheet-list" class="sheet-list"></ul>
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
-  <!-- MapLibre deferred before app.js (opt18: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt18"></script>
-  <script defer src="app.js?v=opt18"></script>
+  <!-- MapLibre deferred before app.js (opt19: no preload — avoids SW cross-world mismatch) -->
+  <script defer src="vendor/maplibre-gl.js?v=opt19"></script>
+  <script defer src="app.js?v=opt19"></script>
 </body>
 </html>

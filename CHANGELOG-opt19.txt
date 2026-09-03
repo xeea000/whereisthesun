@@ -1,0 +1,15 @@
+SUNNY opt19 — Clouds|Radar overlay mode (Play stays in-mode)
+=============================================================
+opt18 mutex fought the UX: Play and Clouds slider silently
+turned Radar off (and zeroed opacity). Redesign:
+
+- Overlay segment Clouds | Radar (like Map Roads/Satellite/Dark)
+- overlayMode persisted as sunny-overlay; no silent mode flips
+- Radar: mute cloud rasters + disable Clouds slider (keep value)
+- Clouds: remove radar; re-enable slider; restore rasters
+- Play in Clouds = GOES WMS (unchanged)
+- Play in Radar = RainViewer past frames (~2h / 10-min); scrub works
+- Manifest fail → status only; stay in Radar
+- Labels / International / Map style unchanged
+
+Cache: ?v=opt19; SW CACHE=sunny-v-opt19
