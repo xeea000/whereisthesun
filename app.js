@@ -483,101 +483,21 @@
   }
 
   /*
-   * opt14: Daily MODIS/VIIRS CorrectedReflectance often lags "today" (UTC) by 1+ days.
-   * Prefer yesterday, probe back up to 5 days with one lightweight tile GET, cache the
-   * working date. Never spray a viewport of 404s for an unpublished day. GOES GeoColor
-   * and IEM VIS stay on their near-real-time paths (no daily date).
+   * opt27: Drop gappy daily MODIS Terra + VIIRS SNPP CorrectedReflectance from the
+   * live stack (granule gaps → widespread 404s even on "available" days). Keep
+   * GOES GeoColor (static + Play WMS) and IEM GOES VIS 1km for zoomed NOW sharpness.
+   * Remove leftover modis/viirs sources/layers on hot reload.
    */
-  var HIRES_DAY_TTL_MS = 3 * 3600 * 1000;
-  var HIRES_PROBE_BACK = 5;
-  var hiresDayCache = { modis: null, viirs: null }; /* {date, t} */
-  var hiresDayProbe = null; /* in-flight Promise */
-
-  function hiresDaySync(kind) {
-    var ent = hiresDayCache[kind];
-    if (ent && ent.date) return ent.date;
-    return utcDate(2); /* opt25: safer than yesterday alone until probe settles */
-  }
-
-  function hiresDaysResolved() {
-    return !!(hiresDayCache.modis && hiresDayCache.modis.date &&
-      hiresDayCache.viirs && hiresDayCache.viirs.date);
-  }
-
-  function probeGibsDailyTile(layerId, date) {
-    /* Mid-Atlantic z5 tile — small JPEG; 404/empty => unavailable day */
-    var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layerId +
-      "/default/" + date + "/GoogleMapsCompatible_Level9/5/10/15.jpg";
-    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    var timer = null;
-    var p = fetch(url, {
-      method: "GET",
-      mode: "cors",
-      cache: "no-store",
-      signal: ctrl ? ctrl.signal : undefined
-    }).then(function (res) {
-      if (!res.ok) return false;
-      return res.blob().then(function (b) {
-        return !!(b && b.size > 800);
-      });
-    }).catch(function () {
-      return false;
+  function removeLegacyDailyHires() {
+    if (!map || !map.getLayer) return;
+    ["modis", "viirs"].forEach(function (id) {
+      try {
+        if (map.getLayer(id)) map.removeLayer(id);
+      } catch (eL) {}
+      try {
+        if (map.getSource(id)) map.removeSource(id);
+      } catch (eS) {}
     });
-    if (ctrl) {
-      timer = setTimeout(function () {
-        try { ctrl.abort(); } catch (eA) {}
-      }, 8000);
-      p = p.then(function (ok) {
-        clearTimeout(timer);
-        return ok;
-      }, function (err) {
-        clearTimeout(timer);
-        throw err;
-      });
-    }
-    return p;
-  }
-
-  function resolveOneHiresDay(kind, layerId) {
-    var ent = hiresDayCache[kind];
-    if (ent && ent.date && (Date.now() - ent.t) < HIRES_DAY_TTL_MS) {
-      return Promise.resolve(ent.date);
-    }
-    /* opt25: never probe UTC today (offset 0) — partial days 404 loudly */
-    var offsets = [];
-    var o;
-    for (o = 1; o <= HIRES_PROBE_BACK; o++) offsets.push(o);
-    function tryAt(idx) {
-      if (idx >= offsets.length) {
-        var fb = utcDate(2);
-        hiresDayCache[kind] = { date: fb, t: Date.now() };
-        return Promise.resolve(fb);
-      }
-      var day = utcDate(offsets[idx]);
-      return probeGibsDailyTile(layerId, day).then(function (ok) {
-        if (ok) {
-          hiresDayCache[kind] = { date: day, t: Date.now() };
-          return day;
-        }
-        return tryAt(idx + 1);
-      });
-    }
-    return tryAt(0);
-  }
-
-  function ensureHiresDays() {
-    if (hiresDayProbe) return hiresDayProbe;
-    hiresDayProbe = Promise.all([
-      resolveOneHiresDay("modis", "MODIS_Terra_CorrectedReflectance_TrueColor"),
-      resolveOneHiresDay("viirs", "VIIRS_SNPP_CorrectedReflectance_TrueColor")
-    ]).then(function (pair) {
-      hiresDayProbe = null;
-      return { modis: pair[0], viirs: pair[1] };
-    }).catch(function () {
-      hiresDayProbe = null;
-      return { modis: hiresDaySync("modis"), viirs: hiresDaySync("viirs") };
-    });
-    return hiresDayProbe;
   }
 
   function refreshHiresRaster(srcId, url) {
@@ -591,22 +511,6 @@
         try { src.setTiles([url]); } catch (e2) {}
       }
     }
-  }
-
-  function applyResolvedHiresDates(dates) {
-    if (!dates || tabHidden || playMode) return;
-    refreshHiresRaster("modis", modisTiles(dates.modis || hiresDaySync("modis")));
-    refreshHiresRaster("viirs", viirsTiles(dates.viirs || hiresDaySync("viirs")));
-  }
-
-  function modisTiles(date) {
-    return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/" +
-      date + "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
-  }
-
-  function viirsTiles(date) {
-    return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" +
-      date + "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
   }
 
   function iemVisTiles(lon) {
@@ -652,7 +556,7 @@
   /*
    * opt11: Static/scrub GIBS on MAIN map (raster before beaches/labels) so canvas
    * beach dots + Labels draw on top. Do NOT cover the WebGL canvas with #cloud-map.
-   * - Static / scrub: gibs/modis/viirs/iem-vis on `map`, insert before beaches-fill
+   * - Static / scrub: gibs/iem-vis on `map`, insert before beaches-fill
    *   (and under Labels overlay). setTiles WITHOUT clearTiles.
    * - Play: hide MapLibre cloud rasters; drive #cloud-play-layer (two <img>s) from
    *   NASA GIBS WMS GetMap, mix-blend-mode:screen, double-buffer crossfade.
@@ -900,7 +804,7 @@
   function restackCloudRasters() {
     if (!map) return;
     var before = cloudStackBefore();
-    var ids = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+    var ids = [GIBS_LAYER, "iem-vis"];
     var i;
     for (i = 0; i < ids.length; i++) {
       if (map.getLayer(ids[i])) {
@@ -917,7 +821,7 @@
   function applyCloudRasterResampling() {
     if (!map) return;
     var mode = cloudResamplingForZoom(map.getZoom());
-    var ids = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+    var ids = [GIBS_LAYER, "iem-vis"];
     var i;
     for (i = 0; i < ids.length; i++) {
       if (map.getLayer(ids[i])) {
@@ -1181,7 +1085,7 @@
     if (!m) return;
     var i, id;
     if (hidden) {
-      var idsHide = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+      var idsHide = [GIBS_LAYER, "iem-vis"];
       for (i = 0; i < idsHide.length; i++) {
         id = idsHide[i];
         if (!m.getLayer(id)) continue;
@@ -1190,7 +1094,7 @@
       }
       return;
     }
-    /* opt26: only restore GIBS here — never force-show modis/viirs/iem (404 storms) */
+    /* opt26/opt27: only restore GIBS here — never force-show iem (hires via applyHires) */
     if (m.getLayer(GIBS_LAYER)) {
       try { m.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eG) {}
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
@@ -1732,8 +1636,8 @@
       presentStaticGibs(url);
       setMapLibreCloudsHidden(false);
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
-      /* hide daily hires during play history — only GOES for current play index */
-      ["modis", "viirs", "iem-vis"].forEach(function (id) {
+      /* hide IEM hires during play history — only GOES for current play index */
+      ["iem-vis"].forEach(function (id) {
         if (map.getLayer(id)) {
           try { map.setLayoutProperty(id, "visibility", "none"); } catch (eH) {}
         }
@@ -1859,21 +1763,12 @@
     return p.then(function (shown) {
       void shown;
       if (playMode) return shown;
-      /* Hires (MODIS/VIIRS/IEM) only at NOW — not while scrubbing history / play */
+      /* Hires (IEM VIS) only at NOW — not while scrubbing history / play */
       if (atNow) {
-        /* opt25: refresh daily rasters only after probe; IEM can update immediately */
         refreshHiresRaster("iem-vis", iemVisTiles(origin ? origin.lon : null));
-        if (hiresDaysResolved()) {
-          refreshHiresRaster("modis", modisTiles(hiresDaySync("modis")));
-          refreshHiresRaster("viirs", viirsTiles(hiresDaySync("viirs")));
-        }
-        ensureHiresDays().then(function (dates) {
-          applyResolvedHiresDates(dates);
-          applyHires();
-        }).catch(function () { applyHires(); });
         applyHires();
       } else {
-        ["modis", "viirs", "iem-vis"].forEach(function (id) {
+        ["iem-vis"].forEach(function (id) {
           if (map.getLayer(id)) {
             map.setLayoutProperty(id, "visibility", "none");
             applyCloudPaintMain(id, 0);
@@ -1889,7 +1784,7 @@
     if (!map.getLayer(layerId)) return;
     var z = typeof map.getZoom === "function" ? map.getZoom() : 0;
     /* opt14: short fade on daily hires softens granule edges; GOES stays snappy via applyCloudPaint */
-    var fade = (layerId === "modis" || layerId === "viirs" || layerId === "iem-vis") ? 280 : 0;
+    var fade = (layerId === "iem-vis") ? 280 : 0;
     var paint = {
       "raster-opacity": opacity,
       "raster-resampling": cloudResamplingForZoom(z),
@@ -1905,57 +1800,15 @@
 
   function applyHires() {
     if (tabHidden || playMode || radarOn()) return;
+    removeLegacyDailyHires();
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
-    /* opt13: hires only at NOW. Far=GeoColor; mid=light VIIRS/MODIS; close=favor sharp+IEM. */
+    /* opt27: hires = IEM GOES VIS only. Far=GeoColor; close NOW=favor IEM sharpness. */
     var HIRES_Z = 5.5;
     var IEM_Z = 6.0;
     var wantSharp = atNow && z >= HIRES_Z;
     if (wantSharp) {
-      /* opt25: IEM ok immediately; MODIS/VIIRS only after ensureHiresDays */
-      addHiresSources({ daily: hiresDaysResolved() });
-      ensureHiresDays().then(function (dates) {
-        applyResolvedHiresDates(dates);
-        addHiresSources({ daily: true });
-        if (tabHidden || playMode || radarOn()) return;
-        var z2 = map.getZoom();
-        var atNow2 = !cloudTimes.length || cloudIndex >= sliderMax();
-        if (!(atNow2 && z2 >= HIRES_Z)) return;
-        var sharp2 = Math.min(0.96, cloudOpacity);
-        var tLin2 = Math.max(0, Math.min(1, (z2 - HIRES_Z) / 2.0));
-        var t2 = tLin2 * tLin2 * (3 - 2 * tLin2);
-        var modisOp2 = Math.min(sharp2 * (0.28 + 0.44 * t2), cloudOpacity * 0.88);
-        var viirsOp2 = Math.min(sharp2 * (0.20 + 0.38 * t2), cloudOpacity * 0.78);
-        if (map.getLayer("modis")) {
-          map.setLayoutProperty("modis", "visibility", "visible");
-          applyCloudPaintMain("modis", modisOp2);
-        }
-        if (map.getLayer("viirs")) {
-          map.setLayoutProperty("viirs", "visibility", "visible");
-          applyCloudPaintMain("viirs", viirsOp2);
-        }
-      }).catch(function () {});
-      var sharp = Math.min(0.96, cloudOpacity);
-      /* 0 at z=5.5 → 1 at z≈7.5; smoothstep softens granule/zoom edges (opt14) */
-      var tLin = Math.max(0, Math.min(1, (z - HIRES_Z) / 2.0));
-      var t = tLin * tLin * (3 - 2 * tLin);
-      /* Stronger when zoomed; still respect slider (don't bury basemap at low opacity) */
-      var modisOp = Math.min(sharp * (0.28 + 0.44 * t), cloudOpacity * 0.88);
-      var viirsOp = Math.min(sharp * (0.20 + 0.38 * t), cloudOpacity * 0.78);
-      if (hiresDaysResolved() && map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "visible");
-        applyCloudPaintMain("modis", modisOp);
-      } else if (map.getLayer("modis")) {
-        map.setLayoutProperty("modis", "visibility", "none");
-        applyCloudPaintMain("modis", 0);
-      }
-      if (hiresDaysResolved() && map.getLayer("viirs")) {
-        map.setLayoutProperty("viirs", "visibility", "visible");
-        applyCloudPaintMain("viirs", viirsOp);
-      } else if (map.getLayer("viirs")) {
-        map.setLayoutProperty("viirs", "visibility", "none");
-        applyCloudPaintMain("viirs", 0);
-      }
+      addHiresSources();
       if (map.getLayer("iem-vis")) {
         var iemT = z >= IEM_Z ? Math.max(0, Math.min(1, (z - IEM_Z) / 1.5)) : 0;
         var vis = z >= IEM_Z ? Math.min(0.62, 0.40 + 0.22 * iemT) * cloudOpacity : 0;
@@ -1970,7 +1823,7 @@
       }
       applyCloudPaint(GIBS_LAYER, gibsOp);
     } else {
-      ["modis", "viirs", "iem-vis"].forEach(function (id) {
+      ["iem-vis"].forEach(function (id) {
         if (map.getLayer(id)) {
           map.setLayoutProperty(id, "visibility", "none");
           applyCloudPaintMain(id, 0);
@@ -2046,29 +1899,10 @@
     if (typeof applyBaseMap === "function") applyBaseMap();
   }
 
-  function addHiresSources(opts) {
+  function addHiresSources() {
     if (tabHidden || radarOn()) return;
-    opts = opts || {};
-    var allowDaily = opts.daily === true || (opts.daily !== false && hiresDaysResolved());
+    removeLegacyDailyHires();
     var before = cloudStackBefore();
-    if (allowDaily && !map.getSource("modis")) {
-      map.addSource("modis", {
-        type: "raster",
-        tiles: [modisTiles(hiresDaySync("modis"))],
-        tileSize: 256,
-        maxzoom: 8,
-        attribution: "NASA GIBS / MODIS"
-      });
-    }
-    if (allowDaily && !map.getSource("viirs")) {
-      map.addSource("viirs", {
-        type: "raster",
-        tiles: [viirsTiles(hiresDaySync("viirs"))],
-        tileSize: 256,
-        maxzoom: 8,
-        attribution: "NASA GIBS / VIIRS SNPP"
-      });
-    }
     if (!map.getSource("iem-vis")) {
       map.addSource("iem-vis", {
         type: "raster",
@@ -2077,32 +1911,6 @@
         maxzoom: 9,
         attribution: "Iowa Environmental Mesonet / NOAA GOES"
       });
-    }
-    if (allowDaily && !map.getLayer("modis") && map.getSource("modis")) {
-      map.addLayer({
-        id: "modis",
-        type: "raster",
-        source: "modis",
-        layout: { visibility: "none" },
-        paint: {
-          "raster-opacity": 0,
-          "raster-resampling": "linear",
-          "raster-fade-duration": 0
-        }
-      }, before);
-    }
-    if (allowDaily && !map.getLayer("viirs") && map.getSource("viirs")) {
-      map.addLayer({
-        id: "viirs",
-        type: "raster",
-        source: "viirs",
-        layout: { visibility: "none" },
-        paint: {
-          "raster-opacity": 0,
-          "raster-resampling": "linear",
-          "raster-fade-duration": 0
-        }
-      }, before);
     }
     if (!map.getLayer("iem-vis")) {
       map.addLayer({
@@ -2745,7 +2553,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt26");
+      beachWorker = new Worker("beach-worker.js?v=opt27");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -5370,7 +5178,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt26").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt27").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

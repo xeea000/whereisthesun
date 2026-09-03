@@ -1,0 +1,11 @@
+SUNNY opt27 — drop gappy MODIS/VIIRS; GOES+IEM only
+===================================================
+1) Remove MODIS Terra + VIIRS SNPP daily CorrectedReflectance from
+   the live map stack (no addSource/addLayer; strip on hot reload).
+2) applyHires opacity: IEM GOES VIS + GeoColor only (no daily probe).
+3) Delete ensureHiresDays / probeGibsDailyTile MODIS/VIIRS path —
+   mid-Atlantic tile probe lied; granule gaps still 404'd.
+4) Keep map.on("error") image 404 filter for residual GIBS/IEM misses.
+5) Attribution: no MODIS/VIIRS source strings.
+
+Cache: ?v=opt27; SW CACHE=sunny-v-opt27
