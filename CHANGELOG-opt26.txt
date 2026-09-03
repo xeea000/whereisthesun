@@ -1,0 +1,11 @@
+SUNNY opt26 — safe weather JSON, quieter exit-play, solid Play
+=============================================================
+1) Weather: readJsonSafe(res) — status check, text parse, soft
+   "non-JSON weather" (no scary SyntaxError stacks). Used by
+   fetchCurrentWeather, fetchHourly, Open-Meteo play grid.
+2) exitPlay / setMapLibreCloudsHidden(false): only restore GIBS;
+   never force-show modis/viirs/iem; applyHires() after exit.
+3) Play: yellow is-on after .play base; cloudTimes empty guard;
+   clear playGestureActive on stop; Pause icon while retrying.
+
+Cache: ?v=opt26; SW CACHE=sunny-v-opt26

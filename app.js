@@ -804,15 +804,22 @@
     try { localStorage.setItem(SPEED_KEY, String(playSpeed)); } catch (eS) {}
   }
 
-  /* opt25: one .tbtn-ico slot — swap path between triangle and pause bars */
+  /* opt25/opt26: one .tbtn-ico slot — swap path; keep is-on + Pause while playing/retrying */
   function setPlayButtonPlaying(on) {
     if (!btnPlay) return;
     var playing = !!on;
     btnPlay.setAttribute("aria-pressed", playing ? "true" : "false");
-    if (playing) btnPlay.classList.add("is-on");
-    else btnPlay.classList.remove("is-on");
+    if (playing) {
+      btnPlay.classList.add("is-on");
+      btnPlay.classList.add("is-playing");
+    } else {
+      btnPlay.classList.remove("is-on");
+      btnPlay.classList.remove("is-playing");
+    }
     var ico = btnPlay.querySelector(".tbtn-ico");
-    if (ico) ico.innerHTML = playing ? PAUSE_ICO_HTML : PLAY_ICO_HTML;
+    if (ico && typeof PAUSE_ICO_HTML === "string" && typeof PLAY_ICO_HTML === "string") {
+      ico.innerHTML = playing ? PAUSE_ICO_HTML : PLAY_ICO_HTML;
+    }
     var kind = (typeof radarOn === "function" && radarOn()) ? "radar" : "cloud";
     var label = playing ? ("Pause " + kind + " animation") : ("Play " + kind + " animation");
     btnPlay.setAttribute("aria-label", label);
@@ -1172,18 +1179,21 @@
   function setMapLibreCloudsHidden(hidden) {
     var m = cloudTargetMap();
     if (!m) return;
-    var ids = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
     var i, id;
-    for (i = 0; i < ids.length; i++) {
-      id = ids[i];
-      if (!m.getLayer(id)) continue;
-      try {
-        m.setLayoutProperty(id, "visibility", hidden ? "none" : "visible");
-      } catch (eV) {}
-      if (id === GIBS_LAYER) {
-        if (!hidden) applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
-        else applyCloudPaint(GIBS_LAYER, 0);
+    if (hidden) {
+      var idsHide = [GIBS_LAYER, "modis", "viirs", "iem-vis"];
+      for (i = 0; i < idsHide.length; i++) {
+        id = idsHide[i];
+        if (!m.getLayer(id)) continue;
+        try { m.setLayoutProperty(id, "visibility", "none"); } catch (eV) {}
+        if (id === GIBS_LAYER) applyCloudPaint(GIBS_LAYER, 0);
       }
+      return;
+    }
+    /* opt26: only restore GIBS here — never force-show modis/viirs/iem (404 storms) */
+    if (m.getLayer(GIBS_LAYER)) {
+      try { m.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eG) {}
+      applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
     }
   }
 
@@ -1594,10 +1604,7 @@
       "?latitude=" + sampleLats.join(",") +
       "&longitude=" + sampleLons.join(",") +
       "&hourly=cloud_cover&past_days=1&forecast_days=1&timezone=UTC";
-    omPlayPromise = fetch(url).then(function (res) {
-      if (!res.ok) throw new Error("om " + res.status);
-      return res.json();
-    }).then(function (data) {
+    omPlayPromise = fetch(url).then(readJsonSafe).then(function (data) {
       /* normalize to array-of-series */
       var series = Array.isArray(data) ? data : [data];
       omPlayGrid = { cols: cols, rows: rows, lats: lats, lons: lons, series: series, sampleStep: 2 };
@@ -1700,6 +1707,8 @@
     }
     restackCloudRasters();
     if (overlayVisible()) restackOverlay();
+    /* opt26: hires only via NOW+zoom rules / ready dates — not forced visible on exit */
+    try { applyHires(); } catch (eAh) {}
   }
 
   function softHidePlayOverlayForGesture() {
@@ -2736,7 +2745,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt25");
+      beachWorker = new Worker("beach-worker.js?v=opt26");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -3287,6 +3296,19 @@
     });
   }
 
+  /* opt26: never res.json() blind — Open-Meteo sometimes returns non-JSON / HTML */
+  function readJsonSafe(res) {
+    if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
+    return res.text().then(function (text) {
+      if (!text || !String(text).trim()) throw new Error("empty weather body");
+      try {
+        return JSON.parse(text);
+      } catch (eParse) {
+        throw new Error("non-JSON weather");
+      }
+    });
+  }
+
   function fetchCurrentWeather(points, signal) {
     if (!points.length) return Promise.resolve([]);
     var out = new Array(points.length);
@@ -3336,10 +3358,7 @@
     var lats = missing.map(function (p) { return p.lat.toFixed(4); }).join(",");
     var lons = missing.map(function (p) { return p.lon.toFixed(4); }).join(",");
     var url = METEO_URL + "?latitude=" + lats + "&longitude=" + lons + "&current=cloud_cover,uv_index,is_day";
-    return fetchWithTimeout(url, WX_FETCH_TIMEOUT_MS, signal).then(function (res) {
-      if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
-      return res.json();
-    }).then(function (data) {
+    return fetchWithTimeout(url, WX_FETCH_TIMEOUT_MS, signal).then(readJsonSafe).then(function (data) {
       var rows = Array.isArray(data) ? data : [data];
       if (rows.length !== missing.length) throw new Error("Open-Meteo count mismatch");
       var j, wx;
@@ -3365,10 +3384,7 @@
       "&current=cloud_cover,uv_index,is_day" +
       "&hourly=cloud_cover,is_day,uv_index,sunshine_duration" +
       "&forecast_hours=48&timezone=auto";
-    return fetch(url).then(function (res) {
-      if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
-      return res.json();
-    }).then(function (data) {
+    return fetch(url).then(readJsonSafe).then(function (data) {
       hourlyCache[key] = data;
       try {
         if (data && data.current && data.current.cloud_cover != null) {
@@ -4380,7 +4396,8 @@
           setStatus(nBit + sunBit + ". Hover or tap one for details.");
           maybeLocalBeachForecast();
         }).catch(function (err) {
-          console.error(err);
+          var msg = (err && err.message) ? String(err.message) : "weather";
+          console.warn("Weather:", msg);
           setStatus("Found beaches, but I couldn't get the weather for them yet.");
         });
       })
@@ -4715,9 +4732,11 @@
   function stopCloudPlayOnly() {
     playSession += 1;
     playBusy = false;
+    playGestureActive = false;
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
     if (playMode) exitPlayMode();
+    else playGestureActive = false;
   }
 
   function startRadarPlay() {
@@ -4902,6 +4921,11 @@
     /* opt19: Play stays in active overlay mode — never flips Clouds/Radar */
     if (radarOn()) {
       startRadarPlay();
+      return;
+    }
+    if (!cloudTimes.length) {
+      setStatus("Cloud frames not ready yet.");
+      setPlayButtonPlaying(false);
       return;
     }
     setPlayButtonPlaying(true);
@@ -5346,7 +5370,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt25").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt26").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
