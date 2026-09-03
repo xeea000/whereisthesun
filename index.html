@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt22">
-  <link rel="stylesheet" href="styles.css?v=opt22">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt23">
+  <link rel="stylesheet" href="styles.css?v=opt23">
 </head>
 <body>
   <div id="map"></div>
@@ -38,8 +38,15 @@
     <p id="status" class="status">Finding you… Clouds sit lightly on the map so land stays visible.</p>
   </div>
   <div class="timeline">
-    <div class="time-row">
+    <div class="transport-row">
       <button id="btn-play" class="play" type="button" aria-label="Play cloud animation" aria-pressed="false">Play</button>
+      <div class="track-wrap">
+        <span class="now-mark">NOW</span>
+        <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
+      </div>
+      <span id="time-label">Clouds</span>
+    </div>
+    <div class="transport-meta">
       <label class="loop-opt" title="Loop animation from the start">
         <input id="toggle-loop" type="checkbox" checked>
         Loop
@@ -54,16 +61,8 @@
           <option value="3">3x</option>
         </select>
       </label>
-      <div class="track-wrap">
-        <span class="now-mark">NOW</span>
-        <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
-      </div>
-      <span id="time-label">Clouds</span>
     </div>
-    <div class="overlay-row">
-      <label class="ov" id="cloud-opacity-label">Clouds
-        <input id="cloud-opacity" type="range" min="0" max="100" value="90" step="1">
-      </label>
+    <div class="layer-row">
       <div class="ov overlay-mode" role="group" aria-label="Overlay">
         <span class="basemap-label">Overlay</span>
         <div class="seg" id="overlay-seg">
@@ -71,6 +70,11 @@
           <button type="button" class="seg-btn" data-overlay="radar" aria-pressed="false">Radar</button>
         </div>
       </div>
+      <label class="ov opacity-opt" id="cloud-opacity-label">Clouds
+        <input id="cloud-opacity" type="range" min="0" max="100" value="90" step="1">
+      </label>
+    </div>
+    <div class="map-row">
       <div class="ov basemap" role="group" aria-label="Map style">
         <span class="basemap-label">Map</span>
         <div class="seg" id="basemap-seg">
@@ -112,7 +116,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt22"></script>
-  <script defer src="app.js?v=opt22"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt23"></script>
+  <script defer src="app.js?v=opt23"></script>
 </body>
 </html>

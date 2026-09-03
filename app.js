@@ -653,13 +653,15 @@
    *   Play layer is sibling of canvas-container (markers z-index above it).
    *   Never clear to empty — hold previous image until next onload.
    * opt21: cover crossfade (outgoing full; incoming 0→op) + Loop checkbox.
+   * opt23: on pan/zoom while Play, hide HTML WMS immediately and show MapLibre
+   *   rasters (map-locked); debounce WMS reload on gesture end.
    */
   var CLOUD_FADE_MS = 600; /* rAF cover fade; opt21 */
   var PLAY_DWELL_MS = 900; /* opt20 base; opt22: scale via playDwellMs(speed) */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
   var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
   var PLAY_PREFETCH = 5; /* opt20: keep next frames warm */
-  var PLAY_MOVE_DEBOUNCE_MS = 250; /* opt12: align with map move debounce */
+  var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
   var PLAY_LRU_CAP = 24;
   var WMS_MAX_SIDE_PHONE = 960;
   var WMS_MAX_SIDE_TABLET = 1280;
@@ -676,6 +678,7 @@
   var playBusy = false;
   var playMode = false;
   var playHoldStaticUntilFirst = false; /* opt21: keep MapLibre under play until first cover */
+  var playGestureActive = false; /* opt23: map-locked tiles while pan/zoom in Play */
   var playFrontBuf = "a";
   var playImgCache = Object.create(null); /* LRU: key -> {ok,url,img,key} */
   var playLruOrder = []; /* oldest → newest keys */
@@ -1098,6 +1101,7 @@
     if (!layer) return;
     layer.hidden = false;
     layer.classList.add("is-active");
+    if (!playGestureActive) layer.classList.remove("is-map-locked");
     layer.setAttribute("aria-hidden", "false");
     setPlayLayerOpacity();
   }
@@ -1106,6 +1110,7 @@
     var layer = document.getElementById("cloud-play-layer");
     if (!layer) return;
     layer.classList.remove("is-active");
+    layer.classList.remove("is-map-locked");
     layer.hidden = true;
     layer.setAttribute("aria-hidden", "true");
     var imgs = layer.querySelectorAll("img");
@@ -1559,7 +1564,8 @@
   function presentPlayFrame(iso) {
     if (tabHidden) return Promise.resolve(false);
     showPlayOverlay();
-    setMapLibreCloudsHidden(true);
+    /* opt23: keep MapLibre under overlay until cover completes when holding/gesture */
+    if (!playHoldStaticUntilFirst) setMapLibreCloudsHidden(true);
     if (playUseOpenMeteo) {
       return paintOpenMeteoFrame(iso);
     }
@@ -1588,9 +1594,11 @@
   function exitPlayMode() {
     playMode = false;
     playHoldStaticUntilFirst = false;
+    playGestureActive = false;
     playLoadGen += 1;
     cancelPlayFade();
     if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
+    softShowPlayOverlayAfterGesture();
     hidePlayOverlay();
     setMapLibreCloudsHidden(false);
     /* restore main-map GIBS: prefer last-known-good GOES time at NOW (opt15) */
@@ -1603,26 +1611,109 @@
     if (overlayVisible()) restackOverlay();
   }
 
-  function onPlayViewChanged() {
-    if (!playMode || tabHidden) return;
-    /* keep last image visible; debounce bbox reload */
+  function softHidePlayOverlayForGesture() {
+    var layer = ensurePlayLayer();
+    if (!layer) return;
+    layer.classList.add("is-map-locked");
+  }
+
+  function softShowPlayOverlayAfterGesture() {
+    var layer = ensurePlayLayer();
+    if (!layer) return;
+    layer.classList.remove("is-map-locked");
+  }
+
+  function showPlayLockedMapClouds() {
+    /* MapLibre rasters move with the map — stay geo-locked while HTML WMS is wrong */
+    if (!map || !cloudTimes.length || radarOn()) return;
+    var iso = cloudTimes[cloudIndex];
+    var url = gibsTiles(iso, origin ? origin.lon : null);
+    try {
+      presentStaticGibs(url);
+      setMapLibreCloudsHidden(false);
+      applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+      /* hide daily hires during play history — only GOES for current play index */
+      ["modis", "viirs", "iem-vis"].forEach(function (id) {
+        if (map.getLayer(id)) {
+          try { map.setLayoutProperty(id, "visibility", "none"); } catch (eH) {}
+        }
+      });
+    } catch (eLock) {}
+  }
+
+  function beginPlayMapLock() {
+    /* opt23: on first pan/zoom while Play — drop fixed WMS, show map-synced tiles NOW */
+    if (!playMode || tabHidden || radarOn()) return;
+    if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
+    /* cancel in-flight WMS cover so stale geography never wins mid-drag */
+    playLoadGen += 1;
+    cancelPlayFade();
+    playGestureActive = true;
+    softHidePlayOverlayForGesture();
+    showPlayLockedMapClouds();
+  }
+
+  function endPlayMapLock() {
+    /* Debounced WMS reload for new bbox; cancel if still dragging */
+    if (!playMode || tabHidden) {
+      playGestureActive = false;
+      softShowPlayOverlayAfterGesture();
+      return;
+    }
     if (playMoveTimer) clearTimeout(playMoveTimer);
     playMoveTimer = setTimeout(function () {
       playMoveTimer = null;
-      if (!playMode) return;
-      /* opt8 E: one sync at debounced moveend only */
+      if (!playMode) {
+        playGestureActive = false;
+        softShowPlayOverlayAfterGesture();
+        return;
+      }
+      try {
+        if (map && (map.isMoving() || map.isZooming())) {
+          /* still gesturing — wait for a quiet end */
+          endPlayMapLock();
+          return;
+        }
+      } catch (eStill) {}
       syncCloudMap(true);
-      /* purge LRU — bbox changed; keep last image visible until new loads */
       playLruClear();
       omPlayGrid = null;
       omPlayPromise = null;
+      playHoldStaticUntilFirst = true;
+      softShowPlayOverlayAfterGesture();
       if (cloudTimes.length) {
         var iso = cloudTimes[cloudIndex];
-        presentPlayFrame(iso).then(function () {
-          prefetchPlayIndices(cloudIndex);
+        presentPlayFrame(iso).then(function (shown) {
+          if (shown) {
+            /* cover complete (or hold released) — ensure maplibre hidden under HTML */
+            playHoldStaticUntilFirst = false;
+            setMapLibreCloudsHidden(true);
+            softShowPlayOverlayAfterGesture();
+            prefetchPlayIndices(cloudIndex);
+          } else {
+            /* WMS failed: keep map-synced tiles, do not flash stale fixed image */
+            softHidePlayOverlayForGesture();
+            showPlayLockedMapClouds();
+            playHoldStaticUntilFirst = false;
+          }
+          playGestureActive = false;
+        }).catch(function () {
+          softHidePlayOverlayForGesture();
+          showPlayLockedMapClouds();
+          playHoldStaticUntilFirst = false;
+          playGestureActive = false;
         });
+      } else {
+        playGestureActive = false;
       }
     }, PLAY_MOVE_DEBOUNCE_MS);
+  }
+
+  function onPlayViewChanged() {
+    /* Compat: treat as gesture-end reload (resize / legacy callers) */
+    if (!playMode || tabHidden) return;
+    beginPlayMapLock();
+    endPlayMapLock();
   }
 
   function presentCloudUrl(url, opts) {
@@ -2521,7 +2612,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt22");
+      beachWorker = new Worker("beach-worker.js?v=opt23");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4712,6 +4803,11 @@
     function tick() {
       playTimer = null;
       if (playSession !== session || tabHidden) return;
+      /* opt23: do not advance frames mid pan/zoom — stay on map-locked tiles */
+      if (playGestureActive) {
+        schedule(200);
+        return;
+      }
       var next;
       if (holdTarget != null) {
         next = holdTarget;
@@ -4780,17 +4876,33 @@
     startPlay();
   }
 
+  map.on("movestart", function () {
+    if (playMode) beginPlayMapLock();
+  });
+  map.on("zoomstart", function () {
+    if (playMode) beginPlayMapLock();
+  });
+
   map.on("zoomend", function () {
     if (playMode) {
-      onPlayViewChanged();
+      endPlayMapLock();
       applyCloudRasterResampling();
       return;
     }
+    /* static: never leave a stale play overlay covering tiles */
+    try {
+      var pl = document.getElementById("cloud-play-layer");
+      if (pl && !playMode) {
+        pl.classList.remove("is-map-locked");
+        if (!pl.classList.contains("is-active")) hidePlayOverlay();
+      }
+    } catch (eZo) {}
     syncCloudMap(true);
     applyHires();
   });
 
   map.on("move", function () {
+    /* opt23: lock only on movestart/zoomstart — residual move must not re-lock after unlock */
     if (!playMode) syncCloudMap(false);
   });
 
@@ -4801,8 +4913,7 @@
 
   map.on("moveend", function () {
     if (playMode) {
-      /* debounced inside onPlayViewChanged; keeps last image visible */
-      onPlayViewChanged();
+      endPlayMapLock();
     } else {
       syncCloudMap(true);
     }
@@ -5090,7 +5201,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt22").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt23").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

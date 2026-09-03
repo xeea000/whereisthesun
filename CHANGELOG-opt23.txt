@@ -1,0 +1,18 @@
+SUNNY opt23 — Control layout + map-locked Play overlays
+=======================================================
+A) Timeline chrome (industry-standard transport):
+   .transport-row: Play · scrubber flex:1 · time label
+   .transport-meta: Loop · Speed (NOW mark on scrubber end only)
+   .layer-row: Overlay Clouds|Radar · Clouds opacity
+   .map-row: Map Roads|Satellite|Dark · Labels · International
+   Shared ~36–40px control height, 8/12px gaps, flex-wrap rows.
+
+B) Play zoom/pan desync fix:
+   Fixed WMS <img> overlay is screen-locked to old bbox.
+   On movestart/zoomstart while Play: hide HTML overlay immediately,
+   show MapLibre cloud rasters for current cloudIndex (tiles move with map).
+   Pause frame advance mid-gesture. On moveend/zoomend: debounce ~180ms,
+   cancel if still dragging, fetch new WMS, cover-fade overlay back, then
+   hide MapLibre clouds. Static rasters keep raster-fade-duration: 0.
+
+Cache: ?v=opt23; SW CACHE=sunny-v-opt23
