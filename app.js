@@ -630,11 +630,11 @@
    *   Play layer is sibling of canvas-container (markers z-index above it).
    *   Never clear to empty — hold previous image until next onload.
    */
-  var CLOUD_FADE_MS = 520; /* rAF crossfade ~450–600ms */
-  var PLAY_DWELL_MS = 250; /* min dwell after reveal when next is cached */
+  var CLOUD_FADE_MS = 600; /* rAF crossfade; opt20 calmer */
+  var PLAY_DWELL_MS = 900; /* opt20: readable pace vs GIBS+fade */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
   var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
-  var PLAY_PREFETCH = 2; /* opt12: next 1–2 frames while playing */
+  var PLAY_PREFETCH = 5; /* opt20: keep next frames warm */
   var PLAY_MOVE_DEBOUNCE_MS = 250; /* opt12: align with map move debounce */
   var PLAY_LRU_CAP = 24;
   var WMS_MAX_SIDE_PHONE = 960;
@@ -2432,7 +2432,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt19");
+      beachWorker = new Worker("beach-worker.js?v=opt20");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4103,7 +4103,7 @@
   var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
   var RADAR_OPTS = "1_1"; /* smoothed + snow */
   var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
-  var RADAR_PLAY_DWELL_MS = 350;
+  var RADAR_PLAY_DWELL_MS = 900; /* opt20: match cloud play pace */
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
   var radarHost = null;
@@ -4636,7 +4636,7 @@
         if (!shown) {
           /* HOLD visible frame; retry the same target index */
           holdTarget = next;
-          schedule(400);
+          schedule(600);
           return;
         }
         holdTarget = null;
@@ -4652,7 +4652,7 @@
         playBusy = false;
         if (playSession === session) {
           holdTarget = next;
-          schedule(400);
+          schedule(600);
         }
       });
     }
@@ -4973,7 +4973,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt19").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt20").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
