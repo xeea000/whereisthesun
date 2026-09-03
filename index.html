@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt27">
-  <link rel="stylesheet" href="styles.css?v=opt27">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt28">
+  <link rel="stylesheet" href="styles.css?v=opt28">
 </head>
 <body>
   <div id="map"></div>
@@ -71,6 +71,7 @@
       <div class="track-wrap">
         <span class="now-mark">NOW</span>
         <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
+        <div id="time-ticks" class="time-ticks" aria-hidden="true"></div>
       </div>
       <span id="time-label">Clouds</span>
       <select id="play-speed" class="sr-only" tabindex="-1" aria-hidden="true">
@@ -135,7 +136,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt27"></script>
-  <script defer src="app.js?v=opt27"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt28"></script>
+  <script defer src="app.js?v=opt28"></script>
 </body>
 </html>

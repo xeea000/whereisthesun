@@ -1,0 +1,11 @@
+SUNNY opt28 — scrub keeps play; time ticks; freeze when paused
+=============================================================
+1) Scrub no longer calls stopPlay(). If play was on, pause only the
+   advance timer, keep Pause state, resume from the scrubbed index
+   (not 0). Play button still fully stops. Same for Radar play.
+2) Time ticks under the playhead (~4–5 local clock labels). Rebuild
+   when the segment or Clouds/Radar mode changes.
+3) Paused/historical frames stay frozen: restore that index's iso on
+   Pause (not NOW); no radar refresh jump while parked off NOW.
+
+Cache: ?v=opt28; SW CACHE=sunny-v-opt28

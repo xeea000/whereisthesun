@@ -415,7 +415,9 @@ html, body {
   flex: 1 1 auto;
   min-width: 0;
   padding-top: 14px;
+  padding-bottom: 2px;
   overflow: visible;
+  align-self: center;
 }
 
 .now-mark {
@@ -463,6 +465,52 @@ html, body {
   border-radius: 50%;
   background: var(--sun);
   border: 0;
+}
+
+.time-ticks {
+  position: relative;
+  height: 16px;
+  margin-top: 1px;
+  pointer-events: none;
+  user-select: none;
+}
+.time-tick {
+  position: absolute;
+  top: 0;
+  width: 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--muted);
+}
+.time-tick-mark {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.32);
+  transform: translateX(-50%);
+}
+.time-tick-lab {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0.88;
+}
+.time-tick.is-start .time-tick-lab {
+  transform: translateX(0);
+  text-align: left;
+}
+.time-tick.is-end .time-tick-lab {
+  transform: translateX(-100%);
+  text-align: right;
 }
 
 #time-label {
@@ -727,6 +775,12 @@ html, body {
   .track-wrap {
     flex: 1 1 auto;
     min-width: 80px;
+  }
+  .time-ticks {
+    height: 14px;
+  }
+  .time-tick-lab {
+    font-size: 0.52rem;
   }
   .ov.opacity-opt {
     flex: 1 1 100%;
