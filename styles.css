@@ -71,7 +71,8 @@ html, body {
   z-index: 2;
   pointer-events: none;
   mix-blend-mode: screen;
-  background: #000;
+  /* opt21: transparent — black mid-fade looked like basemap dip under screen blend */
+  background: transparent;
   filter: contrast(1.15) brightness(1.05);
   --cloud-play-op: 0.90;
 }
@@ -104,7 +105,8 @@ html, body {
   height: 100%;
   object-fit: fill;
   opacity: 0;
-  /* opacity lerped by rAF in app.js (opt8) — no CSS flash */
+  z-index: 0;
+  /* opacity lerped by rAF in app.js (opt8/opt21 cover fade) — no CSS flash */
   transition: none;
   pointer-events: none;
   user-select: none;
@@ -112,8 +114,13 @@ html, body {
   will-change: opacity;
 }
 #cloud-play-layer .cloud-play-buf.is-front {
-  /* JS sets inline opacity to --cloud-play-op; class marks front buffer */
+  /* JS sets inline opacity to --cloud-play-op; under-layer during cover fade */
+  z-index: 1;
   opacity: var(--cloud-play-op, 0.90);
+}
+#cloud-play-layer .cloud-play-buf.is-incoming {
+  /* Cover fade: incoming on top while outgoing stays full underneath */
+  z-index: 2;
 }
 
 .hud {
@@ -265,6 +272,29 @@ html, body {
   font: 700 0.9rem/1 system-ui, sans-serif;
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+.loop-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 0 2px;
+  flex: 0 0 auto;
+  color: var(--text);
+  font: 650 0.78rem/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.loop-opt input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--sun);
+  cursor: pointer;
 }
 
 .track-wrap {
