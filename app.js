@@ -59,6 +59,8 @@
   var homeCountry = null;
   var beaches = [];
   var waitingForTap = false;
+  var locateWatchId = null;
+  var locateDeadlineTimer = null;
   var userMarker = null;
   var destMarker = null;
   var popup = null;
@@ -2654,7 +2656,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt30");
+      beachWorker = new Worker("beach-worker.js?v=opt31");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4855,8 +4857,20 @@
     return " (±" + rounded + " km)";
   }
 
-  /* opt30: Locate me + boot locate prefer fresh GPS (high accuracy, no cache).
-     Soft network fallback only after GPS fail/timeout — never re-pin from readLastLocate. */
+  /* opt31: Locate me + boot locate wait for a fresh device GPS fix via
+     watchPosition. Reject stale OS last-known fixes; never use network/IP
+     geolocation fallback (poison on Starlink). Never re-pin from readLastLocate. */
+  function clearLocateWatch() {
+    if (locateWatchId != null) {
+      try { navigator.geolocation.clearWatch(locateWatchId); } catch (eClr) {}
+      locateWatchId = null;
+    }
+    if (locateDeadlineTimer != null) {
+      clearTimeout(locateDeadlineTimer);
+      locateDeadlineTimer = null;
+    }
+  }
+
   function applyLocateFix(pos, opts) {
     opts = opts || {};
     var lat = pos.coords.latitude;
@@ -4864,13 +4878,12 @@
     var acc = pos.coords.accuracy;
     saveLastLocate(lat, lon);
     var note;
-    if (opts.networkFallback) {
-      note = "GPS timed out — using approximate network location" + formatLocateAccuracy(acc);
-    } else if (isFinite(acc) && acc > 20000) {
+    if (isFinite(acc) && acc > 20000) {
       note = "Location is very approximate" + formatLocateAccuracy(acc);
     } else {
       note = "Located" + formatLocateAccuracy(acc);
     }
+    if (opts.fresh) note += " · fresh GPS";
     setStatus(note);
     /* Always use fresh callback coords (user may be relocating far from home). */
     loadAround(lat, lon);
@@ -4882,26 +4895,74 @@
       setStatus("Can't get your location. Tap the map to drop a pin.");
       return;
     }
-    setStatus("Finding you with GPS…");
-    navigator.geolocation.getCurrentPosition(
-      function (pos) {
-        applyLocateFix(pos, {});
-      },
-      function () {
-        setStatus("GPS timed out — using approximate network location");
-        navigator.geolocation.getCurrentPosition(
-          function (pos) {
-            applyLocateFix(pos, { networkFallback: true });
-          },
-          function () {
-            waitingForTap = true;
-            setStatus("Location is off. Tap the map to drop a pin.");
-          },
-          { enableHighAccuracy: false, timeout: 12000, maximumAge: 0 }
-        );
-      },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    clearLocateWatch();
+    setStatus("Waiting for a fresh GPS fix…");
+
+    var FRESH_MAX_AGE_MS = 60000;
+    var ACCEPT_ACCURACY_M = 250;
+    var WALL_MS = 22000;
+    var bestFresh = null;
+    var sawStale = false;
+    var settled = false;
+
+    function finishFail(msg) {
+      if (settled) return;
+      settled = true;
+      clearLocateWatch();
+      waitingForTap = true;
+      setStatus(msg);
+    }
+
+    function finishOk(pos) {
+      if (settled) return;
+      settled = true;
+      clearLocateWatch();
+      applyLocateFix(pos, { fresh: true });
+    }
+
+    function onWatchPos(pos) {
+      if (settled) return;
+      var age = Date.now() - pos.timestamp;
+      if (!isFinite(age) || age < 0 || age > FRESH_MAX_AGE_MS) {
+        sawStale = true;
+        var ageSec = isFinite(age) && age >= 0 ? Math.round(age / 1000) : "?";
+        setStatus("Waiting for a fresh GPS fix… (last fix ~" + ageSec + "s old)");
+        return;
+      }
+      var acc = pos.coords.accuracy;
+      var accNum = isFinite(acc) && acc > 0 ? acc : Infinity;
+      if (!bestFresh || accNum < bestFresh.acc) {
+        bestFresh = { pos: pos, acc: accNum };
+      }
+      if (accNum <= ACCEPT_ACCURACY_M) {
+        finishOk(pos);
+        return;
+      }
+      setStatus("Waiting for a fresh GPS fix…" + formatLocateAccuracy(acc));
+    }
+
+    function onWatchErr() {
+      if (settled) return;
+      /* Permission denied / hard error — do not fall back to network geolocation. */
+      finishFail("Couldn't get a fresh GPS fix. Tap the map to drop a pin.");
+    }
+
+    locateWatchId = navigator.geolocation.watchPosition(
+      onWatchPos,
+      onWatchErr,
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 25000 }
     );
+
+    locateDeadlineTimer = setTimeout(function () {
+      if (settled) return;
+      if (bestFresh) {
+        finishOk(bestFresh.pos);
+      } else if (sawStale) {
+        finishFail("GPS didn't refresh. Tap the map to drop a pin.");
+      } else {
+        finishFail("Couldn't get a fresh GPS fix. Tap the map to drop a pin.");
+      }
+    }, WALL_MS);
   }
 
   function stopPlay() {
@@ -5430,7 +5491,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt30").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt31").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

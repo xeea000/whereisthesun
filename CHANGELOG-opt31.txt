@@ -1,0 +1,17 @@
+SUNNY opt31 — Locate waits for fresh GPS (Starlink-safe)
+========================================================
+1) Locate me + boot locate use watchPosition (enableHighAccuracy true,
+   maximumAge 0, timeout 25000) with an outer ~22s wall-clock deadline.
+2) Reject stale fixes: ignore positions with Date.now()-timestamp > 60s;
+   keep watching; status "Waiting for a fresh GPS fix…" (+ age if helpful).
+3) Accept immediately when a fresh fix has accuracy <= 250 m; otherwise
+   keep the best fresh fix (lowest accuracy meters) and apply at deadline.
+4) If only stale fixes were seen by deadline: do not apply — tell user
+   GPS didn't refresh and offer map tap.
+5) Removed automatic network/IP fallback (enableHighAccuracy false).
+   Starlink PoP geolocation is worse than asking for a map tap.
+6) Re-tap Locate cancels any previous watch (locateWatchId + deadline).
+7) applyLocateFix kept; optional "· fresh GPS" note. Never use
+   readLastLocate() for the marker.
+
+Cache: ?v=opt31; SW CACHE=sunny-v-opt31
