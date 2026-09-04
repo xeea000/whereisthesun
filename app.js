@@ -2654,7 +2654,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt29");
+      beachWorker = new Worker("beach-worker.js?v=opt30");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4847,23 +4847,60 @@
     }).catch(function () {});
   }
 
+  function formatLocateAccuracy(meters) {
+    if (!isFinite(meters) || meters <= 0) return "";
+    if (meters < 1000) return " (±" + Math.round(meters) + " m)";
+    var km = meters / 1000;
+    var rounded = km >= 10 ? Math.round(km) : (Math.round(km * 10) / 10);
+    return " (±" + rounded + " km)";
+  }
+
+  /* opt30: Locate me + boot locate prefer fresh GPS (high accuracy, no cache).
+     Soft network fallback only after GPS fail/timeout — never re-pin from readLastLocate. */
+  function applyLocateFix(pos, opts) {
+    opts = opts || {};
+    var lat = pos.coords.latitude;
+    var lon = pos.coords.longitude;
+    var acc = pos.coords.accuracy;
+    saveLastLocate(lat, lon);
+    var note;
+    if (opts.networkFallback) {
+      note = "GPS timed out — using approximate network location" + formatLocateAccuracy(acc);
+    } else if (isFinite(acc) && acc > 20000) {
+      note = "Location is very approximate" + formatLocateAccuracy(acc);
+    } else {
+      note = "Located" + formatLocateAccuracy(acc);
+    }
+    setStatus(note);
+    /* Always use fresh callback coords (user may be relocating far from home). */
+    loadAround(lat, lon);
+  }
+
   function locate() {
     if (!navigator.geolocation) {
       waitingForTap = true;
       setStatus("Can't get your location. Tap the map to drop a pin.");
       return;
     }
-    setStatus("Finding you…");
+    setStatus("Finding you with GPS…");
     navigator.geolocation.getCurrentPosition(
       function (pos) {
-        saveLastLocate(pos.coords.latitude, pos.coords.longitude);
-        loadAround(pos.coords.latitude, pos.coords.longitude);
+        applyLocateFix(pos, {});
       },
       function () {
-        waitingForTap = true;
-        setStatus("Location is off. Tap the map to drop a pin.");
+        setStatus("GPS timed out — using approximate network location");
+        navigator.geolocation.getCurrentPosition(
+          function (pos) {
+            applyLocateFix(pos, { networkFallback: true });
+          },
+          function () {
+            waitingForTap = true;
+            setStatus("Location is off. Tap the map to drop a pin.");
+          },
+          { enableHighAccuracy: false, timeout: 12000, maximumAge: 0 }
+        );
       },
-      { enableHighAccuracy: false, timeout: 12000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   }
 
@@ -5393,7 +5430,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt29").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt30").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

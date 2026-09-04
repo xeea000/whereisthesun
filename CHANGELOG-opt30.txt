@@ -1,0 +1,15 @@
+SUNNY opt30 — Locate me uses fresh GPS
+=======================================
+1) Locate me + boot locate: enableHighAccuracy true, maximumAge 0,
+   timeout 20000 — prefer real GPS, never reuse a cached ISP/home pin.
+2) Status while waiting: "Finding you with GPS…". On success:
+   "Located (±N m/km)" from coords.accuracy.
+3) Soft fallback only if GPS fails/times out: one network retry with
+   maximumAge 0 + warning "GPS timed out — using approximate network
+   location". Never fall back to readLastLocate() for the marker.
+4) Very coarse fixes (accuracy > ~20 km): still accept fresh coords
+   (user relocating) with "Location is very approximate (±N km)".
+5) saveLastLocate still on success for beach preload warm only.
+6) Map-tap pin drop path unchanged.
+
+Cache: ?v=opt30; SW CACHE=sunny-v-opt30
