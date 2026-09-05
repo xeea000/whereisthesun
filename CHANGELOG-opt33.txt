@@ -1,0 +1,16 @@
+SUNNY opt33 — smooth cloud layer (GeoColor/IEM handoff)
+=======================================================
+1) XOR cloud picture: stop muddy dual-blend of GeoColor + IEM at mid opacities.
+   - Far / night / scrub history / Play: GeoColor only @ gibsEffectiveOpacity().
+   - Zoomed NOW + daytime: IEM VIS primary (~0.85–0.95×cloudOpacity); GeoColor
+     fades out (hidden near full handoff). Short smoothstep crossfade z5.5→6.5.
+2) Day/night gate: approx solar elevation from origin (else map center) + UTC;
+   IEM only when elev ≥ ~8° — never black VIS overlay at night.
+3) Smoother GeoColor upscale: raster-resampling linear for GeoColor (Level7);
+   nearest only on IEM when close (z≥7.5).
+4) GOES NOW: after resolveGoesLatestIso probe, presentStaticGibs + setCloudFrame
+   so NOW is not an empty/404 slot.
+5) Opacity slider still drives the active product; Play/radar XOR unchanged.
+6) No MODIS/VIIRS; no starcode.
+
+Cache: ?v=opt33; SW CACHE=sunny-v-opt33

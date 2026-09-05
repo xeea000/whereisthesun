@@ -910,29 +910,40 @@
   }
 
   function cloudResamplingForZoom(z) {
-    /* opt13: nearest at z≥8 for crisper cloud pixels; linear below */
-    return (z != null && z >= 8) ? "nearest" : "linear";
+    /* opt33: GeoColor Level7 — always linear (esp. z>7 upscale); nearest only for sharp IEM */
+    void z;
+    return "linear";
+  }
+
+  function cloudResamplingForLayer(layerId) {
+    var z = map && typeof map.getZoom === "function" ? map.getZoom() : 0;
+    if (layerId === "iem-vis") {
+      /* IEM native ~1km: nearest when close for crisp VIS; linear while blending in */
+      return (z != null && z >= 7.5) ? "nearest" : "linear";
+    }
+    /* GeoColor max WMTS Level7 — linear softens blocky upscale at z>7 */
+    return "linear";
   }
 
   function applyCloudRasterResampling() {
     if (!map) return;
-    var mode = cloudResamplingForZoom(map.getZoom());
     var ids = [GIBS_LAYER, "iem-vis"];
-    var i;
+    var i, id, mode;
     for (i = 0; i < ids.length; i++) {
-      if (map.getLayer(ids[i])) {
-        try { map.setPaintProperty(ids[i], "raster-resampling", mode); } catch (eRs) {}
+      id = ids[i];
+      if (map.getLayer(id)) {
+        mode = cloudResamplingForLayer(id);
+        try { map.setPaintProperty(id, "raster-resampling", mode); } catch (eRs) {}
       }
     }
   }
 
-  function cloudRasterPaint(opacity) {
+  function cloudRasterPaint(opacity, layerId) {
     /* Approximate former CSS screen+filter look via MapLibre raster paint */
     var solid = cloudOpacity >= 0.82;
-    var z = map && typeof map.getZoom === "function" ? map.getZoom() : 0;
     return {
       "raster-opacity": opacity == null ? 0 : opacity,
-      "raster-resampling": cloudResamplingForZoom(z),
+      "raster-resampling": cloudResamplingForLayer(layerId || GIBS_LAYER),
       "raster-fade-duration": 0,
       "raster-brightness-min": solid ? 0 : 0.02,
       "raster-brightness-max": solid ? 1 : 0.92,
@@ -944,7 +955,7 @@
   function applyCloudPaint(layerId, opacity) {
     var m = cloudTargetMap();
     if (!m || !m.getLayer(layerId)) return;
-    var paint = cloudRasterPaint(opacity);
+    var paint = cloudRasterPaint(opacity, layerId);
     var key;
     for (key in paint) {
       if (Object.prototype.hasOwnProperty.call(paint, key)) {
@@ -1885,12 +1896,11 @@
 
   function applyCloudPaintMain(layerId, opacity) {
     if (!map.getLayer(layerId)) return;
-    var z = typeof map.getZoom === "function" ? map.getZoom() : 0;
-    /* opt14: short fade on daily hires softens granule edges; GOES stays snappy via applyCloudPaint */
-    var fade = (layerId === "iem-vis") ? 280 : 0;
+    /* opt14/opt33: short fade on IEM softens handoff; GOES stays snappy via applyCloudPaint */
+    var fade = (layerId === "iem-vis") ? 320 : 0;
     var paint = {
       "raster-opacity": opacity,
-      "raster-resampling": cloudResamplingForZoom(z),
+      "raster-resampling": cloudResamplingForLayer(layerId),
       "raster-fade-duration": fade
     };
     var key;
@@ -1901,30 +1911,83 @@
     }
   }
 
+  function cloudLonLat() {
+    if (origin && isFinite(origin.lon) && isFinite(origin.lat)) {
+      return { lon: origin.lon, lat: origin.lat };
+    }
+    try {
+      if (map && typeof map.getCenter === "function") {
+        var c = map.getCenter();
+        if (c && isFinite(c.lng) && isFinite(c.lat)) return { lon: c.lng, lat: c.lat };
+      }
+    } catch (eC) {}
+    return { lon: -79, lat: 28 };
+  }
+
+  /*
+   * opt33: rough solar elevation for VIS usefulness (no keys). IEM GOES VIS is
+   * black / useless at night — gate it so GeoColor stays the night cloud picture.
+   */
+  function approxSolarElevationDeg(lon, lat, whenMs) {
+    var ms = whenMs == null ? Date.now() : whenMs;
+    var d = new Date(ms);
+    var rad = Math.PI / 180;
+    var start = Date.UTC(d.getUTCFullYear(), 0, 0);
+    var day = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - start) / 86400000;
+    var decl = 23.44 * Math.sin(rad * (360 / 365) * (day - 81));
+    var utcH = d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
+    var ha = (utcH - 12) * 15 + lon; /* hour angle deg */
+    var latR = (lat == null || !isFinite(lat) ? 28 : lat) * rad;
+    var declR = decl * rad;
+    var haR = ha * rad;
+    var sinEl = Math.sin(latR) * Math.sin(declR) + Math.cos(latR) * Math.cos(declR) * Math.cos(haR);
+    if (sinEl > 1) sinEl = 1;
+    if (sinEl < -1) sinEl = -1;
+    return Math.asin(sinEl) / rad;
+  }
+
+  function isVisDaytime(lon, lat, whenMs) {
+    /* VIS needs sun well up; ~8° keeps dusk/dawn from painting a black overlay */
+    return approxSolarElevationDeg(lon, lat, whenMs) >= 8;
+  }
+
   function applyHires() {
     if (tabHidden || playMode || radarOn()) return;
     removeLegacyDailyHires();
     var z = map.getZoom();
     var atNow = !cloudTimes.length || cloudIndex >= sliderMax();
-    /* opt27: hires = IEM GOES VIS only. Far=GeoColor; close NOW=favor IEM sharpness. */
-    var HIRES_Z = 5.5;
-    var IEM_Z = 6.0;
-    var wantSharp = atNow && z >= HIRES_Z;
-    if (wantSharp) {
+    var ll = cloudLonLat();
+    var daytime = isVisDaytime(ll.lon, ll.lat);
+    /*
+     * opt33 XOR cloud picture (stop muddy dual-blend):
+     * - Far / night / scrub history: GeoColor only @ gibsEffectiveOpacity()
+     * - Zoomed NOW + daytime: IEM VIS primary (~0.85–0.95×slider), GeoColor down/out
+     * Short crossfade from ~z5.5 → z6.5 once daytime.
+     */
+    var IEM_Z0 = 5.5;
+    var IEM_Z1 = 6.5;
+    var wantIem = atNow && daytime && z >= IEM_Z0;
+    if (wantIem) {
       addHiresSources();
+      var t = Math.max(0, Math.min(1, (z - IEM_Z0) / (IEM_Z1 - IEM_Z0)));
+      t = t * t * (3 - 2 * t); /* smoothstep */
+      var iemTarget = Math.min(0.95, 0.85 + 0.10 * t) * cloudOpacity;
+      var iemOp = iemTarget * (0.20 + 0.80 * t); /* rise into primary */
+      var gibsOp = gibsEffectiveOpacity() * (1 - t);
+      if (t >= 0.92) gibsOp = 0;
       if (map.getLayer("iem-vis")) {
-        var iemT = z >= IEM_Z ? Math.max(0, Math.min(1, (z - IEM_Z) / 1.5)) : 0;
-        var vis = z >= IEM_Z ? Math.min(0.62, 0.40 + 0.22 * iemT) * cloudOpacity : 0;
-        map.setLayoutProperty("iem-vis", "visibility", vis > 0.02 ? "visible" : "none");
-        applyCloudPaintMain("iem-vis", vis);
+        map.setLayoutProperty("iem-vis", "visibility", iemOp > 0.02 ? "visible" : "none");
+        applyCloudPaintMain("iem-vis", iemOp);
       }
-      /* Close NOW: ease GeoColor down so sharp layers read (never zero) */
-      var gibsOp = gibsEffectiveOpacity();
-      if (z >= 6.2) {
-        var gReduce = Math.min(0.42, (z - 6.2) * 0.22);
-        gibsOp = Math.max(cloudOpacity * 0.32, gibsOp * (1 - gReduce));
+      if (map.getLayer(GIBS_LAYER)) {
+        if (gibsOp <= 0.02) {
+          try { map.setLayoutProperty(GIBS_LAYER, "visibility", "none"); } catch (eHideG) {}
+          applyCloudPaint(GIBS_LAYER, 0);
+        } else {
+          try { map.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eShowG) {}
+          applyCloudPaint(GIBS_LAYER, gibsOp);
+        }
       }
-      applyCloudPaint(GIBS_LAYER, gibsOp);
     } else {
       ["iem-vis"].forEach(function (id) {
         if (map.getLayer(id)) {
@@ -1932,8 +1995,10 @@
           applyCloudPaintMain(id, 0);
         }
       });
-      /* Scrub/Play path hides hires elsewhere; far NOW = GeoColor only */
-      applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+      if (map.getLayer(GIBS_LAYER)) {
+        try { map.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eG2) {}
+        applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+      }
     }
     applyCloudRasterResampling();
     restackCloudRasters();
@@ -5210,7 +5275,12 @@
       /* opt15: probe last published GOES slot; rebuild NOW if lag was optimistic */
       resolveGoesLatestIso(origin ? origin.lon : -79).then(function (iso) {
         applyGoesLatestToTimeline(iso);
-        if (!playMode && !tabHidden && !radarOn()) setCloudFrame(cloudIndex);
+        if (!playMode && !tabHidden && !radarOn()) {
+          /* opt33: always refresh static GeoColor after probe so NOW is not a 404 slot */
+          var urlNow = gibsTiles(iso || goesLatestIsoSync(), origin ? origin.lon : -79);
+          presentStaticGibs(urlNow);
+          setCloudFrame(cloudIndex);
+        }
       }).catch(function () {});
     } else {
       try {
