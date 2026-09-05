@@ -4922,10 +4922,11 @@
     return " (±" + rounded + " km)";
   }
 
-  /* opt32: Locate me + boot locate wait for a fresh device GPS fix via
+  /* opt34: Locate me + boot locate wait for a fresh device GPS fix via
      watchPosition. Reject stale OS last-known fixes; never use network/IP
-     geolocation fallback. Refuse WiFi/BSSID-only guesses (moved routers
-     still geolocate to the old house with a fresh timestamp). Only auto
+     geolocation fallback. Refuse WiFi/BSSID-only guesses immediately on
+     first fresh WiFi-like fix (laptops have no GNSS — don't wait ~22s).
+     Boot locate is quiet (no "Waiting for device GPS…" HUD). Only auto
      loadAround when the fix looks like real GNSS, else require map tap.
      Never re-pin from readLastLocate. */
   function clearLocateWatch() {
@@ -4979,23 +4980,35 @@
     loadAround(lat, lon);
   }
 
-  function locate() {
+  function locate(opts) {
+    opts = opts || {};
+    var boot = !!opts.boot;
     if (!navigator.geolocation) {
       waitingForTap = true;
-      setStatus("Can't get your location. Tap the map to drop a pin.");
+      setStatus(boot
+        ? "Tap the map to set your spot."
+        : "Can't get your location. Tap the map to drop a pin.");
       return;
     }
     clearLocateWatch();
-    setStatus("Waiting for device GPS…");
+    /* Quiet on boot — only show waiting HUD when user taps Locate. */
+    if (!boot) setStatus("Waiting for device GPS…");
 
     var FRESH_MAX_AGE_MS = 60000;
     var ACCEPT_ACCURACY_M = 250;
     var WIFI_REFUSE_ACCURACY_M = 500;
-    var WALL_MS = 22000;
+    var WALL_MS = 8000;
     var bestGps = null;
     var sawWifiLike = false;
     var sawStale = false;
     var settled = false;
+
+    function failMsg(kind) {
+      if (kind === "wifi") return wifiLocateRefuseMessage();
+      if (boot) return "Tap the map to set your spot.";
+      if (kind === "stale") return "GPS didn't refresh. Tap the map to drop a pin.";
+      return "Couldn't get a fresh GPS fix. Tap the map to drop a pin.";
+    }
 
     function finishFail(msg) {
       if (settled) return;
@@ -5017,17 +5030,19 @@
       var age = Date.now() - pos.timestamp;
       if (!isFinite(age) || age < 0 || age > FRESH_MAX_AGE_MS) {
         sawStale = true;
-        var ageSec = isFinite(age) && age >= 0 ? Math.round(age / 1000) : "?";
-        setStatus("Waiting for device GPS… (last fix ~" + ageSec + "s old)");
+        if (!boot) {
+          var ageSec = isFinite(age) && age >= 0 ? Math.round(age / 1000) : "?";
+          setStatus("Waiting for device GPS… (last fix ~" + ageSec + "s old)");
+        }
         return;
       }
       var acc = pos.coords.accuracy;
       var accNum = isFinite(acc) && acc > 0 ? acc : Infinity;
       var hasAlt = finiteCoord(pos.coords.altitude) || finiteCoord(pos.coords.altitudeAccuracy);
-      /* Coarse network/IP with no altitude → never candidate for auto-pin. */
+      /* Fresh WiFi/network-like → refuse immediately (laptop has no GNSS). */
       if (!looksLikeDeviceGps(pos) || (!hasAlt && accNum > WIFI_REFUSE_ACCURACY_M)) {
         sawWifiLike = true;
-        setStatus("Waiting for device GPS…");
+        finishFail(failMsg("wifi"));
         return;
       }
       if (!bestGps || accNum < bestGps.acc) {
@@ -5037,19 +5052,19 @@
         finishOk(pos);
         return;
       }
-      setStatus("Waiting for device GPS…" + formatLocateAccuracy(acc));
+      if (!boot) setStatus("Waiting for device GPS…" + formatLocateAccuracy(acc));
     }
 
     function onWatchErr() {
       if (settled) return;
       /* Permission denied / hard error — do not fall back to network geolocation. */
-      finishFail("Couldn't get a fresh GPS fix. Tap the map to drop a pin.");
+      finishFail(failMsg("err"));
     }
 
     locateWatchId = navigator.geolocation.watchPosition(
       onWatchPos,
       onWatchErr,
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 25000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
 
     locateDeadlineTimer = setTimeout(function () {
@@ -5057,11 +5072,11 @@
       if (bestGps) {
         finishOk(bestGps.pos);
       } else if (sawWifiLike) {
-        finishFail(wifiLocateRefuseMessage());
+        finishFail(failMsg("wifi"));
       } else if (sawStale) {
-        finishFail("GPS didn't refresh. Tap the map to drop a pin.");
+        finishFail(failMsg("stale"));
       } else {
-        finishFail("Couldn't get a fresh GPS fix. Tap the map to drop a pin.");
+        finishFail(failMsg("none"));
       }
     }, WALL_MS);
   }
@@ -5299,7 +5314,7 @@
     var bootLon = lastGps ? lastGps.lon : DEFAULT_WARM_LON;
     preloadRegionsNearLastGps();
     loadBeachDb({ quiet: true, lat: bootLat, lon: bootLon }).catch(function () {});
-    locate();
+    locate({ boot: true });
   });
 
   map.on("idle", function () {

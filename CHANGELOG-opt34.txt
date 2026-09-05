@@ -1,0 +1,19 @@
+SUNNY opt34 — Locate stops waiting on laptop WiFi
+=================================================
+Bug (opt32): WiFi-like fixes were refused at the wall only. On a laptop
+(no GPS chip) fresh WiFi fixes kept arriving, status reset to
+"Waiting for device GPS…", and it felt endless (~22s wall).
+
+Fix:
+1) Immediate refuse: first fresh fix that fails looksLikeDeviceGps (or
+   coarse no-alt >500m) → finishFail(wifiLocateRefuseMessage()) right away.
+2) Shorter wall: ~8s (watch timeout 10s) if no usable GPS-like fix.
+3) Boot locate: locate({ boot: true }) — quiet HUD (no waiting status);
+   on fail → waitingForTap + "Tap the map to set your spot." (WiFi refuse
+   message still used when a WiFi-like fix arrived).
+4) User Locate button still shows "Waiting for device GPS…".
+5) Phone GPS path unchanged: fresh GPS-like → finishOk / best-within-deadline.
+6) Still no enableHighAccuracy:false network fallback; never readLastLocate
+   for the marker. Re-tap Locate still clearLocateWatch().
+
+Cache: ?v=opt34; SW CACHE=sunny-v-opt34
