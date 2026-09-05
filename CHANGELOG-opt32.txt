@@ -1,0 +1,28 @@
+SUNNY opt32 — Refuse WiFi-only locate; require GPS or map tap
+=============================================================
+Reality: most laptops have no GPS. Browser Geolocation then uses WiFi BSSID
+databases (or IP). A moved router often still geolocates to the old house —
+fresh timestamp, wrong coords. opt31's stale-timestamp reject does not catch
+this. There is no web API to force true GPS without GNSS hardware.
+
+Keep opt31:
+1) watchPosition (enableHighAccuracy true, maximumAge 0, timeout 25000)
+2) Reject age > 60s; outer ~22s wall deadline
+3) No enableHighAccuracy:false network/IP fallback
+4) Never re-pin from readLastLocate()
+
+Add source heuristic + honest UX:
+1) looksLikeDeviceGps(pos) — true when coords suggest real GNSS
+   (finite altitude OR altitudeAccuracy OR speed/heading with decent
+   accuracy OR accuracy <= 50 m even without altitude). Uses finiteCoord()
+   (typeof number) because isFinite(null) is true in JS.
+2) GPS-like fix: apply as before; status "Located via GPS (±Nm)".
+3) WiFi/network-like (no altitude/etc., or accuracy > 500 m with no alt):
+   do NOT call loadAround; set waitingForTap; status explains WiFi may be
+   wrong (often an old address) and asks to tap the map.
+4) While watching: "Waiting for device GPS…"; deadline with only WiFi-like
+   fixes → same refuse + tap message (never auto-apply WiFi coords).
+5) Deadline with zero positions: existing tap-map message.
+6) Phones with GPS still auto-locate as before.
+
+Cache: ?v=opt32; SW CACHE=sunny-v-opt32

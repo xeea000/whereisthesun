@@ -2656,7 +2656,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt31");
+      beachWorker = new Worker("beach-worker.js?v=opt32");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4857,9 +4857,12 @@
     return " (±" + rounded + " km)";
   }
 
-  /* opt31: Locate me + boot locate wait for a fresh device GPS fix via
+  /* opt32: Locate me + boot locate wait for a fresh device GPS fix via
      watchPosition. Reject stale OS last-known fixes; never use network/IP
-     geolocation fallback (poison on Starlink). Never re-pin from readLastLocate. */
+     geolocation fallback. Refuse WiFi/BSSID-only guesses (moved routers
+     still geolocate to the old house with a fresh timestamp). Only auto
+     loadAround when the fix looks like real GNSS, else require map tap.
+     Never re-pin from readLastLocate. */
   function clearLocateWatch() {
     if (locateWatchId != null) {
       try { navigator.geolocation.clearWatch(locateWatchId); } catch (eClr) {}
@@ -4869,6 +4872,29 @@
       clearTimeout(locateDeadlineTimer);
       locateDeadlineTimer = null;
     }
+  }
+
+  /* WiFi/IP databases usually omit altitude/speed/heading (null). Phones
+     with a GNSS chip typically expose at least one of those, or a tight
+     accuracy. Use typeof==='number' — isFinite(null) is true in JS. */
+  function finiteCoord(v) {
+    return typeof v === "number" && isFinite(v);
+  }
+
+  function looksLikeDeviceGps(pos) {
+    var c = pos && pos.coords;
+    if (!c) return false;
+    var acc = c.accuracy;
+    var accOk = finiteCoord(acc) && acc > 0;
+    if (finiteCoord(c.altitude) || finiteCoord(c.altitudeAccuracy)) return true;
+    if ((finiteCoord(c.speed) || finiteCoord(c.heading)) && accOk && acc <= 80) return true;
+    /* Some phones omit altitude briefly — treat tight accuracy as GPS. */
+    if (accOk && acc <= 50) return true;
+    return false;
+  }
+
+  function wifiLocateRefuseMessage() {
+    return "No GPS chip detected — WiFi location may be wrong (often an old address). Tap the map to drop a pin where you are.";
   }
 
   function applyLocateFix(pos, opts) {
@@ -4881,9 +4907,8 @@
     if (isFinite(acc) && acc > 20000) {
       note = "Location is very approximate" + formatLocateAccuracy(acc);
     } else {
-      note = "Located" + formatLocateAccuracy(acc);
+      note = "Located via GPS" + formatLocateAccuracy(acc);
     }
-    if (opts.fresh) note += " · fresh GPS";
     setStatus(note);
     /* Always use fresh callback coords (user may be relocating far from home). */
     loadAround(lat, lon);
@@ -4896,12 +4921,14 @@
       return;
     }
     clearLocateWatch();
-    setStatus("Waiting for a fresh GPS fix…");
+    setStatus("Waiting for device GPS…");
 
     var FRESH_MAX_AGE_MS = 60000;
     var ACCEPT_ACCURACY_M = 250;
+    var WIFI_REFUSE_ACCURACY_M = 500;
     var WALL_MS = 22000;
-    var bestFresh = null;
+    var bestGps = null;
+    var sawWifiLike = false;
     var sawStale = false;
     var settled = false;
 
@@ -4926,19 +4953,26 @@
       if (!isFinite(age) || age < 0 || age > FRESH_MAX_AGE_MS) {
         sawStale = true;
         var ageSec = isFinite(age) && age >= 0 ? Math.round(age / 1000) : "?";
-        setStatus("Waiting for a fresh GPS fix… (last fix ~" + ageSec + "s old)");
+        setStatus("Waiting for device GPS… (last fix ~" + ageSec + "s old)");
         return;
       }
       var acc = pos.coords.accuracy;
       var accNum = isFinite(acc) && acc > 0 ? acc : Infinity;
-      if (!bestFresh || accNum < bestFresh.acc) {
-        bestFresh = { pos: pos, acc: accNum };
+      var hasAlt = finiteCoord(pos.coords.altitude) || finiteCoord(pos.coords.altitudeAccuracy);
+      /* Coarse network/IP with no altitude → never candidate for auto-pin. */
+      if (!looksLikeDeviceGps(pos) || (!hasAlt && accNum > WIFI_REFUSE_ACCURACY_M)) {
+        sawWifiLike = true;
+        setStatus("Waiting for device GPS…");
+        return;
+      }
+      if (!bestGps || accNum < bestGps.acc) {
+        bestGps = { pos: pos, acc: accNum };
       }
       if (accNum <= ACCEPT_ACCURACY_M) {
         finishOk(pos);
         return;
       }
-      setStatus("Waiting for a fresh GPS fix…" + formatLocateAccuracy(acc));
+      setStatus("Waiting for device GPS…" + formatLocateAccuracy(acc));
     }
 
     function onWatchErr() {
@@ -4955,8 +4989,10 @@
 
     locateDeadlineTimer = setTimeout(function () {
       if (settled) return;
-      if (bestFresh) {
-        finishOk(bestFresh.pos);
+      if (bestGps) {
+        finishOk(bestGps.pos);
+      } else if (sawWifiLike) {
+        finishFail(wifiLocateRefuseMessage());
       } else if (sawStale) {
         finishFail("GPS didn't refresh. Tap the map to drop a pin.");
       } else {
@@ -5491,7 +5527,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt31").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt32").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
