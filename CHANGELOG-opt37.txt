@@ -1,0 +1,23 @@
+SUNNY opt37 — match cloud/radar pace; soft blur-fade
+====================================================
+Radar felt frantic (near-instant setTiles + 900ms dwell → ~300ms @3x).
+Clouds crawled (WMS load 0.5–2s + fade dominated wall time even with
+opt36 budget). Same Speed control now feels comparable.
+
+Pace sync:
+1) Shared PLAY_PACE_MS = 520 for cloud + radar via playDwellMs.
+2) Radar slowed from 900→520 base (still snappy at 2x/3x).
+3) playFrameStep(): 1 @0.5–1x, 2 @1.5–2x, 3 @3x — skip 10-min slots
+   so weather time advances with Speed even if a fetch is slow.
+4) Deeper prefetch (9 along step). Cached frames fade-only.
+5) playImageSize ~72% at Speed ≥2 during Play (quality kept at 1x).
+6) Cover-fade kept; budget = max(0, playDwellMs(PLAY_PACE_MS) - elapsed).
+
+Soft lerp + cheap blur:
+- rafCrossfade: opacity cover lerp + incoming blur 2.5px → 0.
+- CLOUD_FADE_MS ~320 at 1x; playFadeMs floor 120ms (no hard-cut at 3x).
+- will-change: opacity, filter; clear filter when done. Blur ≤3px.
+
+Keeps opt33 cloud XOR, opt35 unstick, locate/GPS refuse.
+
+Cache: ?v=opt37; SW CACHE=sunny-v-opt37

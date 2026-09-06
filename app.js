@@ -659,13 +659,15 @@
    * opt23: on pan/zoom while Play, hide HTML WMS immediately and show MapLibre
    *   rasters (map-locked); debounce WMS reload on gesture end.
    */
-  var CLOUD_FADE_MS = 600; /* rAF cover fade; opt21; opt36: scaled via playFadeMs */
-  var PLAY_DWELL_MS = 900; /* opt20 base; opt22: scale via playDwellMs(speed) */
+  var CLOUD_FADE_MS = 320; /* opt37: readable soften at 1x; scaled via playFadeMs */
+  var PLAY_PACE_MS = 520; /* opt37: shared wall budget @1x for cloud + radar */
+  var PLAY_DWELL_MS = PLAY_PACE_MS; /* alias — playDwellMs(PLAY_PACE_MS) */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
-  var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
-  var PLAY_PREFETCH = 5; /* opt20: keep next frames warm */
+  var FRAME_PLAY_STEP = 1; /* legacy 1-slot; live step via playFrameStep() */
+  var PLAY_PREFETCH = 9; /* opt37: deeper warm ahead along playFrameStep */
   var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
-  var PLAY_LRU_CAP = 24;
+  var PLAY_LRU_CAP = 28; /* opt37: room for deeper prefetch */
+  var PLAY_BLUR_PX = 2.5; /* opt37: cheap incoming blur during cover fade */
   var WMS_MAX_SIDE_PHONE = 960;
   var WMS_MAX_SIDE_TABLET = 1280;
   var WMS_MAX_SIDE_DESKTOP = 1600;
@@ -830,22 +832,30 @@
     btnPlay.title = playing ? "Pause" : "Play";
   }
 
-  /* opt22: effective dwell from live speed; base constants stay 900 */
+  /* opt22/opt37: effective dwell from live speed; shared PLAY_PACE_MS base */
   function playDwellMs(baseMs) {
     var base = Number(baseMs);
-    if (!isFinite(base) || base <= 0) base = 900;
+    if (!isFinite(base) || base <= 0) base = PLAY_PACE_MS;
     var sp = getPlaySpeed();
     if (!sp || sp <= 0) sp = 1;
     return Math.max(120, Math.round(base / sp));
   }
 
-  /* opt36: cover fade scales with play speed (radar-like pacing).
-     Keep cover behavior; only shorten duration. Floor 80ms; at ≥2x allow 60ms. */
+  /* opt37: skip 10-min cloud slots so weather time tracks Speed even if WMS is slow.
+     1 @ 0.5–1x, 2 @ 1.5–2x, 3 @ 3x. */
+  function playFrameStep() {
+    var sp = getPlaySpeed();
+    if (!sp || sp <= 0) sp = 1;
+    if (sp >= 2.5) return 3;
+    if (sp >= 1.5) return 2;
+    return 1;
+  }
+
+  /* opt36/opt37: cover fade scales with speed. Floor ~120ms so 3x never hard-cuts. */
   function playFadeMs() {
     var sp = getPlaySpeed();
     if (!sp || sp <= 0) sp = 1;
-    var floor = sp >= 2 ? 60 : 80;
-    return Math.max(floor, Math.round(CLOUD_FADE_MS / sp));
+    return Math.max(120, Math.round(CLOUD_FADE_MS / sp));
   }
 
   function releasePlayStaticHold() {
@@ -1078,10 +1088,18 @@
   }
 
   function playImageSize() {
-    /* opt10: cache WMS size; only recompute on real resize/orientation (debounced) */
-    if (playSizeCache) return playSizeCache;
-    playSizeCache = computePlayImageSize();
-    return playSizeCache;
+    /* opt10: cache WMS size; only recompute on real resize/orientation (debounced).
+       opt37: at Speed ≥2 during Play, slightly smaller JPEG for faster WMS. */
+    if (!playSizeCache) playSizeCache = computePlayImageSize();
+    var base = playSizeCache;
+    var sp = getPlaySpeed();
+    if (playMode && sp >= 2) {
+      return {
+        w: Math.max(64, Math.round(base.w * 0.72)),
+        h: Math.max(64, Math.round(base.h * 0.72))
+      };
+    }
+    return base;
   }
 
   function invalidatePlayImageSize() {
@@ -1442,20 +1460,34 @@
       try { cancelAnimationFrame(playFadeRaf); } catch (eC) {}
       playFadeRaf = 0;
     }
+    /* opt37: drop leftover blur if a fade was aborted (hoisted clearPlayBufFilter) */
+    try {
+      clearPlayBufFilter(playBufEl("a"));
+      clearPlayBufFilter(playBufEl("b"));
+    } catch (eClr) {}
+  }
+
+  function clearPlayBufFilter(el) {
+    if (!el || !el.style) return;
+    try { el.style.filter = ""; } catch (eF) {}
   }
 
   function rafCrossfade(back, front, gen, resolve) {
     /* opt21 cover fade: outgoing stays full; only incoming 0→op on top.
-       Never lerp both to partial — that dipped below full coverage → basemap flash. */
+       Never lerp both to partial — that dipped below full coverage → basemap flash.
+       opt37: cheap blur lerp on incoming (PLAY_BLUR_PX → 0) synced with opacity. */
     var targetOp = gibsEffectiveOpacity();
     var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    var dur = playFadeMs(); /* opt36: speed-scaled cover fade */
+    var dur = playFadeMs(); /* opt36/opt37: speed-scaled cover fade */
+    var blurMax = PLAY_BLUR_PX;
     if (front) {
       front.style.opacity = String(targetOp);
+      clearPlayBufFilter(front);
       front.classList.add("is-front");
       front.classList.remove("is-incoming");
     }
     back.style.opacity = "0";
+    back.style.filter = "blur(" + blurMax + "px)";
     back.classList.remove("is-front");
     back.classList.add("is-incoming");
     function easeInOut(t) {
@@ -1465,22 +1497,28 @@
       playFadeRaf = 0;
       if (gen !== playLoadGen) {
         try { back.classList.remove("is-incoming"); } catch (eI) {}
+        clearPlayBufFilter(back);
+        clearPlayBufFilter(front);
         resolve(false);
         return;
       }
       var t = Math.min(1, (now - start) / dur);
       var e = easeInOut(t);
       back.style.opacity = String(targetOp * e);
+      /* incoming softens in: blur → 0 with opacity */
+      back.style.filter = "blur(" + (blurMax * (1 - e)).toFixed(2) + "px)";
       /* outgoing stays at full targetOp the whole time */
       if (front) front.style.opacity = String(targetOp);
       if (t < 1) {
         playFadeRaf = requestAnimationFrame(step);
       } else {
         back.style.opacity = String(targetOp);
+        clearPlayBufFilter(back);
         back.classList.add("is-front");
         back.classList.remove("is-incoming");
         if (front) {
           front.style.opacity = "0";
+          clearPlayBufFilter(front);
           front.classList.remove("is-front");
           front.classList.remove("is-incoming");
         }
@@ -1575,9 +1613,10 @@
     if (tabHidden || !cloudTimes.length || playUseOpenMeteo) return;
     var lon = origin ? origin.lon : null;
     var span = sliderMax() + 1;
+    var step = playFrameStep();
     var n;
     for (n = 1; n <= PLAY_PREFETCH; n++) {
-      var idx = fromIndex + n * FRAME_PLAY_STEP;
+      var idx = fromIndex + n * step;
       if (idx > sliderMax()) {
         if (playLoopOn() && span > 0) idx = idx % span;
         else idx = sliderMax();
@@ -2789,7 +2828,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt36");
+      beachWorker = new Worker("beach-worker.js?v=opt37");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4468,7 +4507,7 @@
   var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
   var RADAR_OPTS = "1_1"; /* smoothed + snow */
   var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
-  var RADAR_PLAY_DWELL_MS = 900; /* opt20 base; opt22: playDwellMs(speed) */
+  var RADAR_PLAY_DWELL_MS = PLAY_PACE_MS; /* opt37: shared pace with clouds */
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
   var radarHost = null;
@@ -5222,7 +5261,7 @@
         setCloudFrame(sliderMax(), { forceHires: true });
         return;
       }
-      schedule(Math.min(400, playDwellMs(PLAY_DWELL_MS)));
+      schedule(Math.min(400, playDwellMs(PLAY_PACE_MS)));
     }
     function tick() {
       playTimer = null;
@@ -5248,11 +5287,12 @@
           return;
         }
       } else {
-        next = cloudIndex + FRAME_PLAY_STEP;
+        next = cloudIndex + playFrameStep();
         if (next >= sliderMax()) next = sliderMax();
       }
       playBusy = true;
       var t0 = Date.now();
+      /* opt37: if next frame warm in LRU, fade-only (no cold WMS wait) */
       withPlayFrameTimeout(setCloudFrame(next), PLAY_FRAME_TIMEOUT_MS).then(function (shown) {
         playBusy = false;
         if (playSession !== session) return;
@@ -5278,8 +5318,8 @@
           setCloudFrame(sliderMax(), { forceHires: true });
           return;
         }
-        /* opt36: load+fade count toward speed budget (radar-like wall pacing) */
-        var budget = playDwellMs(PLAY_DWELL_MS);
+        /* opt36/opt37: load+fade count toward shared PLAY_PACE_MS budget */
+        var budget = playDwellMs(PLAY_PACE_MS);
         schedule(Math.max(0, budget - (Date.now() - t0)));
       });
     }
@@ -5727,7 +5767,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt36").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt37").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

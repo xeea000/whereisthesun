@@ -112,12 +112,12 @@ html, body {
   object-fit: fill;
   opacity: 0;
   z-index: 0;
-  /* opacity lerped by rAF in app.js (opt8/opt21 cover fade) — no CSS flash */
+  /* opacity+filter lerped by rAF in app.js (opt8/opt21/opt37 cover blur-fade) — no CSS flash */
   transition: none;
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
-  will-change: opacity;
+  will-change: opacity, filter;
 }
 #cloud-play-layer .cloud-play-buf.is-front {
   /* JS sets inline opacity to --cloud-play-op; under-layer during cover fade */
