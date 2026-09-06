@@ -1,0 +1,20 @@
+SUNNY opt36 — cloud Play speed matches radar pacing
+====================================================
+Cloud Play used playDwellMs(base/speed) for the post-frame delay, but each
+frame also always ran rafCrossfade with fixed CLOUD_FADE_MS=600 and waited
+on GIBS WMS load before scheduling the full dwell. At 3x, dwell≈300ms while
+fade alone is 600ms + load → speed barely changed. Radar applyRadarFrameAt
+is near-instant then dwell-only → 3x worked.
+
+Fixes:
+1) playFadeMs() = max(floor, round(CLOUD_FADE_MS / getPlaySpeed())).
+   Floor 80ms; at speed ≥ 2 allow 60ms so 3x is obvious. Used in
+   rafCrossfade instead of raw CLOUD_FADE_MS. Cover fade behavior kept
+   (outgoing full; incoming 0→op) — only duration scales.
+2) After a successful cloud frame in startPlay tick: budget =
+   playDwellMs(PLAY_DWELL_MS); schedule(max(0, budget - (Date.now()-t0)))
+   so load+fade count toward the speed budget (radar-like wall pacing).
+3) Mid-play speed menu still live via getPlaySpeed() on next fade/dwell.
+4) Radar path unchanged. opt35 unstick logic kept.
+
+Cache: ?v=opt36; SW CACHE=sunny-v-opt36

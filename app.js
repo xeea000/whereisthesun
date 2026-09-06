@@ -659,7 +659,7 @@
    * opt23: on pan/zoom while Play, hide HTML WMS immediately and show MapLibre
    *   rasters (map-locked); debounce WMS reload on gesture end.
    */
-  var CLOUD_FADE_MS = 600; /* rAF cover fade; opt21 */
+  var CLOUD_FADE_MS = 600; /* rAF cover fade; opt21; opt36: scaled via playFadeMs */
   var PLAY_DWELL_MS = 900; /* opt20 base; opt22: scale via playDwellMs(speed) */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
   var FRAME_PLAY_STEP = 1; /* 10-minute satellite steps while playing */
@@ -837,6 +837,15 @@
     var sp = getPlaySpeed();
     if (!sp || sp <= 0) sp = 1;
     return Math.max(120, Math.round(base / sp));
+  }
+
+  /* opt36: cover fade scales with play speed (radar-like pacing).
+     Keep cover behavior; only shorten duration. Floor 80ms; at ≥2x allow 60ms. */
+  function playFadeMs() {
+    var sp = getPlaySpeed();
+    if (!sp || sp <= 0) sp = 1;
+    var floor = sp >= 2 ? 60 : 80;
+    return Math.max(floor, Math.round(CLOUD_FADE_MS / sp));
   }
 
   function releasePlayStaticHold() {
@@ -1440,7 +1449,7 @@
        Never lerp both to partial — that dipped below full coverage → basemap flash. */
     var targetOp = gibsEffectiveOpacity();
     var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    var dur = CLOUD_FADE_MS;
+    var dur = playFadeMs(); /* opt36: speed-scaled cover fade */
     if (front) {
       front.style.opacity = String(targetOp);
       front.classList.add("is-front");
@@ -2780,7 +2789,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt35");
+      beachWorker = new Worker("beach-worker.js?v=opt36");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -5269,9 +5278,9 @@
           setCloudFrame(sliderMax(), { forceHires: true });
           return;
         }
-        /* Min dwell after reveal; next frame already prefetching into LRU */
-        void t0;
-        schedule(playDwellMs(PLAY_DWELL_MS));
+        /* opt36: load+fade count toward speed budget (radar-like wall pacing) */
+        var budget = playDwellMs(PLAY_DWELL_MS);
+        schedule(Math.max(0, budget - (Date.now() - t0)));
       });
     }
     var startIdx = clampIndex(cloudIndex);
@@ -5718,7 +5727,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt35").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt36").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
