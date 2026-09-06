@@ -685,6 +685,10 @@
   var timeTicksSig = "";
   var playHoldStaticUntilFirst = false; /* opt21: keep MapLibre under play until first cover */
   var playGestureActive = false; /* opt23: map-locked tiles while pan/zoom in Play */
+  var playGestureWatchTimer = null; /* opt35: force-clear stuck map lock */
+  var PLAY_GESTURE_MAX_MS = 2500;
+  var PLAY_FRAME_TIMEOUT_MS = 8000; /* opt35: wedged setCloudFrame must not stick playBusy */
+  var PLAY_HOLD_MAX_RETRIES = 3;
   var playFrontBuf = "a";
   var playImgCache = Object.create(null); /* LRU: key -> {ok,url,img,key} */
   var playLruOrder = []; /* oldest → newest keys */
@@ -1703,12 +1707,12 @@
   function exitPlayMode() {
     playMode = false;
     playHoldStaticUntilFirst = false;
-    playGestureActive = false;
+    forceClearPlayGesture("exit");
     playLoadGen += 1;
     cancelPlayFade();
-    if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
     softShowPlayOverlayAfterGesture();
     hidePlayOverlay();
+    /* opt35: never leave MapLibre clouds muted or overlay map-locked after Play */
     setMapLibreCloudsHidden(false);
     /* opt28: Pause mid-timeline keeps that frame; NOW only if playhead is at end */
     if (cloudTimes.length) {
@@ -1732,6 +1736,59 @@
     var layer = ensurePlayLayer();
     if (!layer) return;
     layer.classList.remove("is-map-locked");
+  }
+
+  function clearPlayGestureWatch() {
+    if (playGestureWatchTimer) {
+      clearTimeout(playGestureWatchTimer);
+      playGestureWatchTimer = null;
+    }
+  }
+
+  /* opt35: stuck pan/zoom lock must not freeze the Play ticker forever */
+  function forceClearPlayGesture(reason) {
+    void reason;
+    clearPlayGestureWatch();
+    if (playMoveTimer) { clearTimeout(playMoveTimer); playMoveTimer = null; }
+    playGestureActive = false;
+    softShowPlayOverlayAfterGesture();
+  }
+
+  function armPlayGestureWatch() {
+    clearPlayGestureWatch();
+    playGestureWatchTimer = setTimeout(function () {
+      playGestureWatchTimer = null;
+      if (!playGestureActive) return;
+      try {
+        if (map && (map.isMoving() || map.isZooming())) {
+          armPlayGestureWatch();
+          return;
+        }
+      } catch (eArm) {}
+      forceClearPlayGesture("watchdog");
+    }, PLAY_GESTURE_MAX_MS);
+  }
+
+  function withPlayFrameTimeout(p, ms) {
+    return new Promise(function (resolve) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        resolve(false);
+      }, ms);
+      Promise.resolve(p).then(function (shown) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(shown);
+      }, function () {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(false);
+      });
+    });
   }
 
   function showPlayLockedMapClouds() {
@@ -1760,6 +1817,7 @@
     playLoadGen += 1;
     cancelPlayFade();
     playGestureActive = true;
+    armPlayGestureWatch();
     softHidePlayOverlayForGesture();
     showPlayLockedMapClouds();
   }
@@ -1767,16 +1825,14 @@
   function endPlayMapLock() {
     /* Debounced WMS reload for new bbox; cancel if still dragging */
     if (!playMode || tabHidden) {
-      playGestureActive = false;
-      softShowPlayOverlayAfterGesture();
+      forceClearPlayGesture("idle");
       return;
     }
     if (playMoveTimer) clearTimeout(playMoveTimer);
     playMoveTimer = setTimeout(function () {
       playMoveTimer = null;
       if (!playMode) {
-        playGestureActive = false;
-        softShowPlayOverlayAfterGesture();
+        forceClearPlayGesture("idle");
         return;
       }
       try {
@@ -1807,14 +1863,17 @@
             showPlayLockedMapClouds();
             playHoldStaticUntilFirst = false;
           }
+          clearPlayGestureWatch();
           playGestureActive = false;
         }).catch(function () {
           softHidePlayOverlayForGesture();
           showPlayLockedMapClouds();
           playHoldStaticUntilFirst = false;
+          clearPlayGestureWatch();
           playGestureActive = false;
         });
       } else {
+        clearPlayGestureWatch();
         playGestureActive = false;
       }
     }, PLAY_MOVE_DEBOUNCE_MS);
@@ -2721,7 +2780,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt32");
+      beachWorker = new Worker("beach-worker.js?v=opt35");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4735,11 +4794,21 @@
   function stopCloudPlayOnly() {
     playSession += 1;
     playBusy = false;
-    playGestureActive = false;
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
     if (playMode) exitPlayMode();
-    else playGestureActive = false;
+    else {
+      forceClearPlayGesture("stop");
+      try { hidePlayOverlay(); } catch (eHideStop) {}
+      setMapLibreCloudsHidden(false);
+      if (cloudTimes.length) {
+        try {
+          var isoStop = goesIsoForStaticRestore();
+          presentStaticGibs(gibsTiles(isoStop, origin ? origin.lon : null));
+        } catch (ePs) {}
+      }
+      try { applyHires(); } catch (eAhStop) {}
+    }
   }
 
   function startRadarPlay(opts) {
@@ -5095,13 +5164,15 @@
   function startPlay(opts) {
     opts = opts || {};
     var resume = !!opts.resume;
-    if (resume) {
-      if (playTimer) { clearTimeout(playTimer); playTimer = null; }
-      playBusy = false;
-      radarPlayBusy = false;
-    } else if (playTimer || playBusy || radarPlayBusy) {
-      return;
+    /* opt35: always unstick busy/scrub/gesture — never no-op on stale playBusy */
+    playBusy = false;
+    radarPlayBusy = false;
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    if (scrubbing) {
+      scrubbing = false;
+      scrubWasPlaying = false;
     }
+    if (playGestureActive) forceClearPlayGesture("startPlay");
     /* opt19: Play stays in active overlay mode — never flips Clouds/Radar */
     if (radarOn()) {
       startRadarPlay({ resume: resume });
@@ -5128,9 +5199,21 @@
     }
     var session = ++playSession;
     var holdTarget = null;
+    var holdFails = 0;
     function schedule(ms) {
       if (playSession !== session) return;
       playTimer = setTimeout(tick, ms);
+    }
+    function skipMissingHold(failedIdx) {
+      holdTarget = null;
+      holdFails = 0;
+      try { setStatus("Skipping missing cloud frame…"); } catch (eSk) {}
+      if (failedIdx >= sliderMax() && !playLoopOn()) {
+        stopPlay();
+        setCloudFrame(sliderMax(), { forceHires: true });
+        return;
+      }
+      schedule(Math.min(400, playDwellMs(PLAY_DWELL_MS)));
     }
     function tick() {
       playTimer = null;
@@ -5161,16 +5244,26 @@
       }
       playBusy = true;
       var t0 = Date.now();
-      setCloudFrame(next).then(function (shown) {
+      withPlayFrameTimeout(setCloudFrame(next), PLAY_FRAME_TIMEOUT_MS).then(function (shown) {
         playBusy = false;
         if (playSession !== session) return;
         if (!shown) {
-          /* HOLD visible frame; retry the same target index */
+          /* HOLD visible frame; retry same target, then skip (opt35) */
+          if (holdTarget === next) holdFails += 1;
+          else {
+            holdTarget = next;
+            holdFails = 1;
+          }
+          if (holdFails >= PLAY_HOLD_MAX_RETRIES) {
+            skipMissingHold(next);
+            return;
+          }
           holdTarget = next;
           schedule(600);
           return;
         }
         holdTarget = null;
+        holdFails = 0;
         if (cloudIndex >= sliderMax() && !playLoopOn()) {
           stopPlay();
           setCloudFrame(sliderMax(), { forceHires: true });
@@ -5179,12 +5272,6 @@
         /* Min dwell after reveal; next frame already prefetching into LRU */
         void t0;
         schedule(playDwellMs(PLAY_DWELL_MS));
-      }).catch(function () {
-        playBusy = false;
-        if (playSession === session) {
-          holdTarget = next;
-          schedule(600);
-        }
       });
     }
     var startIdx = clampIndex(cloudIndex);
@@ -5197,7 +5284,8 @@
     }
     testWmsCors().then(function () {
       if (playSession !== session) return;
-      setCloudFrame(startIdx).then(function () {
+      withPlayFrameTimeout(setCloudFrame(startIdx), PLAY_FRAME_TIMEOUT_MS).then(function () {
+        playBusy = false;
         if (playSession !== session) return;
         prefetchPlayIndices(startIdx);
         schedule(80);
@@ -5206,8 +5294,15 @@
   }
 
   function togglePlay() {
-    if (playTimer || playBusy || btnPlay.getAttribute("aria-pressed") === "true") {
+    var pressed = !!(btnPlay && btnPlay.getAttribute("aria-pressed") === "true");
+    /* Actively ticking or Pause while live → stop */
+    if (playTimer) {
       stopPlay();
+      return;
+    }
+    /* opt35: UI says playing but ticker died → recover/resume, do not confuse stop */
+    if (pressed) {
+      startPlay({ resume: true });
       return;
     }
     startPlay();
@@ -5454,8 +5549,13 @@
     if (scrubbing) endScrub();
   }
   document.addEventListener("pointerup", onScrubPointerUp);
+  document.addEventListener("pointercancel", onScrubPointerUp);
   document.addEventListener("mouseup", onScrubPointerUp);
   document.addEventListener("touchend", onScrubPointerUp);
+  document.addEventListener("touchcancel", onScrubPointerUp);
+  window.addEventListener("blur", function () {
+    if (scrubbing) endScrub();
+  });
   cloudOpacityEl.addEventListener("input", function () {
     if (radarOn() || cloudOpacityEl.disabled) return;
     var pct = Math.max(0, Math.min(100, Math.round(Number(cloudOpacityEl.value))));
@@ -5566,6 +5666,12 @@
       tabHidden = true;
       stopRadarRefresh();
       try { if (window.__sunnyFpsStop) window.__sunnyFpsStop(); } catch (eFps) {}
+      /* opt35: stuck scrub must not leave play ticker wedged on return */
+      if (scrubbing) {
+        scrubbing = false;
+        scrubWasPlaying = false;
+      }
+      forceClearPlayGesture("hidden");
       /* opt10: abort/ignore Play WMS prefetch + in-flight frame loads */
       playLoadGen += 1;
       playLoadPending = Object.create(null);
@@ -5612,7 +5718,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt32").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt35").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

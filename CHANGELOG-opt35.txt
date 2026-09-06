@@ -1,0 +1,23 @@
+SUNNY opt35 — unstick Play + cloud frame hangs
+================================================
+Play / cloud layer sometimes froze: wedged frame promises left playBusy
+true so startPlay early-returned; stuck aria-pressed with dead ticker;
+scrubbing or playGestureActive stuck → infinite 200ms reschedule;
+holdTarget retried failed WMS forever; map-locked overlay left up.
+
+Fixes:
+A) startPlay always clears playBusy/radarPlayBusy; clears stuck scrubbing
+   and force-clears playGestureActive. togglePlay: live playTimer → stop;
+   aria-pressed with no timer → startPlay({resume:true}); else startPlay.
+B) setCloudFrame in Play wrapped with ~8s timeout (shown=false, clear
+   busy). holdTarget retries capped at 3 then skip ahead + status
+   "Skipping missing cloud frame…".
+C) pointercancel/touchcancel/blur + visibility hidden force end scrub /
+   clear gesture. playGestureActive watchdog ~2.5s soft-resets lock.
+D) stopPlay/exitPlayMode: clear is-map-locked, unhide MapLibre clouds,
+   re-presentStaticGibs + applyHires.
+
+Kept: opt28 scrub-resume, opt29 resume-from-playhead, opt33 GeoColor/IEM
+XOR, locate opt34, no MODIS.
+
+Cache: ?v=opt35; SW CACHE=sunny-v-opt35
