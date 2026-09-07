@@ -1,0 +1,29 @@
+SUNNY opt38 — scrub throttle, play prefetch, gesture pause, mobile WMS, idle warm
+================================================================================
+Five smoothness / responsiveness fixes. Keeps opt35–37 pace, blur-fade, unstick, locate.
+
+1) Scrub rAF throttle
+   - Slider input stores desired index; one requestAnimationFrame applies per frame.
+   - endScrub / change / pointerup flush pending frame immediately (final index).
+   - opt28 scrub-was-playing resume preserved.
+
+2) Play prefetch overlap
+   - prefetchPlayIndices at tick start and as soon as frame reveal/load begins
+     (not only when shown=true). Also after schedule.
+   - While current frame loads, still warms n=1..PLAY_PREFETCH along playFrameStep.
+
+3) Pan/zoom: pause heavy work
+   - mapGesturing true on movestart/zoomstart; false on moveend/zoomend.
+   - While gesturing: skip maybeIdlePrefetchRing; defer new sunny weather batches;
+     MOVE_DEBOUNCE moveend remains the resume point. Play map-lock (opt23/35) intact.
+
+4) Faster mobile Play WMS
+   - playImageSize: narrow (<700) ~75% of desktop size; keep opt37 ≥2x 0.72 shrink.
+   - Min-edge clamp ~512 when base allows (else ≥64).
+
+5) Idle GOES warm-cache
+   - After ~1.7s idle (post moveend / tab visible), quiet-prefetch ~3 nearby
+     cloudTimes WMS into playImgCache via loadImageSrc / gibsWmsFrameMeta.
+   - Cancel on scrub / play / hide tab / gesture.
+
+Cache: ?v=opt38; SW CACHE=sunny-v-opt38

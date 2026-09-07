@@ -664,7 +664,7 @@
   var PLAY_DWELL_MS = PLAY_PACE_MS; /* alias — playDwellMs(PLAY_PACE_MS) */
   var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
   var FRAME_PLAY_STEP = 1; /* legacy 1-slot; live step via playFrameStep() */
-  var PLAY_PREFETCH = 9; /* opt37: deeper warm ahead along playFrameStep */
+  var PLAY_PREFETCH = 9; /* opt37/opt38: deeper warm ahead along playFrameStep */
   var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
   var PLAY_LRU_CAP = 28; /* opt37: room for deeper prefetch */
   var PLAY_BLUR_PX = 2.5; /* opt37: cheap incoming blur during cover fade */
@@ -684,6 +684,12 @@
   var playMode = false;
   var scrubbing = false; /* opt28: pointer on #time-slider */
   var scrubWasPlaying = false; /* opt28: resume play after scrub if it was on */
+  var scrubDesiredIdx = null; /* opt38: coalesce slider input to one apply/frame */
+  var scrubRaf = 0;
+  var mapGesturing = false; /* opt38: pan/zoom — pause heavy idle work */
+  var idleGoesWarmTimer = null; /* opt38: quiet nearby WMS warm into playImgCache */
+  var IDLE_GOES_WARM_MS = 1700;
+  var IDLE_GOES_WARM_COUNT = 3;
   var timeTicksSig = "";
   var playHoldStaticUntilFirst = false; /* opt21: keep MapLibre under play until first cover */
   var playGestureActive = false; /* opt23: map-locked tiles while pan/zoom in Play */
@@ -1089,17 +1095,31 @@
 
   function playImageSize() {
     /* opt10: cache WMS size; only recompute on real resize/orientation (debounced).
-       opt37: at Speed ≥2 during Play, slightly smaller JPEG for faster WMS. */
+       opt37: at Speed ≥2 during Play, slightly smaller JPEG for faster WMS.
+       opt38: narrow viewports (<700) use ~75% of desktop cap for faster mobile WMS. */
     if (!playSizeCache) playSizeCache = computePlayImageSize();
     var base = playSizeCache;
     var sp = getPlaySpeed();
-    if (playMode && sp >= 2) {
-      return {
-        w: Math.max(64, Math.round(base.w * 0.72)),
-        h: Math.max(64, Math.round(base.h * 0.72))
-      };
+    var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
+    var cw = (el && el.clientWidth) || window.innerWidth || 800;
+    var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
+    var scale = 1;
+    if (narrow) scale *= 0.75;
+    if (playMode && sp >= 2) scale *= 0.72;
+    if (scale >= 0.999) return base;
+    var w = Math.round(base.w * scale);
+    var h = Math.round(base.h * scale);
+    /* Clamp min edge ~512 when base allows, else keep ≥64 floor */
+    var minEdge = Math.min(w, h);
+    var baseMin = Math.min(base.w, base.h);
+    if (minEdge < 512 && baseMin >= 512) {
+      var up = 512 / Math.max(1, minEdge);
+      w = Math.round(w * up);
+      h = Math.round(h * up);
     }
-    return base;
+    w = Math.max(64, Math.min(base.w, w));
+    h = Math.max(64, Math.min(base.h, h));
+    return { w: w, h: h };
   }
 
   function invalidatePlayImageSize() {
@@ -1630,6 +1650,48 @@
     }
   }
 
+  function cancelIdleGoesWarm() {
+    if (idleGoesWarmTimer) {
+      clearTimeout(idleGoesWarmTimer);
+      idleGoesWarmTimer = null;
+    }
+  }
+
+  function scheduleIdleGoesWarm() {
+    cancelIdleGoesWarm();
+    if (tabHidden || playMode || mapGesturing || scrubbing || radarOn()) return;
+    if (!cloudTimes.length || playUseOpenMeteo) return;
+    idleGoesWarmTimer = setTimeout(function () {
+      idleGoesWarmTimer = null;
+      warmIdleGoesCache();
+    }, IDLE_GOES_WARM_MS);
+  }
+
+  function warmIdleGoesCache() {
+    /* opt38: quiet 2–4 nearby GOES WMS into playImgCache while idle */
+    if (tabHidden || playMode || mapGesturing || scrubbing || radarOn()) return;
+    if (!cloudTimes.length || playUseOpenMeteo) return;
+    try {
+      if (map && (map.isMoving() || map.isZooming())) return;
+    } catch (eIdle) {}
+    var lon = origin ? origin.lon : null;
+    var from = cloudIndex;
+    var offsets = [-2, -1, 1, 2];
+    var warmed = 0;
+    var oi;
+    for (oi = 0; oi < offsets.length && warmed < IDLE_GOES_WARM_COUNT; oi++) {
+      var idx = clampIndex(from + offsets[oi]);
+      if (idx === from) continue;
+      var iso = cloudTimes[idx];
+      if (!iso) continue;
+      var meta = gibsWmsFrameMeta(iso, lon);
+      if (!playImgCache[meta.key] && !playLoadPending[meta.key]) {
+        loadImageSrc(meta.url, false, meta.key);
+        warmed += 1;
+      }
+    }
+  }
+
   /* --- Open-Meteo fallback heatmap (only if WMS Image CORS fails) --- */
   var omPlayGrid = null;
   var omPlayPromise = null;
@@ -1742,6 +1804,7 @@
   }
 
   function enterPlayMode() {
+    cancelIdleGoesWarm();
     playMode = true;
     omPlayGrid = null;
     omPlayPromise = null;
@@ -1966,8 +2029,10 @@
     var p;
     var livePlay = playMode && !scrubbing;
     if (livePlay) {
+      /* opt38: kick prefetch as soon as reveal/load starts — not only after shown */
+      prefetchPlayIndices(cloudIndex);
       p = presentPlayFrame(iso).then(function (shown) {
-        if (shown) prefetchPlayIndices(cloudIndex);
+        prefetchPlayIndices(cloudIndex);
         return shown;
       });
     } else {
@@ -2828,7 +2893,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt37");
+      beachWorker = new Worker("beach-worker.js?v=opt38");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -2934,7 +2999,7 @@
   }
 
   function maybeIdlePrefetchRing() {
-    if (idlePrefetchBusy || tabHidden || !beachManifest || !beachManifest.regions) return;
+    if (mapGesturing || idlePrefetchBusy || tabHidden || !beachManifest || !beachManifest.regions) return;
     if (!beachDb || !beachDb.length) return;
     var lat = origin ? origin.lat : DEFAULT_WARM_LAT;
     var lon = origin ? origin.lon : DEFAULT_WARM_LON;
@@ -3955,6 +4020,12 @@
       if (found.length >= want || i >= list.length) {
         found.sort(sunnySortCmp);
         return Promise.resolve(found.slice(0, want));
+      }
+      /* opt38: don't start a new sunny weather batch mid pan/zoom */
+      if (mapGesturing) {
+        return new Promise(function (resolve) {
+          setTimeout(resolve, 180);
+        }).then(step);
       }
       var chunk = list.slice(i, i + WX_BATCH);
       i += chunk.length;
@@ -5292,6 +5363,8 @@
       }
       playBusy = true;
       var t0 = Date.now();
+      /* opt38: prefetch ahead at tick start even while current frame loads */
+      prefetchPlayIndices(next);
       /* opt37: if next frame warm in LRU, fade-only (no cold WMS wait) */
       withPlayFrameTimeout(setCloudFrame(next), PLAY_FRAME_TIMEOUT_MS).then(function (shown) {
         playBusy = false;
@@ -5320,6 +5393,7 @@
         }
         /* opt36/opt37: load+fade count toward shared PLAY_PACE_MS budget */
         var budget = playDwellMs(PLAY_PACE_MS);
+        prefetchPlayIndices(cloudIndex);
         schedule(Math.max(0, budget - (Date.now() - t0)));
       });
     }
@@ -5358,13 +5432,18 @@
   }
 
   map.on("movestart", function () {
+    mapGesturing = true;
+    cancelIdleGoesWarm();
     if (playMode) beginPlayMapLock();
   });
   map.on("zoomstart", function () {
+    mapGesturing = true;
+    cancelIdleGoesWarm();
     if (playMode) beginPlayMapLock();
   });
 
   map.on("zoomend", function () {
+    mapGesturing = false;
     if (playMode) {
       endPlayMapLock();
       applyCloudRasterResampling();
@@ -5393,6 +5472,7 @@
   window.addEventListener("orientationchange", schedulePlayImageSizeRefresh);
 
   map.on("moveend", function () {
+    mapGesturing = false;
     if (playMode) {
       endPlayMapLock();
     } else {
@@ -5401,6 +5481,8 @@
     saveLastViewDebounced();
     if (moveTimer) clearTimeout(moveTimer);
     moveTimer = setTimeout(function () {
+      /* opt38: resume heavy work only after gesture quiet (MOVE_DEBOUNCE) */
+      if (mapGesturing) return;
       applyCloudRasterResampling();
       paintBeaches(beaches);
       if (allMode) {
@@ -5413,6 +5495,7 @@
         } catch (eMove) {}
       }
       maybeIdlePrefetchRing();
+      scheduleIdleGoesWarm();
     }, MOVE_DEBOUNCE_MS);
   });
 
@@ -5554,6 +5637,7 @@
   function beginScrub() {
     if (scrubbing) return;
     scrubbing = true;
+    cancelIdleGoesWarm();
     scrubWasPlaying = isPlaying();
     if (scrubWasPlaying) {
       /* pause advance only — keep playMode + Pause button */
@@ -5566,11 +5650,32 @@
   }
 
   function applyScrubFrame() {
+    var raw = scrubDesiredIdx != null ? scrubDesiredIdx : slider.value;
+    scrubDesiredIdx = null;
     if (radarOn()) {
-      setRadarFrame(clampRadarIndex(slider.value));
+      setRadarFrame(clampRadarIndex(raw));
       return;
     }
-    setCloudFrame(clampIndex(slider.value), { forceHires: true });
+    setCloudFrame(clampIndex(raw), { forceHires: true });
+  }
+
+  function flushScrubFrame() {
+    /* opt38: cancel pending rAF and apply final index immediately */
+    if (scrubRaf) {
+      try { cancelAnimationFrame(scrubRaf); } catch (eCaf) {}
+      scrubRaf = 0;
+    }
+    if (scrubDesiredIdx == null) scrubDesiredIdx = Number(slider.value);
+    applyScrubFrame();
+  }
+
+  function scheduleScrubFrame() {
+    if (scrubRaf) return;
+    scrubRaf = requestAnimationFrame(function () {
+      scrubRaf = 0;
+      if (scrubDesiredIdx == null) return;
+      applyScrubFrame();
+    });
   }
 
   function endScrub() {
@@ -5578,11 +5683,14 @@
     scrubbing = false;
     var was = scrubWasPlaying;
     scrubWasPlaying = false;
-    applyScrubFrame();
+    flushScrubFrame();
+    cancelIdleGoesWarm();
     if (was) {
       startPlay({ resume: true });
     } else if (radarOn() && !tabHidden && radarIndex >= radarSliderMax()) {
       startRadarRefresh();
+    } else {
+      scheduleIdleGoesWarm();
     }
   }
 
@@ -5591,7 +5699,9 @@
   slider.addEventListener("touchstart", beginScrub, { passive: true });
   slider.addEventListener("input", function () {
     if (!scrubbing) beginScrub();
-    applyScrubFrame();
+    cancelIdleGoesWarm();
+    scrubDesiredIdx = Number(slider.value);
+    scheduleScrubFrame();
   });
   slider.addEventListener("change", endScrub);
   function onScrubPointerUp() {
@@ -5713,12 +5823,18 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       tabHidden = true;
+      cancelIdleGoesWarm();
       stopRadarRefresh();
       try { if (window.__sunnyFpsStop) window.__sunnyFpsStop(); } catch (eFps) {}
       /* opt35: stuck scrub must not leave play ticker wedged on return */
       if (scrubbing) {
         scrubbing = false;
         scrubWasPlaying = false;
+        if (scrubRaf) {
+          try { cancelAnimationFrame(scrubRaf); } catch (eScrR) {}
+          scrubRaf = 0;
+        }
+        scrubDesiredIdx = null;
       }
       forceClearPlayGesture("hidden");
       /* opt10: abort/ignore Play WMS prefetch + in-flight frame loads */
@@ -5748,6 +5864,8 @@
       if (resumePlay) {
         resumePlay = false;
         startPlay({ resume: true });
+      } else {
+        scheduleIdleGoesWarm();
       }
     }
   });
@@ -5767,7 +5885,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt37").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt38").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
