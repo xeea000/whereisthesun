@@ -1,4 +1,4 @@
-/* SUNNY opt41 — coarse block-matching optical flow (A→B) for Play motion lerp.
+/* SUNNY opt42 — coarse block-matching optical flow (A→B) for Play motion lerp.
    Runs off-main; returns Int16 dx/dy per block. No external deps. */
 "use strict";
 
@@ -74,8 +74,8 @@ self.onmessage = function (ev) {
   try {
     var w = msg.w | 0;
     var h = msg.h | 0;
-    var block = Math.max(4, msg.block | 0 || 8);
-    var search = Math.max(2, Math.min(16, msg.search | 0 || 8));
+    var block = Math.max(4, msg.block | 0 || 12);
+    var search = Math.max(2, Math.min(16, msg.search | 0 || 6));
     if (!w || !h || !msg.a || !msg.b || msg.a.byteLength < w * h * 4) {
       self.postMessage({ id: id, ok: false, error: "bad dims" });
       return;

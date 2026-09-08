@@ -1,0 +1,16 @@
+SUNNY opt42 — motion lerp actually runs (fix timeout)
+
+Root cause (opt41): FLOW_BUDGET_MS 80–120ms; fetch/decode + worker always
+missed → finishFlow(null) → rafCrossfade. Code was live; motion never visible.
+
+Fix:
+- Wait budget = max(800, playFadeMs()); hold frame A until flow ready or expire.
+- Prefetch optical-flow for next pairs during dwell / prefetchPlayIndices.
+- Faster flow: search 6, block 12, maxW 160 always on first pass.
+- Proof: #cloud-play-layer[data-motion="1"] while motion canvas active;
+  console.info("SUNNY motion lerp") for first 3 successful transitions.
+- playLastFrameKey kept for pair-key cache hits.
+- GIBS pixel path retries createImageBitmap / cors img (no silent forever fail).
+
+Radar: unchanged (opt40 single buffer + raster-fade-duration).
+Cache: ?v=opt42; SW CACHE=sunny-v-opt42
