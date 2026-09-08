@@ -112,7 +112,7 @@ html, body {
   object-fit: fill;
   opacity: 0;
   z-index: 0;
-  /* opacity+filter lerped by rAF in app.js (opt8/opt21/opt37 cover blur-fade) — no CSS flash */
+  /* opacity+filter lerped by rAF in app.js (opt8/opt39 linear crossfade + blur) — no CSS flash */
   transition: none;
   pointer-events: none;
   user-select: none;
@@ -120,12 +120,12 @@ html, body {
   will-change: opacity, filter;
 }
 #cloud-play-layer .cloud-play-buf.is-front {
-  /* JS sets inline opacity to --cloud-play-op; under-layer during cover fade */
+  /* JS sets inline opacity; during opt39 lerp both buffers share visual weight */
   z-index: 1;
   opacity: var(--cloud-play-op, 0.90);
 }
 #cloud-play-layer .cloud-play-buf.is-incoming {
-  /* Cover fade: incoming on top while outgoing stays full underneath */
+  /* Linear crossfade: incoming on top; opacities lerp (1−e)/(e) */
   z-index: 2;
 }
 

@@ -667,7 +667,7 @@
   var PLAY_PREFETCH = 9; /* opt37/opt38: deeper warm ahead along playFrameStep */
   var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
   var PLAY_LRU_CAP = 28; /* opt37: room for deeper prefetch */
-  var PLAY_BLUR_PX = 2.5; /* opt37: cheap incoming blur during cover fade */
+  var PLAY_BLUR_PX = 2.5; /* opt37/opt39: cheap incoming blur during linear crossfade */
   var WMS_MAX_SIDE_PHONE = 960;
   var WMS_MAX_SIDE_TABLET = 1280;
   var WMS_MAX_SIDE_DESKTOP = 1600;
@@ -857,7 +857,7 @@
     return 1;
   }
 
-  /* opt36/opt37: cover fade scales with speed. Floor ~120ms so 3x never hard-cuts. */
+  /* opt36/opt37/opt39: linear crossfade duration scales with speed. Floor ~120ms so 3x never hard-cuts. */
   function playFadeMs() {
     var sp = getPlaySpeed();
     if (!sp || sp <= 0) sp = 1;
@@ -898,8 +898,9 @@
   }
 
   function cloudStackBefore() {
-    /* Insert cloud rasters under radar (opt16), else Labels, else beaches */
+    /* Insert cloud rasters under radar dual-buffer (opt16/opt39), else Labels, else beaches */
     if (map.getLayer("radar")) return "radar";
+    if (map.getLayer("radar-b")) return "radar-b";
     var i, id;
     for (i = 0; i < overlayIds.length; i++) {
       id = overlayIds[i];
@@ -921,9 +922,16 @@
   }
 
   function restackRadar() {
-    if (!map || !map.getLayer("radar")) return;
+    if (!map) return;
+    if (!map.getLayer("radar") && !map.getLayer("radar-b")) return;
     var before = radarStackBefore();
-    try { map.moveLayer("radar", before); } catch (eMvR) {}
+    /* Keep A under B; both above clouds, under Labels */
+    if (map.getLayer("radar")) {
+      try { map.moveLayer("radar", before); } catch (eMvR) {}
+    }
+    if (map.getLayer("radar-b")) {
+      try { map.moveLayer("radar-b", before); } catch (eMvR2) {}
+    }
   }
 
   function restackCloudRasters() {
@@ -1493,12 +1501,13 @@
   }
 
   function rafCrossfade(back, front, gen, resolve) {
-    /* opt21 cover fade: outgoing stays full; only incoming 0→op on top.
-       Never lerp both to partial — that dipped below full coverage → basemap flash.
-       opt37: cheap blur lerp on incoming (PLAY_BLUR_PX → 0) synced with opacity. */
+    /* opt39: true linear crossfade — outgoing targetOp*(1−e), incoming targetOp*e.
+       Both buffers stay visible so opacities sum ≈ targetOp (no basemap flash under
+       normal; screen blend still preferred per user request for soft Play).
+       opt37 blur kept on incoming only: blurMax*(1−e) → 0. */
     var targetOp = gibsEffectiveOpacity();
     var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    var dur = playFadeMs(); /* opt36/opt37: speed-scaled cover fade */
+    var dur = playFadeMs(); /* shared pace with radar via playFadeMs */
     var blurMax = PLAY_BLUR_PX;
     if (front) {
       front.style.opacity = String(targetOp);
@@ -1524,11 +1533,10 @@
       }
       var t = Math.min(1, (now - start) / dur);
       var e = easeInOut(t);
+      /* true lerp: front fades out, back fades in */
+      if (front) front.style.opacity = String(targetOp * (1 - e));
       back.style.opacity = String(targetOp * e);
-      /* incoming softens in: blur → 0 with opacity */
       back.style.filter = "blur(" + (blurMax * (1 - e)).toFixed(2) + "px)";
-      /* outgoing stays at full targetOp the whole time */
-      if (front) front.style.opacity = String(targetOp);
       if (t < 1) {
         playFadeRaf = requestAnimationFrame(step);
       } else {
@@ -2893,7 +2901,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt38");
+      beachWorker = new Worker("beach-worker.js?v=opt39");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4570,15 +4578,18 @@
 
 
 
-  /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) === */
+  /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + dual-buffer lerp (opt39) === */
   var RADAR_SRC = "radar";
+  var RADAR_SRC_B = "radar-b";
   var RADAR_LAYER = "radar";
+  var RADAR_LAYER_B = "radar-b";
   var RADAR_OPACITY = 0.7;
   var RADAR_REFRESH_MS = 6 * 60 * 1000; /* ~6 min while Radar on + tab visible + not playing */
   var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
   var RADAR_OPTS = "1_1"; /* smoothed + snow */
   var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
   var RADAR_PLAY_DWELL_MS = PLAY_PACE_MS; /* opt37: shared pace with clouds */
+  var RADAR_TILE_WAIT_MS = 900; /* opt39: wait for back buffer tiles before lerp */
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
   var radarHost = null;
@@ -4587,6 +4598,9 @@
   var radarIndex = 0;
   var radarPlaySession = 0;
   var radarPlayBusy = false;
+  var radarFrontIsA = true; /* opt39: which dual buffer is front */
+  var radarFadeRaf = 0;
+  var radarFadeGen = 0;
 
   function radarOn() {
     return overlayMode === "radar";
@@ -4698,11 +4712,43 @@
     }, RADAR_REFRESH_MS);
   }
 
-  function ensureRadarLayer(url) {
+  function radarFrontPair() {
+    return radarFrontIsA
+      ? { src: RADAR_SRC, layer: RADAR_LAYER }
+      : { src: RADAR_SRC_B, layer: RADAR_LAYER_B };
+  }
+
+  function radarBackPair() {
+    return radarFrontIsA
+      ? { src: RADAR_SRC_B, layer: RADAR_LAYER_B }
+      : { src: RADAR_SRC, layer: RADAR_LAYER };
+  }
+
+  function cancelRadarFade() {
+    radarFadeGen += 1;
+    if (radarFadeRaf) {
+      try { cancelAnimationFrame(radarFadeRaf); } catch (eCr) {}
+      radarFadeRaf = 0;
+    }
+  }
+
+  function setRadarSourceTiles(srcId, url) {
+    if (!map || !url || !srcId) return;
+    var src = map.getSource(srcId);
+    if (!src || typeof src.setTiles !== "function") return;
+    try {
+      var cur = (src.tiles && src.tiles[0]) || "";
+      if (cur !== url) src.setTiles([url]);
+    } catch (eSet) {
+      try { src.setTiles([url]); } catch (e2) {}
+    }
+  }
+
+  function ensureRadarSourceLayer(srcId, layerId, url, opacity, visible) {
     if (!map || !url) return;
     var before = radarStackBefore();
-    if (!map.getSource(RADAR_SRC)) {
-      map.addSource(RADAR_SRC, {
+    if (!map.getSource(srcId)) {
+      map.addSource(srcId, {
         type: "raster",
         tiles: [url],
         tileSize: 256,
@@ -4710,59 +4756,196 @@
         attribution: '<a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>'
       });
     } else {
-      var src = map.getSource(RADAR_SRC);
-      if (src && typeof src.setTiles === "function") {
-        try {
-          var cur = (src.tiles && src.tiles[0]) || "";
-          if (cur !== url) src.setTiles([url]);
-        } catch (eSet) {
-          try { src.setTiles([url]); } catch (e2) {}
-        }
-      }
+      setRadarSourceTiles(srcId, url);
     }
-    if (!map.getLayer(RADAR_LAYER)) {
+    if (!map.getLayer(layerId)) {
       map.addLayer({
-        id: RADAR_LAYER,
+        id: layerId,
         type: "raster",
-        source: RADAR_SRC,
+        source: srcId,
         paint: {
-          "raster-opacity": RADAR_OPACITY,
+          "raster-opacity": opacity,
           "raster-fade-duration": 0,
           "raster-resampling": "linear"
+        },
+        layout: {
+          visibility: visible ? "visible" : "none"
         }
       }, before);
     } else {
-      try { map.setLayoutProperty(RADAR_LAYER, "visibility", "visible"); } catch (eVis) {}
-      try { map.moveLayer(RADAR_LAYER, before); } catch (eMv) {}
+      try {
+        map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+      } catch (eVis) {}
+      try { map.setPaintProperty(layerId, "raster-opacity", opacity); } catch (eOp) {}
+      try { map.moveLayer(layerId, before); } catch (eMv) {}
     }
+  }
+
+  /* Ensure dual buffers exist. Static/non-play: front shows url; back stays opacity 0. */
+  function ensureRadarLayer(url) {
+    if (!map || !url) return;
+    var front = radarFrontPair();
+    var back = radarBackPair();
+    ensureRadarSourceLayer(front.src, front.layer, url, RADAR_OPACITY, true);
+    /* Back buffer: keep a valid tile URL (reuse front if never set) so first Play lerp is ready */
+    var backUrl = url;
+    try {
+      var bsrc = map.getSource(back.src);
+      if (bsrc && bsrc.tiles && bsrc.tiles[0]) backUrl = bsrc.tiles[0];
+    } catch (eBu) {}
+    ensureRadarSourceLayer(back.src, back.layer, backUrl, 0, true);
+    try { map.setPaintProperty(back.layer, "raster-opacity", 0); } catch (eBo) {}
+    try { map.setPaintProperty(front.layer, "raster-opacity", RADAR_OPACITY); } catch (eFo) {}
     restackCloudRasters();
     restackRadar();
   }
 
+  function waitRadarSourceReady(srcId, timeoutMs) {
+    return new Promise(function (resolve) {
+      if (!map || !srcId) {
+        resolve(false);
+        return;
+      }
+      var ms = timeoutMs == null ? RADAR_TILE_WAIT_MS : timeoutMs;
+      var done = false;
+      function finish(ok) {
+        if (done) return;
+        done = true;
+        try { clearTimeout(tid); } catch (eT) {}
+        try { map.off("sourcedata", onData); } catch (eOff) {}
+        try { map.off("idle", onIdle); } catch (eOff2) {}
+        resolve(!!ok);
+      }
+      function onData(e) {
+        if (!e || e.sourceId !== srcId) return;
+        try {
+          if (e.isSourceLoaded || (map.isSourceLoaded && map.isSourceLoaded(srcId))) finish(true);
+        } catch (eChk) {}
+      }
+      function onIdle() { finish(true); }
+      var tid = setTimeout(function () { finish(true); }, ms);
+      try {
+        if (map.isSourceLoaded && map.isSourceLoaded(srcId)) {
+          finish(true);
+          return;
+        }
+      } catch (eAl) {}
+      try { map.on("sourcedata", onData); } catch (eOn) {}
+      try { map.once("idle", onIdle); } catch (eId) {}
+    });
+  }
+
+  function rafRadarCrossfade(frontLayer, backLayer, gen) {
+    return new Promise(function (resolve) {
+      if (!map || !frontLayer || !backLayer) {
+        resolve(false);
+        return;
+      }
+      var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+      var dur = playFadeMs(); /* shared with cloud Play */
+      try { map.setPaintProperty(frontLayer, "raster-opacity", RADAR_OPACITY); } catch (eF0) {}
+      try { map.setPaintProperty(backLayer, "raster-opacity", 0); } catch (eB0) {}
+      try { map.setLayoutProperty(frontLayer, "visibility", "visible"); } catch (eFv) {}
+      try { map.setLayoutProperty(backLayer, "visibility", "visible"); } catch (eBv) {}
+      function easeInOut(t) {
+        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      }
+      function step(now) {
+        radarFadeRaf = 0;
+        if (gen !== radarFadeGen) {
+          resolve(false);
+          return;
+        }
+        var t = Math.min(1, (now - start) / dur);
+        var e = easeInOut(t);
+        try { map.setPaintProperty(frontLayer, "raster-opacity", RADAR_OPACITY * (1 - e)); } catch (eF) {}
+        try { map.setPaintProperty(backLayer, "raster-opacity", RADAR_OPACITY * e); } catch (eB) {}
+        if (t < 1) {
+          radarFadeRaf = requestAnimationFrame(step);
+        } else {
+          try { map.setPaintProperty(backLayer, "raster-opacity", RADAR_OPACITY); } catch (eB1) {}
+          try { map.setPaintProperty(frontLayer, "raster-opacity", 0); } catch (eF1) {}
+          resolve(true);
+        }
+      }
+      radarFadeRaf = requestAnimationFrame(step);
+    });
+  }
+
+  function crossfadeRadarToUrl(url) {
+    if (!map || !url) return Promise.resolve(false);
+    var front = radarFrontPair();
+    var back = radarBackPair();
+    /* Ensure both buffers exist; pin current front tiles/opacity */
+    ensureRadarLayer(
+      (function () {
+        try {
+          var s = map.getSource(front.src);
+          if (s && s.tiles && s.tiles[0]) return s.tiles[0];
+        } catch (eU) {}
+        return url;
+      })()
+    );
+    setRadarSourceTiles(back.src, url);
+    try { map.setPaintProperty(back.layer, "raster-opacity", 0); } catch (eZ) {}
+    try { map.setLayoutProperty(back.layer, "visibility", "visible"); } catch (eV) {}
+    try { map.setPaintProperty(front.layer, "raster-opacity", RADAR_OPACITY); } catch (eFo) {}
+    restackRadar();
+    var gen = ++radarFadeGen;
+    return waitRadarSourceReady(back.src, RADAR_TILE_WAIT_MS).then(function () {
+      if (gen !== radarFadeGen) return false;
+      return rafRadarCrossfade(front.layer, back.layer, gen).then(function (ok) {
+        if (!ok || gen !== radarFadeGen) return false;
+        radarFrontIsA = !radarFrontIsA;
+        return true;
+      });
+    });
+  }
+
   function hideRadarLayer() {
     stopRadarRefresh();
+    cancelRadarFade();
     radarFetchGen += 1;
     radarHost = null;
     radarPath = null;
     radarPast = [];
     radarIndex = 0;
+    radarFrontIsA = true;
     if (!map) return;
-    if (map.getLayer(RADAR_LAYER)) {
-      try { map.removeLayer(RADAR_LAYER); } catch (eRmL) {}
+    var layers = [RADAR_LAYER, RADAR_LAYER_B];
+    var srcs = [RADAR_SRC, RADAR_SRC_B];
+    var i;
+    for (i = 0; i < layers.length; i++) {
+      if (map.getLayer(layers[i])) {
+        try { map.removeLayer(layers[i]); } catch (eRmL) {}
+      }
     }
-    if (map.getSource(RADAR_SRC)) {
-      try { map.removeSource(RADAR_SRC); } catch (eRmS) {}
+    for (i = 0; i < srcs.length; i++) {
+      if (map.getSource(srcs[i])) {
+        try { map.removeSource(srcs[i]); } catch (eRmS) {}
+      }
     }
   }
 
-  function applyRadarFrameAt(i) {
-    if (!radarOn() || !radarPast.length || !radarHost) return false;
+  /* opts.blend: Play linear crossfade via dual buffers; scrub/static = instant setTiles */
+  function applyRadarFrameAt(i, opts) {
+    opts = opts || {};
+    if (!radarOn() || !radarPast.length || !radarHost) {
+      return opts.blend ? Promise.resolve(false) : false;
+    }
     radarIndex = clampRadarIndex(i);
     var frame = radarPast[radarIndex];
-    if (!frame || !frame.path) return false;
+    if (!frame || !frame.path) {
+      return opts.blend ? Promise.resolve(false) : false;
+    }
     radarPath = frame.path;
-    ensureRadarLayer(radarTileUrl(radarHost, frame.path));
+    var url = radarTileUrl(radarHost, frame.path);
     syncRadarTimelineUi();
+    if (opts.blend) {
+      return crossfadeRadarToUrl(url);
+    }
+    cancelRadarFade();
+    ensureRadarLayer(url);
     return true;
   }
 
@@ -4771,10 +4954,10 @@
     if (!radarPast.length || !radarHost) {
       return fetchAndApplyRadar({ quiet: false }).then(function (ok) {
         if (!ok) return false;
-        return applyRadarFrameAt(i);
+        return !!applyRadarFrameAt(i);
       });
     }
-    return Promise.resolve(applyRadarFrameAt(i));
+    return Promise.resolve(!!applyRadarFrameAt(i));
   }
 
   function fetchAndApplyRadar(opts) {
@@ -4906,6 +5089,7 @@
   function stopRadarPlayOnly() {
     radarPlaySession += 1;
     radarPlayBusy = false;
+    cancelRadarFade();
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
   }
@@ -4982,20 +5166,23 @@
         }
       }
       radarPlayBusy = true;
-      /* setTiles keeps prior raster until new tiles arrive — no source clear */
-      var ok = applyRadarFrameAt(next);
-      radarPlayBusy = false;
-      if (radarPlaySession !== session) return;
-      if (!ok) {
-        schedule(400);
-        return;
-      }
-      if (radarIndex >= radarSliderMax() && !playLoopOn()) {
-        stopRadarPlayOnly();
-        if (radarOn() && !tabHidden) startRadarRefresh();
-        return;
-      }
-      schedule(playDwellMs(RADAR_PLAY_DWELL_MS));
+      var t0 = Date.now();
+      /* opt39: dual-buffer linear lerp; load+fade count toward shared pace budget */
+      Promise.resolve(applyRadarFrameAt(next, { blend: true })).then(function (ok) {
+        radarPlayBusy = false;
+        if (radarPlaySession !== session) return;
+        if (!ok) {
+          schedule(400);
+          return;
+        }
+        if (radarIndex >= radarSliderMax() && !playLoopOn()) {
+          stopRadarPlayOnly();
+          if (radarOn() && !tabHidden) startRadarRefresh();
+          return;
+        }
+        var budget = playDwellMs(RADAR_PLAY_DWELL_MS);
+        schedule(Math.max(0, budget - (Date.now() - t0)));
+      });
     }
     var boot = radarPast.length ? Promise.resolve(true) : fetchAndApplyRadar({ quiet: false, jumpLatest: false });
     boot.then(function (ok) {
@@ -5646,6 +5833,8 @@
       radarPlaySession += 1;
       playBusy = false;
       radarPlayBusy = false;
+      try { cancelRadarFade(); } catch (eRf) {}
+      try { cancelPlayFade(); } catch (ePf) {}
     }
   }
 
@@ -5885,7 +6074,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt38").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt39").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

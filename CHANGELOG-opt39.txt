@@ -1,0 +1,22 @@
+SUNNY opt39 — linear lerp crossfade for cloud + radar Play
+
+Goal: soft true linear interpolation between Play frames (not hard cuts / cover-only).
+
+Clouds (#cloud-play-layer double buffer):
+- rafCrossfade: front opacity → targetOp*(1−e), back → targetOp*e (classic crossfade)
+- Keep light incoming blur blurMax*(1−e) → 0; clear filter when done
+- Both buffers visible during fade (sum ≈ targetOp under normal; screen blend kept)
+- Duration via shared playFadeMs() (speed-scaled, floor 120ms)
+- Scrubbing stays snappy (MapLibre static path; no Play lerp)
+
+Radar (MapLibre dual buffer radar + radar-b):
+- Both sources/layers when radar on (RainViewer URL template)
+- Play: new frame on back @ opacity 0; wait sourcedata/idle/timeout; rAF lerp
+  front RADAR_OPACITY*(1−t) ↔ back RADAR_OPACITY*t; then swap front
+- Static/scrub: instant setTiles on front (no blend)
+- Hide both buffers when overlay=clouds; restack XOR with clouds unchanged
+- Shared playFadeMs() / PLAY_PACE_MS budget (load+fade count toward dwell)
+
+Keep: opt35 unstick, opt37 pace/step, opt38 scrub throttle/prefetch, locate, no MODIS.
+
+Cache: ?v=opt39; SW CACHE=sunny-v-opt39
