@@ -1,0 +1,21 @@
+SUNNY opt41 — motion lerp (optical flow) for Play frames
+
+Clouds (required):
+- Between consecutive Play frames A→B: coarse block-matching optical flow at
+  ~160–224px wide (Worker: flow-worker.js; main-thread fallback).
+- Over playFadeMs(): warp A by t·flow, warp B by (t−1)·flow, per-pixel
+  lerp(warpA, warpB, t) onto #cloud-play-layer canvas (.cloud-play-motion).
+- Then show final B on the dual-img front buffer as before.
+- Flow vectors cached per frame-pair key (cap 14). Budget ~80–100ms; on
+  timeout/failure fall back to opt39 rafCrossfade opacity lerp.
+- Always keep a full frame visible (no basemap flash).
+
+Radar (best effort / clouds-only):
+- Keep opt40 single RainViewer MapLibre source — do NOT restore dual tile URLs.
+- Play still uses raster-fade-duration ≈ playFadeMs(); no canvas motion-lerp
+  for radar (avoids CORS/rate-limit spam from capturing tiles).
+
+Keep: opt35 unstick, opt37 pace/frame step, opt38 scrub/prefetch, opt40 GOES
+55m lag + single radar, locate, no MODIS. No starcode. No paid APIs.
+
+Cache: ?v=opt41; SW CACHE=sunny-v-opt41; precache flow-worker.js
