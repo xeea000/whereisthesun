@@ -1,0 +1,23 @@
+SUNNY opt40 — fix GOES lag 404 + radar single-buffer (CORS spam)
+
+GOES NOW / static:
+- GOES_AVAIL_LAG_MS raised to 55 minutes (wall−40m still unpublished → 404)
+- goesLatestIsoSync / buildCloudTimes never tip past goesLastGoodIso after probe
+- Boot defers WMTS paint until resolveGoesLatestIso resolves (no first-paint 404 storm)
+- Probe walk-back kept; failed optimistic tip not painted
+
+Radar:
+- Removed dual MapLibre sources (radar + radar-b) / rafRadarCrossfade tile doubling
+- Single radar raster source/layer (pre-opt39)
+- Play uses raster-fade-duration ≈ playFadeMs(); scrub/static = 0
+- Stops RainViewer rate-limit / CORS ERR_FAILED spam from 2× tile traffic
+
+Clouds:
+- Keep opt39 true linear DOM crossfade (rafCrossfade) — WMS, not RainViewer
+
+Quiet console:
+- Extended map error filter for GIBS / RainViewer image tile noise
+
+Keep: opt35–38 unstick/pace/prefetch/locate, no MODIS.
+
+Cache: ?v=opt40; SW CACHE=sunny-v-opt40

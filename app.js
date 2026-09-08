@@ -258,9 +258,19 @@
     map.on("error", function (e) {
     try {
       var msg = (e && e.error && e.error.message) ? e.error.message : "";
+      var src = "";
+      try {
+        if (e && e.error && e.error.url) src = String(e.error.url);
+        else if (e && e.sourceId) src = String(e.sourceId);
+      } catch (eSrc) {}
+      var blob = msg + " " + src;
       if (msg.indexOf("Could not load image") !== -1) return;
+      if (msg.indexOf("Failed to fetch") !== -1) return;
       if (msg.indexOf("Not Found") !== -1) return;
-      if (/\b404\b/.test(msg)) return;
+      if (/\b404\b/.test(blob)) return;
+      if (/gibs\.earthdata\.nasa\.gov/i.test(blob)) return;
+      if (/tilecache\.rainviewer\.com/i.test(blob)) return;
+      if (/AjaxError|ImageError|source.*error/i.test(blob) && /\.png|wmts|tile/i.test(blob)) return;
     } catch (eIgn) {}
   });
 
@@ -306,7 +316,7 @@
    * last-known-good from Play WMS / probe. Play WMS + static WMTS share these.
    */
   var GOES_STEP_MS = FRAME_MIN * 60 * 1000;
-  var GOES_AVAIL_LAG_MS = 40 * 60 * 1000; /* wall−40m ceiling (industry lag band) */
+  var GOES_AVAIL_LAG_MS = 55 * 60 * 1000; /* opt40: wall−55m — 40m still 404ed unpublished slots */
   var GOES_PROBE_TTL_MS = 20 * 60 * 1000;
   var GOES_PROBE_BACK_STEPS = 12; /* walk back ≤2h in 10-min steps */
   var goesTimeCache = null; /* { iso, t } */
@@ -346,10 +356,12 @@
   function goesLatestIsoSync() {
     var wallMs = goesWallLatestMs();
     var wallIso = toGoesIso(wallMs);
+    /* opt40: once probed, NEVER tip newer than last successful slot */
     if (goesLastGoodIso) {
       var gMs = goesIsoMs(goesLastGoodIso);
-      if (isFinite(gMs) && gMs <= wallMs && (wallMs - gMs) <= 3 * 3600 * 1000) {
-        return goesLastGoodIso;
+      if (isFinite(gMs)) {
+        var tipMs = Math.min(gMs, wallMs);
+        return toGoesIso(tipMs);
       }
     }
     if (goesTimeCache && goesTimeCache.iso) {
@@ -365,6 +377,11 @@
     latest = snapGoesMs(latest);
     var wall = goesWallLatestMs();
     if (latest > wall) latest = wall;
+    /* opt40: never include times newer than last successful probe */
+    if (goesLastGoodIso) {
+      var gMs = snapGoesMs(goesIsoMs(goesLastGoodIso));
+      if (isFinite(gMs) && latest > gMs) latest = gMs;
+    }
     var start = latest - HOURS_BACK * 3600 * 1000;
     var out = [];
     var t;
@@ -898,9 +915,8 @@
   }
 
   function cloudStackBefore() {
-    /* Insert cloud rasters under radar dual-buffer (opt16/opt39), else Labels, else beaches */
+    /* Insert cloud rasters under radar (opt16/opt40 single buffer), else Labels, else beaches */
     if (map.getLayer("radar")) return "radar";
-    if (map.getLayer("radar-b")) return "radar-b";
     var i, id;
     for (i = 0; i < overlayIds.length; i++) {
       id = overlayIds[i];
@@ -922,16 +938,9 @@
   }
 
   function restackRadar() {
-    if (!map) return;
-    if (!map.getLayer("radar") && !map.getLayer("radar-b")) return;
+    if (!map || !map.getLayer("radar")) return;
     var before = radarStackBefore();
-    /* Keep A under B; both above clouds, under Labels */
-    if (map.getLayer("radar")) {
-      try { map.moveLayer("radar", before); } catch (eMvR) {}
-    }
-    if (map.getLayer("radar-b")) {
-      try { map.moveLayer("radar-b", before); } catch (eMvR2) {}
-    }
+    try { map.moveLayer("radar", before); } catch (eMvR) {}
   }
 
   function restackCloudRasters() {
@@ -2901,7 +2910,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt39");
+      beachWorker = new Worker("beach-worker.js?v=opt40");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -4578,18 +4587,15 @@
 
 
 
-  /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + dual-buffer lerp (opt39) === */
+  /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + single-buffer fade (opt40) === */
   var RADAR_SRC = "radar";
-  var RADAR_SRC_B = "radar-b";
   var RADAR_LAYER = "radar";
-  var RADAR_LAYER_B = "radar-b";
   var RADAR_OPACITY = 0.7;
   var RADAR_REFRESH_MS = 6 * 60 * 1000; /* ~6 min while Radar on + tab visible + not playing */
   var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
   var RADAR_OPTS = "1_1"; /* smoothed + snow */
   var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
   var RADAR_PLAY_DWELL_MS = PLAY_PACE_MS; /* opt37: shared pace with clouds */
-  var RADAR_TILE_WAIT_MS = 900; /* opt39: wait for back buffer tiles before lerp */
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
   var radarHost = null;
@@ -4598,9 +4604,6 @@
   var radarIndex = 0;
   var radarPlaySession = 0;
   var radarPlayBusy = false;
-  var radarFrontIsA = true; /* opt39: which dual buffer is front */
-  var radarFadeRaf = 0;
-  var radarFadeGen = 0;
 
   function radarOn() {
     return overlayMode === "radar";
@@ -4712,43 +4715,25 @@
     }, RADAR_REFRESH_MS);
   }
 
-  function radarFrontPair() {
-    return radarFrontIsA
-      ? { src: RADAR_SRC, layer: RADAR_LAYER }
-      : { src: RADAR_SRC_B, layer: RADAR_LAYER_B };
+  /* opt40: single radar source — MapLibre raster-fade-duration softens Play setTiles
+     without a second live tile URL (dual buffer doubled RainViewer traffic → CORS spam). */
+  function setRadarFadeDuration(ms) {
+    if (!map || !map.getLayer(RADAR_LAYER)) return;
+    var n = Number(ms);
+    if (!isFinite(n) || n < 0) n = 0;
+    try { map.setPaintProperty(RADAR_LAYER, "raster-fade-duration", n); } catch (eFd) {}
   }
 
-  function radarBackPair() {
-    return radarFrontIsA
-      ? { src: RADAR_SRC_B, layer: RADAR_LAYER_B }
-      : { src: RADAR_SRC, layer: RADAR_LAYER };
-  }
-
-  function cancelRadarFade() {
-    radarFadeGen += 1;
-    if (radarFadeRaf) {
-      try { cancelAnimationFrame(radarFadeRaf); } catch (eCr) {}
-      radarFadeRaf = 0;
-    }
-  }
-
-  function setRadarSourceTiles(srcId, url) {
-    if (!map || !url || !srcId) return;
-    var src = map.getSource(srcId);
-    if (!src || typeof src.setTiles !== "function") return;
-    try {
-      var cur = (src.tiles && src.tiles[0]) || "";
-      if (cur !== url) src.setTiles([url]);
-    } catch (eSet) {
-      try { src.setTiles([url]); } catch (e2) {}
-    }
-  }
-
-  function ensureRadarSourceLayer(srcId, layerId, url, opacity, visible) {
+  function ensureRadarLayer(url, opts) {
+    opts = opts || {};
     if (!map || !url) return;
     var before = radarStackBefore();
-    if (!map.getSource(srcId)) {
-      map.addSource(srcId, {
+    var fade = opts.fadeMs;
+    if (fade == null) {
+      fade = (isPlaying() && radarOn()) ? playFadeMs() : 0;
+    }
+    if (!map.getSource(RADAR_SRC)) {
+      map.addSource(RADAR_SRC, {
         type: "raster",
         tiles: [url],
         tileSize: 256,
@@ -4756,196 +4741,76 @@
         attribution: '<a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>'
       });
     } else {
-      setRadarSourceTiles(srcId, url);
+      var src = map.getSource(RADAR_SRC);
+      if (src && typeof src.setTiles === "function") {
+        try {
+          var cur = (src.tiles && src.tiles[0]) || "";
+          if (cur !== url) src.setTiles([url]);
+        } catch (eSet) {
+          try { src.setTiles([url]); } catch (e2) {}
+        }
+      }
     }
-    if (!map.getLayer(layerId)) {
+    if (!map.getLayer(RADAR_LAYER)) {
       map.addLayer({
-        id: layerId,
+        id: RADAR_LAYER,
         type: "raster",
-        source: srcId,
+        source: RADAR_SRC,
         paint: {
-          "raster-opacity": opacity,
-          "raster-fade-duration": 0,
+          "raster-opacity": RADAR_OPACITY,
+          "raster-fade-duration": fade,
           "raster-resampling": "linear"
-        },
-        layout: {
-          visibility: visible ? "visible" : "none"
         }
       }, before);
     } else {
-      try {
-        map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
-      } catch (eVis) {}
-      try { map.setPaintProperty(layerId, "raster-opacity", opacity); } catch (eOp) {}
-      try { map.moveLayer(layerId, before); } catch (eMv) {}
+      try { map.setLayoutProperty(RADAR_LAYER, "visibility", "visible"); } catch (eVis) {}
+      try { map.setPaintProperty(RADAR_LAYER, "raster-opacity", RADAR_OPACITY); } catch (eOp) {}
+      setRadarFadeDuration(fade);
+      try { map.moveLayer(RADAR_LAYER, before); } catch (eMv) {}
     }
-  }
-
-  /* Ensure dual buffers exist. Static/non-play: front shows url; back stays opacity 0. */
-  function ensureRadarLayer(url) {
-    if (!map || !url) return;
-    var front = radarFrontPair();
-    var back = radarBackPair();
-    ensureRadarSourceLayer(front.src, front.layer, url, RADAR_OPACITY, true);
-    /* Back buffer: keep a valid tile URL (reuse front if never set) so first Play lerp is ready */
-    var backUrl = url;
+    /* Drop legacy dual buffer if an old session left it (opt39) */
     try {
-      var bsrc = map.getSource(back.src);
-      if (bsrc && bsrc.tiles && bsrc.tiles[0]) backUrl = bsrc.tiles[0];
-    } catch (eBu) {}
-    ensureRadarSourceLayer(back.src, back.layer, backUrl, 0, true);
-    try { map.setPaintProperty(back.layer, "raster-opacity", 0); } catch (eBo) {}
-    try { map.setPaintProperty(front.layer, "raster-opacity", RADAR_OPACITY); } catch (eFo) {}
+      if (map.getLayer("radar-b")) map.removeLayer("radar-b");
+    } catch (eLb) {}
+    try {
+      if (map.getSource("radar-b")) map.removeSource("radar-b");
+    } catch (eSb) {}
     restackCloudRasters();
     restackRadar();
   }
 
-  function waitRadarSourceReady(srcId, timeoutMs) {
-    return new Promise(function (resolve) {
-      if (!map || !srcId) {
-        resolve(false);
-        return;
-      }
-      var ms = timeoutMs == null ? RADAR_TILE_WAIT_MS : timeoutMs;
-      var done = false;
-      function finish(ok) {
-        if (done) return;
-        done = true;
-        try { clearTimeout(tid); } catch (eT) {}
-        try { map.off("sourcedata", onData); } catch (eOff) {}
-        try { map.off("idle", onIdle); } catch (eOff2) {}
-        resolve(!!ok);
-      }
-      function onData(e) {
-        if (!e || e.sourceId !== srcId) return;
-        try {
-          if (e.isSourceLoaded || (map.isSourceLoaded && map.isSourceLoaded(srcId))) finish(true);
-        } catch (eChk) {}
-      }
-      function onIdle() { finish(true); }
-      var tid = setTimeout(function () { finish(true); }, ms);
-      try {
-        if (map.isSourceLoaded && map.isSourceLoaded(srcId)) {
-          finish(true);
-          return;
-        }
-      } catch (eAl) {}
-      try { map.on("sourcedata", onData); } catch (eOn) {}
-      try { map.once("idle", onIdle); } catch (eId) {}
-    });
-  }
-
-  function rafRadarCrossfade(frontLayer, backLayer, gen) {
-    return new Promise(function (resolve) {
-      if (!map || !frontLayer || !backLayer) {
-        resolve(false);
-        return;
-      }
-      var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-      var dur = playFadeMs(); /* shared with cloud Play */
-      try { map.setPaintProperty(frontLayer, "raster-opacity", RADAR_OPACITY); } catch (eF0) {}
-      try { map.setPaintProperty(backLayer, "raster-opacity", 0); } catch (eB0) {}
-      try { map.setLayoutProperty(frontLayer, "visibility", "visible"); } catch (eFv) {}
-      try { map.setLayoutProperty(backLayer, "visibility", "visible"); } catch (eBv) {}
-      function easeInOut(t) {
-        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      }
-      function step(now) {
-        radarFadeRaf = 0;
-        if (gen !== radarFadeGen) {
-          resolve(false);
-          return;
-        }
-        var t = Math.min(1, (now - start) / dur);
-        var e = easeInOut(t);
-        try { map.setPaintProperty(frontLayer, "raster-opacity", RADAR_OPACITY * (1 - e)); } catch (eF) {}
-        try { map.setPaintProperty(backLayer, "raster-opacity", RADAR_OPACITY * e); } catch (eB) {}
-        if (t < 1) {
-          radarFadeRaf = requestAnimationFrame(step);
-        } else {
-          try { map.setPaintProperty(backLayer, "raster-opacity", RADAR_OPACITY); } catch (eB1) {}
-          try { map.setPaintProperty(frontLayer, "raster-opacity", 0); } catch (eF1) {}
-          resolve(true);
-        }
-      }
-      radarFadeRaf = requestAnimationFrame(step);
-    });
-  }
-
-  function crossfadeRadarToUrl(url) {
-    if (!map || !url) return Promise.resolve(false);
-    var front = radarFrontPair();
-    var back = radarBackPair();
-    /* Ensure both buffers exist; pin current front tiles/opacity */
-    ensureRadarLayer(
-      (function () {
-        try {
-          var s = map.getSource(front.src);
-          if (s && s.tiles && s.tiles[0]) return s.tiles[0];
-        } catch (eU) {}
-        return url;
-      })()
-    );
-    setRadarSourceTiles(back.src, url);
-    try { map.setPaintProperty(back.layer, "raster-opacity", 0); } catch (eZ) {}
-    try { map.setLayoutProperty(back.layer, "visibility", "visible"); } catch (eV) {}
-    try { map.setPaintProperty(front.layer, "raster-opacity", RADAR_OPACITY); } catch (eFo) {}
-    restackRadar();
-    var gen = ++radarFadeGen;
-    return waitRadarSourceReady(back.src, RADAR_TILE_WAIT_MS).then(function () {
-      if (gen !== radarFadeGen) return false;
-      return rafRadarCrossfade(front.layer, back.layer, gen).then(function (ok) {
-        if (!ok || gen !== radarFadeGen) return false;
-        radarFrontIsA = !radarFrontIsA;
-        return true;
-      });
-    });
-  }
-
   function hideRadarLayer() {
     stopRadarRefresh();
-    cancelRadarFade();
     radarFetchGen += 1;
     radarHost = null;
     radarPath = null;
     radarPast = [];
     radarIndex = 0;
-    radarFrontIsA = true;
     if (!map) return;
-    var layers = [RADAR_LAYER, RADAR_LAYER_B];
-    var srcs = [RADAR_SRC, RADAR_SRC_B];
-    var i;
-    for (i = 0; i < layers.length; i++) {
-      if (map.getLayer(layers[i])) {
-        try { map.removeLayer(layers[i]); } catch (eRmL) {}
-      }
+    if (map.getLayer(RADAR_LAYER)) {
+      try { map.removeLayer(RADAR_LAYER); } catch (eRmL) {}
     }
-    for (i = 0; i < srcs.length; i++) {
-      if (map.getSource(srcs[i])) {
-        try { map.removeSource(srcs[i]); } catch (eRmS) {}
-      }
+    if (map.getSource(RADAR_SRC)) {
+      try { map.removeSource(RADAR_SRC); } catch (eRmS) {}
     }
+    try {
+      if (map.getLayer("radar-b")) map.removeLayer("radar-b");
+    } catch (eLb2) {}
+    try {
+      if (map.getSource("radar-b")) map.removeSource("radar-b");
+    } catch (eSb2) {}
   }
 
-  /* opts.blend: Play linear crossfade via dual buffers; scrub/static = instant setTiles */
   function applyRadarFrameAt(i, opts) {
     opts = opts || {};
-    if (!radarOn() || !radarPast.length || !radarHost) {
-      return opts.blend ? Promise.resolve(false) : false;
-    }
+    if (!radarOn() || !radarPast.length || !radarHost) return false;
     radarIndex = clampRadarIndex(i);
     var frame = radarPast[radarIndex];
-    if (!frame || !frame.path) {
-      return opts.blend ? Promise.resolve(false) : false;
-    }
+    if (!frame || !frame.path) return false;
     radarPath = frame.path;
-    var url = radarTileUrl(radarHost, frame.path);
+    var fade = opts.blend ? playFadeMs() : 0;
+    ensureRadarLayer(radarTileUrl(radarHost, frame.path), { fadeMs: fade });
     syncRadarTimelineUi();
-    if (opts.blend) {
-      return crossfadeRadarToUrl(url);
-    }
-    cancelRadarFade();
-    ensureRadarLayer(url);
     return true;
   }
 
@@ -4954,10 +4819,10 @@
     if (!radarPast.length || !radarHost) {
       return fetchAndApplyRadar({ quiet: false }).then(function (ok) {
         if (!ok) return false;
-        return !!applyRadarFrameAt(i);
+        return applyRadarFrameAt(i);
       });
     }
-    return Promise.resolve(!!applyRadarFrameAt(i));
+    return Promise.resolve(applyRadarFrameAt(i));
   }
 
   function fetchAndApplyRadar(opts) {
@@ -4993,7 +4858,7 @@
       var frame = radarPast[clampRadarIndex(radarIndex)] || pickRadarFrame(data);
       if (!frame || !frame.path) throw new Error("radar frame");
       radarPath = frame.path;
-      ensureRadarLayer(radarTileUrl(data.host, frame.path));
+      ensureRadarLayer(radarTileUrl(data.host, frame.path), { fadeMs: 0 });
       syncRadarTimelineUi();
       return true;
     }).catch(function () {
@@ -5089,7 +4954,7 @@
   function stopRadarPlayOnly() {
     radarPlaySession += 1;
     radarPlayBusy = false;
-    cancelRadarFade();
+    setRadarFadeDuration(0);
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
   }
@@ -5132,6 +4997,7 @@
     }
     stopRadarRefresh();
     setPlayButtonPlaying(true);
+    setRadarFadeDuration(playFadeMs());
     var session = ++radarPlaySession;
     function schedule(ms) {
       if (radarPlaySession !== session) return;
@@ -5141,6 +5007,7 @@
       playTimer = null;
       if (radarPlaySession !== session || tabHidden || !radarOn()) return;
       if (scrubbing) {
+        setRadarFadeDuration(0);
         schedule(200);
         return;
       }
@@ -5166,23 +5033,20 @@
         }
       }
       radarPlayBusy = true;
-      var t0 = Date.now();
-      /* opt39: dual-buffer linear lerp; load+fade count toward shared pace budget */
-      Promise.resolve(applyRadarFrameAt(next, { blend: true })).then(function (ok) {
-        radarPlayBusy = false;
-        if (radarPlaySession !== session) return;
-        if (!ok) {
-          schedule(400);
-          return;
-        }
-        if (radarIndex >= radarSliderMax() && !playLoopOn()) {
-          stopRadarPlayOnly();
-          if (radarOn() && !tabHidden) startRadarRefresh();
-          return;
-        }
-        var budget = playDwellMs(RADAR_PLAY_DWELL_MS);
-        schedule(Math.max(0, budget - (Date.now() - t0)));
-      });
+      /* opt40: single setTiles + MapLibre raster-fade-duration (no second tile URL) */
+      var ok = applyRadarFrameAt(next, { blend: true });
+      radarPlayBusy = false;
+      if (radarPlaySession !== session) return;
+      if (!ok) {
+        schedule(400);
+        return;
+      }
+      if (radarIndex >= radarSliderMax() && !playLoopOn()) {
+        stopRadarPlayOnly();
+        if (radarOn() && !tabHidden) startRadarRefresh();
+        return;
+      }
+      schedule(playDwellMs(RADAR_PLAY_DWELL_MS));
     }
     var boot = radarPast.length ? Promise.resolve(true) : fetchAndApplyRadar({ quiet: false, jumpLatest: false });
     boot.then(function (ok) {
@@ -5200,7 +5064,7 @@
       }
       var startIdx = clampRadarIndex(radarIndex);
       if (startIdx >= radarSliderMax() && playLoopOn()) startIdx = 0;
-      applyRadarFrameAt(startIdx);
+      applyRadarFrameAt(startIdx, { blend: true });
       schedule(80);
     });
   }
@@ -5698,19 +5562,28 @@
     restorePersistedSettingsAfterMapReady();
     /* opt19: if Radar overlay restored, skip cloud tile boot (mutex) */
     if (!radarOn()) {
-      var url = gibsTiles(cloudTimes[cloudTimes.length - 1], origin ? origin.lon : -79);
-      addGibsStatic(url);
-      setCloudFrame(sliderMax());
-      /* opt15: probe last published GOES slot; rebuild NOW if lag was optimistic */
+      /* opt40: do NOT paint WMTS for optimistic tip — wait for probe (avoids first-paint 404 storm) */
+      try {
+        if (timeLabel && cloudTimes.length) {
+          timeLabel.textContent = formatFrameLabel(cloudTimes[cloudTimes.length - 1]) + " · …";
+        }
+      } catch (eLbl) {}
       resolveGoesLatestIso(origin ? origin.lon : -79).then(function (iso) {
         applyGoesLatestToTimeline(iso);
         if (!playMode && !tabHidden && !radarOn()) {
-          /* opt33: always refresh static GeoColor after probe so NOW is not a 404 slot */
           var urlNow = gibsTiles(iso || goesLatestIsoSync(), origin ? origin.lon : -79);
           presentStaticGibs(urlNow);
           setCloudFrame(cloudIndex);
         }
-      }).catch(function () {});
+      }).catch(function () {
+        /* probe failed — fall back to conservative wall tip once */
+        if (!playMode && !tabHidden && !radarOn()) {
+          var fb = goesLatestIsoSync();
+          applyGoesLatestToTimeline(fb);
+          presentStaticGibs(gibsTiles(fb, origin ? origin.lon : -79));
+          setCloudFrame(cloudIndex);
+        }
+      });
     } else {
       try {
         var isoBoot = cloudTimes[cloudTimes.length - 1];
@@ -5833,7 +5706,7 @@
       radarPlaySession += 1;
       playBusy = false;
       radarPlayBusy = false;
-      try { cancelRadarFade(); } catch (eRf) {}
+      try { setRadarFadeDuration(0); } catch (eRf) {}
       try { cancelPlayFade(); } catch (ePf) {}
     }
   }
@@ -6074,7 +5947,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt39").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt40").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
