@@ -693,7 +693,7 @@
   var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
   var PLAY_LRU_CAP = 160; /* opt44: raised dynamically with cloudTimes */
   var PLAY_LRU_CAP_MAX = 200; /* opt44: memory bound */
-  var PLAY_WARM_CONCURRENCY = 2; /* opt44: low-concurrency full-timeline warmer */
+  var PLAY_WARM_CONCURRENCY = 3; /* opt44: low-concurrency full-timeline warmer */
   var PLAY_WARM_STATUS_MIN = 12; /* opt44: optional Caching… if many pending */
   var PLAY_BLUR_PX = 2.5; /* opt37/opt39: cheap incoming blur during linear crossfade */
   /* opt43: tighter Play GetMap caps (static MapLibre WMTS unchanged) */
@@ -1336,8 +1336,8 @@
 
     function maybeCachingStatus(pendingLeft) {
       if (playWarmHintShown || cachingFramesHint) return;
-      /* Don't spam during Play animation — only idle/scrubbing */
-      if (playTimer && !scrubbing) return;
+      /* Don't spam during Play animation (playTimer is null between ticks) */
+      if (!scrubbing && (playBusy || playTimer || isPlaying())) return;
       if (pendingLeft < PLAY_WARM_STATUS_MIN) return;
       playWarmHintShown = true;
       cachingFramesHint = true;
