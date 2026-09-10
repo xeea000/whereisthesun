@@ -1,4 +1,4 @@
-/* SUNNY opt43 — coarse block-matching optical flow (A→B) for Play motion lerp.
+/* SUNNY opt44 — coarse block-matching optical flow (A→B) for Play motion lerp.
    Runs off-main; returns Int16 dx/dy per block. No external deps. */
 "use strict";
 

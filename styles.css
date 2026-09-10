@@ -128,7 +128,7 @@ html, body {
   /* Linear crossfade: incoming on top; opacities lerp (1−e)/(e) */
   z-index: 2;
 }
-/* opt43: optical-flow motion lerp buffer (covers imgs during Play warp+blend) */
+/* opt44: optical-flow motion lerp buffer (covers imgs during Play warp+blend) */
 #cloud-play-layer .cloud-play-motion {
   position: absolute;
   inset: 0;

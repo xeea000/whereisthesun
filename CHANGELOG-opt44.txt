@@ -1,0 +1,21 @@
+SUNNY opt44 — cache full Play timeline for seamless scrub/loop
+
+Root cause: PLAY_LRU_CAP=28 evicted early frames of ~145-slot timeline;
+prefetch only warmed ~9 ahead, so scrub-back / Loop re-downloaded (spurts).
+
+Fix:
+- Dynamic Play image LRU: Math.min(200, max(160, cloudTimes.length+PLAY_PREFETCH+8)).
+- FLOW_CACHE_CAP similarly (≥150, max 200) so motion pairs survive a full loop.
+- Eviction while playMode: pin keys for current bbox/size whose ISO is still in
+  cloudTimes; only drop foreign-bbox leftovers first.
+- Background timeline warmer on Play start / post-pan: walk all cloudTimes with
+  concurrency 2; cancel/restart on playLruClear/view change; pause while
+  gesturing / tab hidden. Optional “Caching cloud frames…” when idle/scrubbing
+  and many pending (not during Play animation).
+- Scrub in playMode uses presentPlayFrame (LRU hit = instant, no download hint).
+- After full warm or one complete pass, Loop should not show Downloading for
+  warmed ISOs at same view.
+
+Kept: opt43 honest status, non-blocking flow, lighter WMS, single radar, GOES lag,
+locate fixes. No dual RainViewer. No MODIS. No starcode.
+Cache: ?v=opt44; SW CACHE=sunny-v-opt44 (flow-worker in precache).
