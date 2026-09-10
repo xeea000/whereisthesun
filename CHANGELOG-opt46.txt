@@ -1,0 +1,25 @@
+SUNNY opt46 — continuous canvas Play, flow-gated advances
+
+Why opt45 still felt like a slideshow:
+- Discrete presentPlayFrame → beginPlayTransition → hideMotionCanvas + snap
+  HTML imgs between every pair = join pop/jerk.
+- FLOW_GRACE 50ms → rafCrossfade opacity dissolve between GOES frames 10min
+  apart = classic slideshow when flow rarely ready.
+- schedule(80) cold poll + playFrameStep 2–3 at higher speeds = stutter/jumps.
+
+Fixes:
+1) Persistent motion canvas for the whole playAnimating session — interpolated
+   frames only on canvas; settle to front <img> only on Pause/stop.
+2) Flow-gated advances: start segment only when next image cached AND flow
+   pair ready (or FLOW_WAIT ~220ms). While animating, never use opacity
+   rafCrossfade as the normal path; on flow miss hold canvas / light-reuse
+   last vectors.
+3) Kill schedule(80) cloud cold spin — hold current canvas, warmer ahead,
+   continue when ready (280/120ms soft polls). Optional boot warm if <10
+   nearby frames ("Caching cloud frames…").
+4) playFrameStep always 1; speed only changes blend duration. PLAY_PACE ~600ms.
+5) Triple-buffer prefetch: images + flow for i+1/i+2 while lerping.
+
+Kept: honest playAnimating/Pause (opt45), full timeline LRU/warmer (opt44),
+honest download status (opt43), single radar, GOES lag, locate.
+No starcode. ?v=opt46; CACHE=sunny-v-opt46.
