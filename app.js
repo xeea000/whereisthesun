@@ -1321,7 +1321,9 @@
   }
 
   function startPlayTimelineWarm() {
-    /* opt44: background fill of all cloudTimes for current bbox/size */
+    /* opt44: background fill of all cloudTimes for current bbox/size.
+       Yields to Play (playBusy) and prefers behind-playhead first so scrub/Loop
+       fill without starving the live advance / prefetch. */
     cancelPlayTimelineWarm();
     if (!playMode || tabHidden || playUseOpenMeteo || !cloudTimes.length) return;
     try {
@@ -1330,6 +1332,7 @@
     refreshPlayCacheCaps();
     var gen = playWarmGen;
     var lon = origin ? origin.lon : null;
+    var pass = 0; /* 0: behind playhead, 1: far ahead, 2: full sweep */
     var cursor = 0;
     playWarmActive = true;
     playWarmHintShown = false;
@@ -1352,6 +1355,23 @@
       clearCachingFramesHint();
     }
 
+    function warmOrderIndices() {
+      var n = cloudTimes.length;
+      var head = clampIndex(cloudIndex);
+      var out = [];
+      var i;
+      if (pass === 0) {
+        /* behind + current — scrub-back range */
+        for (i = head; i >= 0; i--) out.push(i);
+      } else if (pass === 1) {
+        /* beyond live prefetch window */
+        for (i = head + PLAY_PREFETCH + 1; i < n; i++) out.push(i);
+      } else {
+        for (i = 0; i < n; i++) out.push(i);
+      }
+      return out;
+    }
+
     function pump() {
       if (gen !== playWarmGen) return;
       playWarmTimer = null;
@@ -1371,9 +1391,17 @@
           return;
         }
       } catch (ePump) {}
+      /* Yield while Play is loading/decoding the active frame */
+      if (playBusy && !scrubbing) {
+        playWarmTimer = setTimeout(pump, 180);
+        return;
+      }
 
-      while (playWarmInFlight < PLAY_WARM_CONCURRENCY && cursor < cloudTimes.length) {
-        var idx = cursor++;
+      var order = warmOrderIndices();
+      var limit = (playTimer || isPlaying()) && !scrubbing ? 2 : PLAY_WARM_CONCURRENCY;
+
+      while (playWarmInFlight < limit && cursor < order.length) {
+        var idx = order[cursor++];
         var iso = cloudTimes[idx];
         if (!iso) continue;
         var meta = gibsWmsFrameMeta(iso, lon);
@@ -1392,13 +1420,35 @@
         });
       }
 
-      if (cursor >= cloudTimes.length && playWarmInFlight === 0) {
+      if (cursor >= order.length && playWarmInFlight === 0) {
+        if (pass < 2) {
+          pass += 1;
+          cursor = 0;
+          playWarmTimer = setTimeout(pump, 60);
+          return;
+        }
+        /* Final sweep: if anything still missing, one more full pass */
+        if (countPlayTimelineMissing() > 0 && pass === 2) {
+          pass = 3;
+          cursor = 0;
+          playWarmTimer = setTimeout(pump, 120);
+          return;
+        }
+        if (pass >= 3) {
+          if (countPlayTimelineMissing() === 0) finishWarm();
+          else {
+            /* Keep a slow retry so late failures refill */
+            pass = 2;
+            cursor = 0;
+            playWarmTimer = setTimeout(pump, 1500);
+          }
+          return;
+        }
         finishWarm();
         return;
       }
       maybeCachingStatus(countPlayTimelineMissing() + playWarmInFlight);
-      if (playWarmInFlight === 0 && cursor < cloudTimes.length) {
-        /* Remaining keys already pending elsewhere — wait and recheck */
+      if (playWarmInFlight === 0 && cursor < order.length) {
         playWarmTimer = setTimeout(pump, 250);
       }
     }
