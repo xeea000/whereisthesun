@@ -678,20 +678,23 @@
    * opt41/opt42: Play prefers optical-flow motion lerp (warp A/B + pixel blend) via
    *   flow-worker; falls back to opt39 rafCrossfade on timeout/failure.
    * opt42: real wait budget (600–900ms), prefetch flow, faster block-match.
+   * opt43: never block critical path on cold flow (~50ms grace → opacity);
+   *   honest download vs blend status; lighter Play WMS pixel budget.
    */
   var CLOUD_FADE_MS = 320; /* opt37: readable soften at 1x; scaled via playFadeMs */
   var PLAY_PACE_MS = 520; /* opt37: shared wall budget @1x for cloud + radar */
   var PLAY_DWELL_MS = PLAY_PACE_MS; /* alias — playDwellMs(PLAY_PACE_MS) */
-  var FRAME_LOAD_STUCK_MS = 1500; /* hide "Loading frame…" unless stuck >1.5s */
+  var FRAME_LOAD_STUCK_MS = 1000; /* "Downloading cloud frame…" only if WMS >~1s */
   var FRAME_PLAY_STEP = 1; /* legacy 1-slot; live step via playFrameStep() */
   var PLAY_PREFETCH = 9; /* opt37/opt38: deeper warm ahead along playFrameStep */
   var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
   var PLAY_LRU_CAP = 28; /* opt37: room for deeper prefetch */
   var PLAY_BLUR_PX = 2.5; /* opt37/opt39: cheap incoming blur during linear crossfade */
-  var WMS_MAX_SIDE_PHONE = 960;
-  var WMS_MAX_SIDE_TABLET = 1280;
-  var WMS_MAX_SIDE_DESKTOP = 1600;
-  var WMS_MAX_SIDE_DESKTOP_HI = 2048;
+  /* opt43: tighter Play GetMap caps (static MapLibre WMTS unchanged) */
+  var WMS_MAX_SIDE_PHONE = 720;
+  var WMS_MAX_SIDE_TABLET = 900;
+  var WMS_MAX_SIDE_DESKTOP = 1024;
+  var WMS_MAX_SIDE_DESKTOP_HI = 1024;
   var GIBS_SRC = "gibs";
   var GIBS_LAYER = "gibs";
 
@@ -724,12 +727,13 @@
   var playLoadGen = 0;
   var playFadeRaf = 0;
   var playMoveTimer = null;
-  /* opt41/opt42: optical-flow motion lerp */
-  var FLOW_BUDGET_MS = 800; /* opt42: was 80–120 — always missed; hold A until flow or budget */
+  /* opt41/opt42/opt43: optical-flow motion lerp */
+  var FLOW_GRACE_MS = 50; /* opt43: cold pair — motion only if flow ready within ~50ms */
   var FLOW_CACHE_CAP = 14;
   var FLOW_BLOCK = 12; /* opt42: larger blocks = fewer SADs */
   var FLOW_SEARCH = 6; /* opt42: smaller search window */
   var FLOW_MAX_W = 160; /* opt42: always 160 on first pass */
+  var BLEND_HINT_MS = 200; /* opt43: "Blending frames…" only if cached+motion >200ms */
   var playFlowCache = Object.create(null);
   var playFlowOrder = [];
   var playFlowWorker = null;
@@ -740,8 +744,11 @@
   var playLastFrameKey = null;
   var playCorsOk = null; /* null=untested, true/false */
   var playUseOpenMeteo = false;
-  var loadingFrameHint = false;
+  var loadingFrameHint = false; /* download hint active */
+  var blendingFrameHint = false;
+  var blendingHintTimer = 0;
   var frameWaitStarted = 0;
+  var playFrameFromCache = false; /* current transition's WMS came from LRU */
 
   function cloudTargetMap() {
     /* opt11: static clouds always on main map */
@@ -1086,7 +1093,7 @@
   }
 
   function wmsMaxSide() {
-    /* opt13: phone ~960, tablet ~1280, desktop 1600–2048; gate by width/DPR (no mobile data blow) */
+    /* opt43 Play WMS: phone ~720, tablet ~900, desktop ~1024; gate by width/DPR */
     var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
     var cw = (el && el.clientWidth) || window.innerWidth || 800;
     var dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
@@ -1097,10 +1104,10 @@
     var cap;
     if (phone) {
       cap = WMS_MAX_SIDE_PHONE;
-      if (dpr >= 2.5) cap = Math.min(cap, 960);
+      if (dpr >= 2.5) cap = Math.min(cap, 640);
     } else if (tablet) {
       cap = WMS_MAX_SIDE_TABLET;
-      if (dpr >= 2.5 && cw < 900) cap = Math.min(cap, 1280);
+      if (dpr >= 2.5 && cw < 900) cap = Math.min(cap, 800);
     } else if (cw >= 1400 && dpr >= 1.5) {
       cap = WMS_MAX_SIDE_DESKTOP_HI;
     } else if (cw >= 1100) {
@@ -1129,8 +1136,9 @@
 
   function playImageSize() {
     /* opt10: cache WMS size; only recompute on real resize/orientation (debounced).
-       opt37: at Speed ≥2 during Play, slightly smaller JPEG for faster WMS.
-       opt38: narrow viewports (<700) use ~75% of desktop cap for faster mobile WMS. */
+       opt37: at Speed ≥2 during Play, slightly smaller JPEG for faster WMS (≥2x shrink).
+       opt38: narrow viewports (<700) use ~75% of desktop cap for faster mobile WMS.
+       opt43: base caps tightened in wmsMaxSide / WMS_MAX_SIDE_*. */
     if (!playSizeCache) playSizeCache = computePlayImageSize();
     var base = playSizeCache;
     var sp = getPlaySpeed();
@@ -1324,12 +1332,62 @@
     }
   }
 
-  function showLoadingFrameHint(show) {
+  function clearPlayFrameStatusIfOurs() {
+    try {
+      var el = statusEl || document.getElementById("status");
+      if (!el) return;
+      var cur = el.textContent || "";
+      if (cur === "Downloading cloud frame…" || cur === "Blending frames…") {
+        setStatus("");
+      }
+    } catch (eSt) {}
+  }
+
+  function clearPlayFrameHints() {
+    if (blendingHintTimer) {
+      clearTimeout(blendingHintTimer);
+      blendingHintTimer = 0;
+    }
+    if (loadingFrameHint || blendingFrameHint) {
+      loadingFrameHint = false;
+      blendingFrameHint = false;
+      clearPlayFrameStatusIfOurs();
+    }
+  }
+
+  function showDownloadingHint(show) {
+    /* opt43: only for slow WMS download/decode — never for flow compute */
     if (show && !loadingFrameHint) {
       loadingFrameHint = true;
-      setStatus("Loading frame…");
+      blendingFrameHint = false;
+      if (blendingHintTimer) { clearTimeout(blendingHintTimer); blendingHintTimer = 0; }
+      setStatus("Downloading cloud frame…");
     } else if (!show && loadingFrameHint) {
       loadingFrameHint = false;
+      clearPlayFrameStatusIfOurs();
+    }
+  }
+
+  function scheduleBlendingHint(fromCachedDownload) {
+    /* Prefer only when download was cached and motion blend runs >200ms */
+    if (blendingHintTimer) { clearTimeout(blendingHintTimer); blendingHintTimer = 0; }
+    if (!fromCachedDownload) return;
+    blendingHintTimer = setTimeout(function () {
+      blendingHintTimer = 0;
+      if (!playMotionActive || loadingFrameHint) return;
+      blendingFrameHint = true;
+      setStatus("Blending frames…");
+    }, BLEND_HINT_MS);
+  }
+
+  function clearBlendingHint() {
+    if (blendingHintTimer) {
+      clearTimeout(blendingHintTimer);
+      blendingHintTimer = 0;
+    }
+    if (blendingFrameHint) {
+      blendingFrameHint = false;
+      clearPlayFrameStatusIfOurs();
     }
   }
 
@@ -1480,13 +1538,16 @@
 
   function loadImageSrc(url, preferCors, cacheKey) {
     var key = cacheKey || url;
-    if (tabHidden) return Promise.resolve({ ok: false, url: url, img: null, key: key });
+    if (tabHidden) return Promise.resolve({ ok: false, url: url, img: null, key: key, cached: false });
     var hit = playLruGet(key);
-    if (hit) return Promise.resolve(hit);
+    if (hit) {
+      hit.cached = true;
+      return Promise.resolve(hit);
+    }
     if (playLoadPending[key]) return playLoadPending[key];
     var p = new Promise(function (resolve) {
       if (tabHidden) {
-        resolve({ ok: false, url: url, img: null, key: key });
+        resolve({ ok: false, url: url, img: null, key: key, cached: false });
         return;
       }
       var img = new Image();
@@ -1495,7 +1556,7 @@
         if (settled) return;
         settled = true;
         delete playLoadPending[key];
-        var rec = { ok: !!ok, url: url, img: img, key: key };
+        var rec = { ok: !!ok, url: url, img: img, key: key, cached: false };
         if (ok) playLruSet(key, rec);
         resolve(rec);
       }
@@ -1520,6 +1581,7 @@
       playFadeRaf = 0;
     }
     playMotionActive = false;
+    try { clearPlayFrameHints(); } catch (eHint) {}
     try { hideMotionCanvas(); } catch (eMot) {}
     /* opt37: drop leftover blur if a fade was aborted (hoisted clearPlayBufFilter) */
     try {
@@ -1539,9 +1601,9 @@
     return FLOW_MAX_W;
   }
 
-  function flowBudgetMs() {
-    /* Hold frame A until flow ready or this expires; never start opacity fade early. */
-    return Math.max(FLOW_BUDGET_MS, playFadeMs());
+  function flowGraceMs() {
+    /* opt43: cold pairs — only wait ~50ms for nearly-ready flow; else opacity now. */
+    return FLOW_GRACE_MS;
   }
 
   function ensureMotionCanvas(layer) {
@@ -1590,7 +1652,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt42");
+      playFlowWorker = new Worker("flow-worker.js?v=opt43");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -2047,6 +2109,7 @@
       playFadeRaf = 0;
       if (gen !== playLoadGen) {
         playMotionActive = false;
+        clearBlendingHint();
         hideMotionCanvas();
         try { back.classList.remove("is-incoming"); } catch (eI) {}
         resolve(false);
@@ -2058,6 +2121,7 @@
         renderMotionFrame(ctx, flowRec.pixA, flowRec.pixB, flowRec, e, outW, outH);
       } catch (eRen) {
         playMotionActive = false;
+        clearBlendingHint();
         hideMotionCanvas();
         rafCrossfade(back, front, gen, resolve);
         return;
@@ -2072,6 +2136,7 @@
         playFadeRaf = requestAnimationFrame(step);
       } else {
         playMotionActive = false;
+        clearBlendingHint();
         /* Final B as today */
         back.style.opacity = String(targetOp);
         clearPlayBufFilter(back);
@@ -2092,39 +2157,33 @@
   }
 
   function beginPlayTransition(back, front, gen, backKey, resolve) {
-    /* opt42: motion lerp when both frames available; else opacity rafCrossfade.
-       Hold frame A (no opacity fade) until flow ready OR budget expires.
-       Budget covers fetch/decode + worker; cached pairs are instant. */
+    /* opt43: motion lerp when flow already cached; else opacity crossfade immediately
+       (or motion if flow resolves within ~FLOW_GRACE_MS). Never hold A for ~800ms.
+       Kick ensureFlowForPair in background so next Loop/advance can hit cache. */
     if (!front || !front.naturalWidth || !back || !back.naturalWidth) {
+      clearPlayFrameHints();
       rafCrossfade(back, front, gen, resolve);
       return;
     }
     var pairKey = String(playLastFrameKey || front.src || "front") + "=>" + String(backKey || back.src || "back");
-    var budget = flowBudgetMs();
     var settled = false;
-    /* Explicitly hold A while waiting — do not start opacity fade yet */
-    try {
-      var holdOp = gibsEffectiveOpacity();
-      front.style.opacity = String(holdOp);
-      clearPlayBufFilter(front);
-      front.classList.add("is-front");
-      front.classList.remove("is-incoming");
-      back.style.opacity = "0";
-      clearPlayBufFilter(back);
-      back.classList.remove("is-front");
-      back.classList.add("is-incoming");
-    } catch (eHold) {}
+    var fromCachedDownload = !!playFrameFromCache;
     function finishFlow(rec) {
       if (settled) return;
       settled = true;
       if (gen !== playLoadGen) {
+        clearPlayFrameHints();
         resolve(false);
         return;
       }
+      /* Transition starting — drop download hint */
+      showDownloadingHint(false);
       if (!rec || !rec.flow || !rec.pixA || !rec.pixB) {
+        clearBlendingHint();
         rafCrossfade(back, front, gen, resolve);
         return;
       }
+      scheduleBlendingHint(fromCachedDownload);
       rafMotionLerp(back, front, rec, gen, resolve);
     }
     var cached = playFlowCacheGet(pairKey);
@@ -2132,11 +2191,13 @@
       finishFlow(cached);
       return;
     }
+    /* Cold pair: brief grace for nearly-ready flow, then opacity; warm cache in bg */
+    var grace = flowGraceMs();
     var timedOut = false;
     var timer = setTimeout(function () {
       timedOut = true;
       finishFlow(null);
-    }, budget);
+    }, grace);
     ensureFlowForPair(front, back, pairKey).then(function (rec) {
       clearTimeout(timer);
       if (timedOut) {
@@ -2219,14 +2280,22 @@
       }
       var gen = ++playLoadGen;
       cancelPlayFade();
+      clearPlayFrameHints();
       frameWaitStarted = Date.now();
-      var stuckTimer = setTimeout(function () {
-        if (gen === playLoadGen) showLoadingFrameHint(true);
-      }, FRAME_LOAD_STUCK_MS);
+      playFrameFromCache = false;
+      /* Arm download hint only when not already in LRU (prefetch honesty) */
+      var keyProbe = cacheKey || url;
+      var alreadyCached = !!(keyProbe && playImgCache[keyProbe] && playImgCache[keyProbe].ok);
+      var stuckTimer = 0;
+      if (!alreadyCached) {
+        stuckTimer = setTimeout(function () {
+          if (gen === playLoadGen) showDownloadingHint(true);
+        }, FRAME_LOAD_STUCK_MS);
+      }
 
       function reveal() {
-        clearTimeout(stuckTimer);
-        showLoadingFrameHint(false);
+        if (stuckTimer) clearTimeout(stuckTimer);
+        showDownloadingHint(false);
         if (gen !== playLoadGen) {
           resolve(false);
           return;
@@ -2237,12 +2306,13 @@
           return;
         }
         setPlayLayerOpacity();
-        /* opt42: motion lerp when possible; else opt39 opacity crossfade */
+        /* opt43: motion if flow cached; else opacity (no ~800ms A-hold) */
         beginPlayTransition(back, front, gen, cacheKey || back.src, function (ok) {
           if (ok) {
             playFrontBuf = backId;
             playLastFrameKey = cacheKey || back.src || playLastFrameKey;
             try { prefetchFlowAhead(cloudIndex); } catch (ePf) {}
+            try { prefetchPlayIndices(cloudIndex); } catch (ePi) {}
           }
           resolve(ok);
         });
@@ -2250,16 +2320,22 @@
 
       loadImageSrc(url, false, cacheKey).then(function (rec) {
         if (gen !== playLoadGen) {
-          clearTimeout(stuckTimer);
+          if (stuckTimer) clearTimeout(stuckTimer);
           resolve(false);
           return;
         }
         if (!rec || !rec.ok) {
-          clearTimeout(stuckTimer);
-          showLoadingFrameHint(false);
+          if (stuckTimer) clearTimeout(stuckTimer);
+          showDownloadingHint(false);
           /* HOLD previous — never clear */
           resolve(false);
           return;
+        }
+        playFrameFromCache = !!(rec.cached || alreadyCached);
+        if (playFrameFromCache) {
+          /* Cache hit: never show download hint */
+          if (stuckTimer) clearTimeout(stuckTimer);
+          showDownloadingHint(false);
         }
         if (back.src === rec.url && back.complete && back.naturalWidth) {
           reveal();
@@ -2279,8 +2355,8 @@
           settled = true;
           back.onload = null;
           back.onerror = null;
-          clearTimeout(stuckTimer);
-          showLoadingFrameHint(false);
+          if (stuckTimer) clearTimeout(stuckTimer);
+          showDownloadingHint(false);
           resolve(false);
         };
         /* Keep back behind until loaded — do not blank front */
@@ -2308,7 +2384,7 @@
   }
 
   function prefetchFlowAhead(fromIndex) {
-    /* opt42: warm optical-flow for next pairs while dwelling so Loop/advance hits cache. */
+    /* opt42/opt43: warm optical-flow for next pairs while dwelling so Loop/advance hits cache. */
     if (tabHidden || !cloudTimes.length || playUseOpenMeteo) return;
     if (typeof Worker === "undefined" && !FLOW_BLOCK) return;
     var lon = origin ? origin.lon : null;
@@ -3601,7 +3677,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt42");
+      beachWorker = new Worker("beach-worker.js?v=opt43");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6640,7 +6716,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt42").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt43").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

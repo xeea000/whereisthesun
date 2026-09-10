@@ -1,0 +1,19 @@
+SUNNY opt43 — honest download status; don’t block Play on flow
+
+Choppiness root cause: slow GIBS WMS GetMap + holding frame A up to
+~800ms for cold optical-flow before any transition (self-inflicted lag).
+
+Fix:
+- Status: “Downloading cloud frame…” only when loadImageSrc/decode >~1s;
+  skip entirely on LRU cache hit. Optional “Blending frames…” only when
+  download was cached and motion canvas runs >200ms. Never “loading” for flow.
+- beginPlayTransition: if flow cached → motion lerp; if cold → opacity
+  crossfade immediately (or motion if flow resolves within ~50ms). Background
+  ensureFlowForPair still warms cache for next Loop/advance. Removed ~800ms
+  A-hold on cold pairs.
+- Lighter Play WMS: phone~720, tablet~900, desktop~1024 (opt37 ≥2x shrink kept).
+  Static MapLibre WMTS unchanged.
+- Prefetch: prefetchPlayIndices + prefetchFlowAhead after successful step.
+
+Radar: unchanged (opt40 single buffer). No MODIS / dual RainViewer.
+Cache: ?v=opt43; SW CACHE=sunny-v-opt43 (flow-worker in precache).
