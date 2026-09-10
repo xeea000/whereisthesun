@@ -1,0 +1,23 @@
+SUNNY opt45 — honest Play/Pause; clock-smooth playback
+
+Bug A (Pause stuck on Pause):
+- Root: togglePlay treated aria-pressed + !playTimer as "resume" while playBusy
+  awaited setCloudFrame → Pause click restarted Play; icon stayed Pause.
+- isPlaying() was playMode || aria-pressed (historical overlay ≠ animating).
+- Fix: playAnimating flag set true only in startPlay/startRadarPlay, false on
+  every stop path. isPlaying()/button sync = that flag only.
+- togglePlay: if animating → always stopPlay(); else startPlay(). Never
+  "pressed but no timer → resume".
+- Scrub/tab-hide/end-of-timeline/errors call setPlayButtonPlaying(false).
+
+Bug B (stuttery slideshow):
+- Root: short crossfade (~320ms) then dwell freeze on a still frame.
+- Fix: while playAnimating, playFadeMs = full playDwellMs interval; linear
+  ease so segment joins stay continuous; advance immediately after blend
+  (schedule 0). If next frame not cached: hold current, kick load/warmer,
+  retry — never stall Play on multi-second WMS / never auto-stop.
+- Radar: same honest playAnimating + full-interval fade pacing.
+
+Kept: opt44 full-timeline cache/warmer, opt43 honest status + non-blocking
+flow prefetch, single radar, GOES lag, locate. flow-worker retained.
+No starcode. Cache: ?v=opt45; SW CACHE=sunny-v-opt45.

@@ -683,6 +683,8 @@
    *   honest download vs blend status; lighter Play WMS pixel budget.
    * opt44: cache full Play timeline (dynamic LRU ≥ timeline+prefetch, pin
    *   current-view keys, background warmer) so scrub/Loop are seamless.
+   * opt45: honest playAnimating (Pause always stops); clock-smooth playback —
+   *   full-interval motion/opacity lerp (no dwell freeze); hold if next cold.
    */
   var CLOUD_FADE_MS = 320; /* opt37: readable soften at 1x; scaled via playFadeMs */
   var PLAY_PACE_MS = 520; /* opt37: shared wall budget @1x for cloud + radar */
@@ -710,6 +712,7 @@
   var cloudSourcesReady = false;
   var playSession = 0;
   var playBusy = false;
+  var playAnimating = false; /* opt45: true only while Play clock/ticks run */
   var playMode = false;
   var scrubbing = false; /* opt28: pointer on #time-slider */
   var scrubWasPlaying = false; /* opt28: resume play after scrub if it was on */
@@ -770,7 +773,8 @@
   }
 
   function isPlaying() {
-    return playMode || !!(btnPlay && btnPlay.getAttribute("aria-pressed") === "true");
+    /* opt45: real animation only — not playMode (historical overlay) or stale aria */
+    return !!playAnimating;
   }
 
   function playLoopOn() {
@@ -912,11 +916,33 @@
     return 1;
   }
 
-  /* opt36/opt37/opt39: linear crossfade duration scales with speed. Floor ~120ms so 3x never hard-cuts. */
+  /* opt36/opt37/opt39/opt45: while animating, blend fills the whole frame
+     interval (no short fade + freeze). Else short soften for one-shots. */
   function playFadeMs() {
     var sp = getPlaySpeed();
     if (!sp || sp <= 0) sp = 1;
+    if (playAnimating) return playDwellMs(PLAY_PACE_MS);
     return Math.max(120, Math.round(CLOUD_FADE_MS / sp));
+  }
+
+  function playFrameIsCached(idx) {
+    if (playUseOpenMeteo) return true;
+    if (!cloudTimes.length) return false;
+    var i = clampIndex(idx);
+    var iso = cloudTimes[i];
+    if (!iso) return false;
+    try {
+      var meta = gibsWmsFrameMeta(iso, origin ? origin.lon : null);
+      return !!(meta && playImgCache[meta.key] && playImgCache[meta.key].ok);
+    } catch (eC) {
+      return false;
+    }
+  }
+
+  function playEase(t) {
+    /* opt45: linear while animating so segment joins stay velocity-continuous */
+    if (playAnimating) return t;
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   }
 
   function releasePlayStaticHold() {
@@ -2359,10 +2385,6 @@
     back.classList.remove("is-front");
     back.classList.add("is-incoming");
 
-    function easeInOut(t) {
-      return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    }
-
     var firstPaint = true;
     function step(now) {
       playFadeRaf = 0;
@@ -2375,7 +2397,7 @@
         return;
       }
       var t = Math.min(1, (now - start) / dur);
-      var e = easeInOut(t);
+      var e = playEase(t);
       try {
         renderMotionFrame(ctx, flowRec.pixA, flowRec.pixB, flowRec, e, outW, outH);
       } catch (eRen) {
@@ -2490,9 +2512,6 @@
     back.style.filter = "blur(" + blurMax + "px)";
     back.classList.remove("is-front");
     back.classList.add("is-incoming");
-    function easeInOut(t) {
-      return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-    }
     function step(now) {
       playFadeRaf = 0;
       if (gen !== playLoadGen) {
@@ -2503,7 +2522,7 @@
         return;
       }
       var t = Math.min(1, (now - start) / dur);
-      var e = easeInOut(t);
+      var e = playEase(t);
       /* true lerp: front fades out, back fades in */
       if (front) front.style.opacity = String(targetOp * (1 - e));
       back.style.opacity = String(targetOp * e);
@@ -5987,6 +6006,7 @@
   function stopRadarPlayOnly() {
     radarPlaySession += 1;
     radarPlayBusy = false;
+    playAnimating = false;
     setRadarFadeDuration(0);
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
@@ -5995,6 +6015,7 @@
   function stopCloudPlayOnly() {
     playSession += 1;
     playBusy = false;
+    playAnimating = false;
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
     if (playMode) exitPlayMode();
@@ -6016,19 +6037,20 @@
     opts = opts || {};
     var resume = !!opts.resume;
     if (!radarOn()) return;
-    if (resume) {
-      if (playTimer) { clearTimeout(playTimer); playTimer = null; }
-      radarPlayBusy = false;
-    } else if (playTimer || radarPlayBusy) {
-      return;
-    }
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    radarPlayBusy = false;
     /* opt29: Play resumes from playhead. At end + Loop off = no-op.
        At end + Loop on = wrap to 0. Loop wrapping mid-session stays in tick. */
     if (radarPast.length && radarIndex >= radarSliderMax() && !playLoopOn()) {
       if (resume) stopRadarPlayOnly();
+      else {
+        playAnimating = false;
+        setPlayButtonPlaying(false);
+      }
       return;
     }
     stopRadarRefresh();
+    playAnimating = true;
     setPlayButtonPlaying(true);
     setRadarFadeDuration(playFadeMs());
     var session = ++radarPlaySession;
@@ -6079,6 +6101,7 @@
         if (radarOn() && !tabHidden) startRadarRefresh();
         return;
       }
+      /* opt45: fade already spans full interval — schedule next at same pace */
       schedule(playDwellMs(RADAR_PLAY_DWELL_MS));
     }
     var boot = radarPast.length ? Promise.resolve(true) : fetchAndApplyRadar({ quiet: false, jumpLatest: false });
@@ -6382,6 +6405,7 @@
       return;
     }
     if (!cloudTimes.length) {
+      playAnimating = false;
       setStatus("Cloud frames not ready yet.");
       setPlayButtonPlaying(false);
       return;
@@ -6392,8 +6416,14 @@
     var atEnd = cloudIndex >= sliderMax();
     if (atEnd && !playLoopOn()) {
       if (resume) stopCloudPlayOnly();
+      else {
+        playAnimating = false;
+        setPlayButtonPlaying(false);
+      }
       return;
     }
+    /* opt45: mark animating before any await so Pause mid-load always stops */
+    playAnimating = true;
     setPlayButtonPlaying(true);
     if (!playMode) enterPlayMode();
     else {
@@ -6404,8 +6434,17 @@
     var holdTarget = null;
     var holdFails = 0;
     function schedule(ms) {
-      if (playSession !== session) return;
+      if (playSession !== session || !playAnimating) return;
       playTimer = setTimeout(tick, ms);
+    }
+    function kickLoadIndex(idx) {
+      try {
+        if (playUseOpenMeteo) return;
+        var isoN = cloudTimes[clampIndex(idx)];
+        if (!isoN) return;
+        var metaN = gibsWmsFrameMeta(isoN, origin ? origin.lon : null);
+        loadImageSrc(metaN.url, false, metaN.key);
+      } catch (eKick) {}
     }
     function skipMissingHold(failedIdx) {
       holdTarget = null;
@@ -6420,7 +6459,8 @@
     }
     function tick() {
       playTimer = null;
-      if (playSession !== session || tabHidden) return;
+      if (playSession !== session || !playAnimating) return;
+      if (tabHidden) return;
       if (scrubbing) {
         schedule(200);
         return;
@@ -6448,14 +6488,22 @@
         next = cloudIndex + playFrameStep();
         if (next >= sliderMax()) next = sliderMax();
       }
+      /* opt45: next cold → keep showing current; warmer/prefetch feed ahead.
+         Never stall the whole player on multi-second WMS / never auto-stop. */
+      if (holdTarget == null && !playFrameIsCached(next)) {
+        prefetchPlayIndices(cloudIndex);
+        kickLoadIndex(next);
+        try { startPlayTimelineWarm(); } catch (eW) {}
+        schedule(80);
+        return;
+      }
       playBusy = true;
-      var t0 = Date.now();
       /* opt38: prefetch ahead at tick start even while current frame loads */
       prefetchPlayIndices(next);
-      /* opt37: if next frame warm in LRU, fade-only (no cold WMS wait) */
+      /* opt45: blend spans full interval (playFadeMs); advance immediately after */
       withPlayFrameTimeout(setCloudFrame(next), PLAY_FRAME_TIMEOUT_MS).then(function (shown) {
         playBusy = false;
-        if (playSession !== session) return;
+        if (playSession !== session || !playAnimating) return;
         if (!shown) {
           /* HOLD visible frame; retry same target, then skip (opt35) */
           if (holdTarget === next) holdFails += 1;
@@ -6468,7 +6516,8 @@
             return;
           }
           holdTarget = next;
-          schedule(600);
+          kickLoadIndex(next);
+          schedule(200);
           return;
         }
         holdTarget = null;
@@ -6478,10 +6527,8 @@
           setCloudFrame(sliderMax(), { forceHires: true });
           return;
         }
-        /* opt36/opt37: load+fade count toward shared PLAY_PACE_MS budget */
-        var budget = playDwellMs(PLAY_PACE_MS);
         prefetchPlayIndices(cloudIndex);
-        schedule(Math.max(0, budget - (Date.now() - t0)));
+        schedule(0);
       });
     }
     var startIdx = clampIndex(cloudIndex);
@@ -6493,27 +6540,21 @@
       slider.value = String(startIdx);
     }
     testWmsCors().then(function () {
-      if (playSession !== session) return;
+      if (playSession !== session || !playAnimating) return;
       withPlayFrameTimeout(setCloudFrame(startIdx), PLAY_FRAME_TIMEOUT_MS).then(function () {
         playBusy = false;
-        if (playSession !== session) return;
+        if (playSession !== session || !playAnimating) return;
         prefetchPlayIndices(startIdx);
         startPlayTimelineWarm();
-        schedule(80);
+        schedule(0);
       });
     });
   }
 
   function togglePlay() {
-    var pressed = !!(btnPlay && btnPlay.getAttribute("aria-pressed") === "true");
-    /* Actively ticking or Pause while live → stop */
-    if (playTimer) {
+    /* opt45: if animating → always stop; else start. Never "pressed but no timer → resume". */
+    if (playAnimating) {
       stopPlay();
-      return;
-    }
-    /* opt35: UI says playing but ticker died → recover/resume, do not confuse stop */
-    if (pressed) {
-      startPlay({ resume: true });
       return;
     }
     startPlay();
@@ -6736,14 +6777,16 @@
     if (scrubbing) return;
     scrubbing = true;
     cancelIdleGoesWarm();
-    scrubWasPlaying = isPlaying();
+    scrubWasPlaying = playAnimating;
     if (scrubWasPlaying) {
-      /* pause advance only — keep playMode + Pause button */
+      /* opt45: stop clock honestly — Play icon while scrubbing; resume on endScrub */
       if (playTimer) { clearTimeout(playTimer); playTimer = null; }
       playSession += 1;
       radarPlaySession += 1;
       playBusy = false;
       radarPlayBusy = false;
+      playAnimating = false;
+      setPlayButtonPlaying(false);
       try { setRadarFadeDuration(0); } catch (eRf) {}
       try { cancelPlayFade(); } catch (ePf) {}
     }
@@ -6942,7 +6985,7 @@
       playLoadGen += 1;
       playLoadPending = Object.create(null);
       cancelPlayFade();
-      if (playTimer || playMode || isPlaying()) {
+      if (playTimer || playMode || playAnimating) {
         resumePlay = true;
         stopPlay();
       }
