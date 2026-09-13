@@ -1,0 +1,21 @@
+SUNNY opt48 — 6/12/24h range, Now-1h loop, continuous playhead
+
+1) Play starts at Now−1h (nearest GOES/radar slot), animates to Now.
+   Loop on: wrap back to Now−1h, not −24h start.
+   Loop off: stop at Now + existing status.
+   Resume-from-scrub if mid-window; jump back only from end/Now.
+
+2) Unlabeled 24h | 12h | 6h segmented control next to Overlay.
+   Persists (localStorage). Default 24h. Rescales HOURS_BACK,
+   rebuilds cloudTimes / radar play range, scrubber, ticks.
+   Keeps playhead near current absolute time.
+
+3) Continuous playhead (not tick→frame→tick slideshow):
+   playheadFrac driven by rAF: += (dt / intervalMs) * speed.
+   High-res slider (max=(n-1)*100) + overlay thumb so the bar
+   moves smoothly. Every rAF: motion lerp floor↔ceil (t=frac)
+   when flow cached, else canvas alpha blend. Prefetch
+   floor/ceil/+1 + flow. Loop wraps playhead continuously.
+
+Kept: opt47 start-now / never freeze / honest Pause / LRU warm.
+No starcode. ?v=opt48; CACHE=sunny-v-opt48.

@@ -436,6 +436,32 @@ html, body {
   align-self: center;
 }
 
+/* opt48: smooth playhead overlay — native range often snaps to integer frames */
+.playhead-thumb {
+  position: absolute;
+  left: 0;
+  top: 17px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--sun);
+  box-shadow: 0 0 0 2px rgba(26, 20, 6, 0.28);
+  pointer-events: none;
+  z-index: 3;
+  display: none;
+  will-change: left;
+}
+.playhead-thumb.is-on {
+  display: block;
+}
+.track-wrap.is-playing-smooth #time-slider::-webkit-slider-thumb {
+  opacity: 0;
+}
+.track-wrap.is-playing-smooth #time-slider::-moz-range-thumb {
+  opacity: 0;
+}
+
 .now-mark {
   position: absolute;
   right: 0;
@@ -625,12 +651,25 @@ html, body {
 
 
 
+.layer-row,
+.map-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
 .ov.basemap,
-.ov.overlay-mode {
+.ov.overlay-mode,
+.ov.range-mode {
   flex: 0 0 auto;
   gap: 8px;
   color: var(--text);
   flex-wrap: nowrap;
+}
+
+.ov.range-mode {
+  gap: 0;
 }
 
 .basemap-label {
@@ -768,6 +807,15 @@ html, body {
   .layer-row,
   .map-row {
     gap: 8px 10px;
+    align-items: center;
+  }
+  .ov.overlay-mode,
+  .ov.range-mode {
+    flex: 0 0 auto;
+  }
+  .ov.range-mode .seg-btn {
+    padding: 7px 8px;
+    min-width: 2.2rem;
   }
   .tbtn,
   .play {
