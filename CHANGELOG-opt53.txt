@@ -1,0 +1,18 @@
+SUNNY opt53 — Open-Meteo Windy-style wind lines
+
+1) Wind toggle (switch) next to Overlay Clouds|Radar. Persists sunny-wind in
+   localStorage. Default OFF so boot stays light (opt52 deferred path intact).
+
+2) Animated short streamlets on #wind-layer canvas sibling of the map (z-index
+   above Clouds/Radar rasters, under markers). Direction follows wind; length
+   and motion speed encode strength.
+
+3) Data: free Open-Meteo current wind_speed_10m + wind_direction_10m (km/h).
+   Samples ~10×7 grid in view; parallel batches of ≤24 points; ~8 min cache.
+   Fetch only when Wind is on (or idle restore after first paint).
+
+4) Recompute on move/zoom (debounced); pause rAF when tab hidden; particle
+   cap ~180–420 by viewport width. Does not touch Clouds|Radar mutex, Play,
+   splitter, 6/12/24h, hi-res fade, or opt52 boot deferral.
+
+5) SW: CACHE=sunny-v-opt53. No paid APIs. No starcode. ?v=opt53.

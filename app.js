@@ -55,6 +55,7 @@
   var cloudOpacityEl = document.getElementById("cloud-opacity");
   var toggleMap = document.getElementById("toggle-map");
   var toggleIntl = document.getElementById("toggle-intl");
+  var toggleWind = document.getElementById("toggle-wind");
   var overlaySeg = document.getElementById("overlay-seg");
   var rangeSeg = document.getElementById("range-seg");
 
@@ -90,6 +91,7 @@
   var INTL_KEY = "sunny-intl";
   var RADAR_KEY = "sunny-radar"; /* legacy; migrated to OVERLAY_KEY */
   var OVERLAY_KEY = "sunny-overlay";
+  var WIND_KEY = "sunny-wind"; /* opt53: Wind lines toggle */
   var LOOP_KEY = "sunny-loop";
   var SPEED_KEY = "sunny-play-speed";
   var RANGE_KEY = "sunny-hours-back";
@@ -145,6 +147,13 @@
       else overlayMode = "clouds";
     }
   } catch (eRadar) {}
+  var windOn = false; /* opt53: default off — light boot */
+  try {
+    var savedWind = localStorage.getItem(WIND_KEY);
+    if (savedWind === "1") windOn = true;
+    else if (savedWind === "0") windOn = false;
+    if (toggleWind) toggleWind.checked = !!windOn;
+  } catch (eWind) {}
   try {
     var savedLoop = localStorage.getItem(LOOP_KEY);
     if (savedLoop === "0") playLoop = false;
@@ -1376,6 +1385,7 @@
     cloudMap = null;
     hideUnusedCloudMapEl();
     ensurePlayLayer();
+    ensureWindLayer();
     return null;
   }
 
@@ -2690,7 +2700,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt52");
+      playFlowWorker = new Worker("flow-worker.js?v=opt53");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3744,7 +3754,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt52";
+      link.href = "flow-worker.js?v=opt53";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4998,7 +5008,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt52");
+      beachWorker = new Worker("beach-worker.js?v=opt53");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6675,6 +6685,503 @@
 
 
 
+
+  /* === BEGIN WIND LINES (opt53) — Open-Meteo Windy-style particles === */
+  var WIND_CACHE_TTL_MS = 8 * 60 * 1000;
+  var WIND_COLS = 10;
+  var WIND_ROWS = 7;
+  var WIND_BATCH = 24;
+  var WIND_MOVE_DEBOUNCE_MS = 380;
+  var windLayerEl = null;
+  var windCanvas = null;
+  var windCtx = null;
+  var windField = null; /* {cols,rows,west,south,dLon,dLat,u[],v[],speeds[],t,key} */
+  var windCache = Object.create(null);
+  var windParticles = [];
+  var windRaf = 0;
+  var windLastTs = 0;
+  var windFetchGen = 0;
+  var windMoveTimer = null;
+  var windFetchPromise = null;
+  var windDpr = 1;
+
+  function windParticleCap() {
+    try {
+      var w = window.innerWidth || 800;
+      if (w < 520) return 180;
+      if (w < 900) return 280;
+      return 420;
+    } catch (eC) {
+      return 280;
+    }
+  }
+
+  function ensureWindLayer() {
+    var layer = document.getElementById("wind-layer");
+    if (!layer || !map) return null;
+    try {
+      var host = map.getContainer && map.getContainer();
+      if (host && layer.parentNode !== host) {
+        host.appendChild(layer);
+        layer.style.position = "absolute";
+        layer.style.inset = "0";
+        layer.style.width = "100%";
+        layer.style.height = "100%";
+        layer.style.zIndex = "3";
+        layer.style.pointerEvents = "none";
+      }
+    } catch (eWl) {}
+    windLayerEl = layer;
+    var c = document.getElementById("wind-canvas");
+    if (!c) {
+      c = document.createElement("canvas");
+      c.id = "wind-canvas";
+      c.setAttribute("aria-hidden", "true");
+      layer.appendChild(c);
+    }
+    windCanvas = c;
+    try {
+      windCtx = c.getContext("2d", { alpha: true });
+    } catch (eCtx) {
+      windCtx = c.getContext("2d");
+    }
+    return layer;
+  }
+
+  function syncWindCanvasSize() {
+    if (!windCanvas || !map) return;
+    var el = map.getContainer ? map.getContainer() : document.getElementById("map");
+    if (!el) return;
+    var w = el.clientWidth || 1;
+    var h = el.clientHeight || 1;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    windDpr = dpr;
+    var bw = Math.max(1, Math.round(w * dpr));
+    var bh = Math.max(1, Math.round(h * dpr));
+    if (windCanvas.width !== bw || windCanvas.height !== bh) {
+      windCanvas.width = bw;
+      windCanvas.height = bh;
+      windCanvas.style.width = w + "px";
+      windCanvas.style.height = h + "px";
+    }
+  }
+
+  function setWindUi(on) {
+    windOn = !!on;
+    if (toggleWind) toggleWind.checked = windOn;
+    var layer = ensureWindLayer();
+    if (!layer) return;
+    if (windOn) {
+      layer.hidden = false;
+      layer.classList.add("is-on");
+      layer.setAttribute("aria-hidden", "false");
+      syncWindCanvasSize();
+      scheduleWindFieldRefresh(true);
+      startWindAnim();
+    } else {
+      stopWindAnim();
+      layer.classList.remove("is-on");
+      layer.hidden = true;
+      layer.setAttribute("aria-hidden", "true");
+      windParticles = [];
+      if (windCtx && windCanvas) {
+        try { windCtx.clearRect(0, 0, windCanvas.width, windCanvas.height); } catch (eCl) {}
+      }
+    }
+  }
+
+  function windViewKey() {
+    if (!map) return "";
+    try {
+      var b = map.getBounds();
+      var z = Math.round(map.getZoom() * 2) / 2;
+      return [
+        z.toFixed(1),
+        b.getWest().toFixed(2),
+        b.getSouth().toFixed(2),
+        b.getEast().toFixed(2),
+        b.getNorth().toFixed(2)
+      ].join("|");
+    } catch (eK) {
+      return String(Date.now());
+    }
+  }
+
+  function buildWindSamplePoints() {
+    var b = map.getBounds();
+    var west = b.getWest();
+    var east = b.getEast();
+    var south = b.getSouth();
+    var north = b.getNorth();
+    if (east < west) east += 360;
+    var cols = WIND_COLS;
+    var rows = WIND_ROWS;
+    var dLon = (east - west) / cols;
+    var dLat = (north - south) / rows;
+    var pts = [];
+    var r, c, lat, lon;
+    for (r = 0; r < rows; r++) {
+      lat = south + (r + 0.5) * dLat;
+      for (c = 0; c < cols; c++) {
+        lon = west + (c + 0.5) * dLon;
+        if (lon > 180) lon -= 360;
+        if (lon < -180) lon += 360;
+        pts.push({ lat: lat, lon: lon, i: r * cols + c });
+      }
+    }
+    return {
+      cols: cols,
+      rows: rows,
+      west: west,
+      south: south,
+      dLon: dLon,
+      dLat: dLat,
+      pts: pts
+    };
+  }
+
+  function parseWindRow(row) {
+    var cur = row && row.current ? row.current : row;
+    if (!cur) return null;
+    var sp = cur.wind_speed_10m;
+    var dir = cur.wind_direction_10m;
+    if (sp == null || dir == null || !isFinite(Number(sp)) || !isFinite(Number(dir))) return null;
+    /* Open-Meteo default wind_speed unit = km/h; dir = meteorological FROM */
+    var speedKmh = Number(sp);
+    var fromDeg = Number(dir);
+    var toRad = ((fromDeg + 180) % 360) * Math.PI / 180;
+    var speedMs = speedKmh / 3.6;
+    return {
+      speedKmh: speedKmh,
+      fromDeg: fromDeg,
+      u: speedMs * Math.sin(toRad), /* eastward m/s */
+      v: speedMs * Math.cos(toRad)  /* northward m/s */
+    };
+  }
+
+  function fetchWindBatch(points) {
+    if (!points.length) return Promise.resolve([]);
+    var lats = points.map(function (p) { return p.lat.toFixed(3); }).join(",");
+    var lons = points.map(function (p) { return p.lon.toFixed(3); }).join(",");
+    var url = METEO_URL +
+      "?latitude=" + lats +
+      "&longitude=" + lons +
+      "&current=wind_speed_10m,wind_direction_10m" +
+      "&wind_speed_unit=kmh";
+    return fetchWithTimeout(url, WX_FETCH_TIMEOUT_MS).then(readJsonSafe).then(function (data) {
+      var rows = Array.isArray(data) ? data : [data];
+      return rows;
+    });
+  }
+
+  function fetchWindFieldForView() {
+    if (!map || !windOn) return Promise.resolve(null);
+    var key = windViewKey();
+    var cached = windCache[key];
+    if (cached && (Date.now() - cached.t) < WIND_CACHE_TTL_MS) {
+      windField = cached;
+      return Promise.resolve(cached);
+    }
+    /* reuse nearby cache within TTL if same zoom band */
+    var ck;
+    for (ck in windCache) {
+      if (!Object.prototype.hasOwnProperty.call(windCache, ck)) continue;
+      var hit = windCache[ck];
+      if (hit && hit.key && hit.key.split("|")[0] === key.split("|")[0] &&
+          (Date.now() - hit.t) < WIND_CACHE_TTL_MS &&
+          Math.abs(hit.west - (map.getBounds().getWest())) < hit.dLon * 1.5) {
+        windField = hit;
+        return Promise.resolve(hit);
+      }
+    }
+    if (windFetchPromise) return windFetchPromise;
+    var gen = ++windFetchGen;
+    var grid = buildWindSamplePoints();
+    var pts = grid.pts;
+    var batches = [];
+    var i;
+    for (i = 0; i < pts.length; i += WIND_BATCH) {
+      batches.push(pts.slice(i, i + WIND_BATCH));
+    }
+    windFetchPromise = Promise.all(batches.map(function (batch) {
+      return fetchWindBatch(batch).catch(function () { return []; });
+    })).then(function (parts) {
+      windFetchPromise = null;
+      if (gen !== windFetchGen || !windOn) return windField;
+      var flat = [];
+      var bi;
+      for (bi = 0; bi < parts.length; bi++) {
+        var rows = parts[bi] || [];
+        var j;
+        for (j = 0; j < rows.length; j++) flat.push(rows[j]);
+      }
+      var n = grid.cols * grid.rows;
+      var u = new Float32Array(n);
+      var v = new Float32Array(n);
+      var speeds = new Float32Array(n);
+      var pi;
+      for (pi = 0; pi < pts.length; pi++) {
+        var parsed = parseWindRow(flat[pi]);
+        if (!parsed) continue;
+        var idx = pts[pi].i;
+        u[idx] = parsed.u;
+        v[idx] = parsed.v;
+        speeds[idx] = parsed.speedKmh;
+      }
+      var field = {
+        key: key,
+        cols: grid.cols,
+        rows: grid.rows,
+        west: grid.west,
+        south: grid.south,
+        dLon: grid.dLon,
+        dLat: grid.dLat,
+        u: u,
+        v: v,
+        speeds: speeds,
+        t: Date.now()
+      };
+      windCache[key] = field;
+      /* prune old cache entries */
+      var keys = Object.keys(windCache);
+      if (keys.length > 12) {
+        keys.sort(function (a, b) { return windCache[a].t - windCache[b].t; });
+        var drop;
+        for (drop = 0; drop < keys.length - 8; drop++) delete windCache[keys[drop]];
+      }
+      windField = field;
+      if (!windParticles.length) seedWindParticles(true);
+      return field;
+    }).catch(function () {
+      windFetchPromise = null;
+      return windField;
+    });
+    return windFetchPromise;
+  }
+
+  function scheduleWindFieldRefresh(immediate) {
+    if (!windOn) return;
+    if (windMoveTimer) {
+      clearTimeout(windMoveTimer);
+      windMoveTimer = null;
+    }
+    var run = function () {
+      windMoveTimer = null;
+      if (!windOn || tabHidden || mapGesturing) return;
+      fetchWindFieldForView().then(function () {
+        if (windOn && !tabHidden) startWindAnim();
+      });
+    };
+    if (immediate) run();
+    else windMoveTimer = setTimeout(run, WIND_MOVE_DEBOUNCE_MS);
+  }
+
+  function sampleWindUV(lon, lat) {
+    var f = windField;
+    if (!f) return { u: 0, v: 0, speed: 0 };
+    var x = (lon - f.west) / f.dLon;
+    var y = (lat - f.south) / f.dLat;
+    /* unwrap lon if needed */
+    if (x < -0.5) x += 360 / f.dLon;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x > f.cols - 1.001) x = f.cols - 1.001;
+    if (y > f.rows - 1.001) y = f.rows - 1.001;
+    var x0 = Math.floor(x);
+    var y0 = Math.floor(y);
+    var x1 = Math.min(f.cols - 1, x0 + 1);
+    var y1 = Math.min(f.rows - 1, y0 + 1);
+    var tx = x - x0;
+    var ty = y - y0;
+    function at(c, r) {
+      return r * f.cols + c;
+    }
+    var i00 = at(x0, y0), i10 = at(x1, y0), i01 = at(x0, y1), i11 = at(x1, y1);
+    var u = (1 - tx) * (1 - ty) * f.u[i00] + tx * (1 - ty) * f.u[i10] +
+            (1 - tx) * ty * f.u[i01] + tx * ty * f.u[i11];
+    var v = (1 - tx) * (1 - ty) * f.v[i00] + tx * (1 - ty) * f.v[i10] +
+            (1 - tx) * ty * f.v[i01] + tx * ty * f.v[i11];
+    var sp = (1 - tx) * (1 - ty) * f.speeds[i00] + tx * (1 - ty) * f.speeds[i10] +
+             (1 - tx) * ty * f.speeds[i01] + tx * ty * f.speeds[i11];
+    return { u: u, v: v, speed: sp };
+  }
+
+  function randomInViewLonLat() {
+    var b = map.getBounds();
+    var west = b.getWest();
+    var east = b.getEast();
+    if (east < west) east += 360;
+    var lon = west + Math.random() * (east - west);
+    if (lon > 180) lon -= 360;
+    var lat = b.getSouth() + Math.random() * (b.getNorth() - b.getSouth());
+    return { lon: lon, lat: lat };
+  }
+
+  function seedWindParticles(reset) {
+    if (!map) return;
+    var cap = windParticleCap();
+    if (reset) windParticles = [];
+    while (windParticles.length < cap) {
+      var p = randomInViewLonLat();
+      windParticles.push({
+        lon: p.lon,
+        lat: p.lat,
+        age: Math.random() * 2.5,
+        life: 1.8 + Math.random() * 2.8,
+        trail: []
+      });
+    }
+    if (windParticles.length > cap) windParticles.length = cap;
+  }
+
+  function respawnParticle(p) {
+    var loc = randomInViewLonLat();
+    p.lon = loc.lon;
+    p.lat = loc.lat;
+    p.age = 0;
+    p.life = 1.8 + Math.random() * 2.8;
+    p.trail = [];
+  }
+
+  function startWindAnim() {
+    if (!windOn || tabHidden) return;
+    if (windRaf) return;
+    windLastTs = 0;
+    seedWindParticles(false);
+    function frame(ts) {
+      windRaf = 0;
+      if (!windOn || tabHidden) return;
+      if (!windLastTs) windLastTs = ts;
+      var dt = Math.min(0.05, (ts - windLastTs) / 1000);
+      windLastTs = ts;
+      paintWindFrame(dt);
+      windRaf = requestAnimationFrame(frame);
+    }
+    windRaf = requestAnimationFrame(frame);
+  }
+
+  function stopWindAnim() {
+    if (windRaf) {
+      try { cancelAnimationFrame(windRaf); } catch (eR) {}
+      windRaf = 0;
+    }
+    windLastTs = 0;
+  }
+
+  function paintWindFrame(dt) {
+    ensureWindLayer();
+    syncWindCanvasSize();
+    if (!windCtx || !windCanvas || !map) return;
+    var w = windCanvas.width;
+    var h = windCanvas.height;
+    /* fade trails */
+    windCtx.fillStyle = "rgba(0, 0, 0, 0.09)";
+    windCtx.globalCompositeOperation = "destination-out";
+    windCtx.fillRect(0, 0, w, h);
+    windCtx.globalCompositeOperation = "source-over";
+
+    if (!windField) return;
+    var cap = windParticleCap();
+    if (windParticles.length < cap * 0.7) seedWindParticles(false);
+
+    var b = map.getBounds();
+    var west = b.getWest();
+    var east = b.getEast();
+    var south = b.getSouth();
+    var north = b.getNorth();
+    var wrap = east < west;
+    var i, p, uv, lon, lat, pt, trailLen, speedKmh, stepScale;
+    var METERS_PER_DEG_LAT = 111320;
+
+    windCtx.lineCap = "round";
+    windCtx.lineJoin = "round";
+
+    for (i = 0; i < windParticles.length; i++) {
+      p = windParticles[i];
+      p.age += dt;
+      if (p.age > p.life) {
+        respawnParticle(p);
+      }
+      uv = sampleWindUV(p.lon, p.lat);
+      speedKmh = uv.speed;
+      /* advect: stronger wind → faster motion */
+      stepScale = Math.max(0.15, Math.min(3.2, speedKmh / 18));
+      var cosLat = Math.cos(p.lat * Math.PI / 180);
+      if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
+      /* exaggerate for readable streamlets (visual, still proportional) */
+      var vis = 26 * stepScale;
+      p.lon += (uv.u * dt * vis) / (METERS_PER_DEG_LAT * cosLat);
+      p.lat += (uv.v * dt * vis) / METERS_PER_DEG_LAT;
+      if (p.lon > 180) p.lon -= 360;
+      if (p.lon < -180) p.lon += 360;
+      if (p.lat < south - 0.5 || p.lat > north + 0.5) {
+        respawnParticle(p);
+        continue;
+      }
+      var inLon = wrap
+        ? (p.lon >= west || p.lon <= east)
+        : (p.lon >= west && p.lon <= east);
+      if (!inLon) {
+        respawnParticle(p);
+        continue;
+      }
+      try {
+        pt = map.project([p.lon, p.lat]);
+      } catch (ePr) {
+        respawnParticle(p);
+        continue;
+      }
+      var sx = pt.x * windDpr;
+      var sy = pt.y * windDpr;
+      if (sx < -40 || sy < -40 || sx > w + 40 || sy > h + 40) {
+        respawnParticle(p);
+        continue;
+      }
+      p.trail.push(sx, sy);
+      /* longer trail for stronger wind */
+      trailLen = Math.max(6, Math.min(20, Math.round(6 + speedKmh / 5))) * 2;
+      if (p.trail.length > trailLen) {
+        p.trail = p.trail.slice(p.trail.length - trailLen);
+      }
+      if (p.trail.length < 4) continue;
+      var alpha = Math.min(0.95, 0.38 + speedKmh / 55);
+      var lifeFade = 1;
+      if (p.age < 0.25) lifeFade = p.age / 0.25;
+      else if (p.age > p.life - 0.35) lifeFade = Math.max(0, (p.life - p.age) / 0.35);
+      alpha *= lifeFade;
+      var lw = Math.max(1.1, Math.min(2.8, 1.0 + speedKmh / 28)) * windDpr;
+      windCtx.strokeStyle = "rgba(230, 245, 255," + alpha.toFixed(3) + ")";
+      windCtx.lineWidth = lw;
+      windCtx.beginPath();
+      windCtx.moveTo(p.trail[0], p.trail[1]);
+      var t;
+      for (t = 2; t < p.trail.length; t += 2) {
+        windCtx.lineTo(p.trail[t], p.trail[t + 1]);
+      }
+      windCtx.stroke();
+    }
+  }
+
+  function onWindToggleChange() {
+    var on = !!(toggleWind && toggleWind.checked);
+    saveSetting(WIND_KEY, on ? "1" : "0");
+    setWindUi(on);
+    if (on) {
+      try { setStatus("Wind on — Open-Meteo 10 m wind lines (longer/faster = stronger)."); } catch (eS) {}
+    }
+  }
+
+  function bootWindIfNeeded() {
+    if (!windOn) return;
+    if (toggleWind) toggleWind.checked = true;
+    /* defer fetch until after first paint — don't block boot */
+    afterMapBasicsReady(function () {
+      if (!windOn) return;
+      setWindUi(true);
+    });
+  }
+  /* === END WIND LINES (opt53) === */
+
   /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + single-buffer fade (opt40) === */
   var RADAR_SRC = "radar";
   var RADAR_LAYER = "radar";
@@ -7853,6 +8360,10 @@
 
   map.on("resize", function () {
     schedulePlayImageSizeRefresh();
+    if (windOn) {
+      syncWindCanvasSize();
+      scheduleWindFieldRefresh(false);
+    }
   });
   window.addEventListener("orientationchange", schedulePlayImageSizeRefresh);
 
@@ -7881,6 +8392,7 @@
       }
       maybeIdlePrefetchRing();
       scheduleIdleGoesWarm();
+      if (windOn) scheduleWindFieldRefresh(false);
     }, MOVE_DEBOUNCE_MS);
   });
 
@@ -7947,6 +8459,7 @@
       setTimeout(function () {
         if (!tabHidden) prefetchFlowWorkerScript();
       }, 2000);
+      bootWindIfNeeded();
     });
   });
 
@@ -8215,6 +8728,9 @@
     restackOverlay();
     saveSetting(LABELS_KEY, toggleMap.checked ? "1" : "0");
   });
+  if (toggleWind) {
+    toggleWind.addEventListener("change", onWindToggleChange);
+  }
   (function bindBasemapSeg() {
     var seg = document.getElementById("basemap-seg");
     if (!seg) return;
@@ -8327,6 +8843,7 @@
       cancelIdleGoesWarm();
       cancelPlayTimelineWarm();
       stopRadarRefresh();
+      stopWindAnim();
       try { if (window.__sunnyFpsStop) window.__sunnyFpsStop(); } catch (eFps) {}
       /* opt35: stuck scrub must not leave play ticker wedged on return */
       if (scrubbing) {
@@ -8358,6 +8875,10 @@
         if (!radarOn()) setCloudFrame(cloudIndex);
         if (map && typeof map.triggerRepaint === "function") map.triggerRepaint();
       } catch (eRes) {}
+      if (windOn) {
+        scheduleWindFieldRefresh(true);
+        startWindAnim();
+      }
       if (radarOn()) {
         fetchAndApplyRadar({ quiet: true, preserveIndex: true }).then(function (ok) {
           if (ok && radarOn() && !tabHidden) startRadarRefresh();
@@ -8387,7 +8908,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt52").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt53").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
