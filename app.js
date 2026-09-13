@@ -894,15 +894,23 @@
     syncLoopSplitter();
   }
 
-  function syncSliderUi() {
+  function syncSliderUi(opts) {
     if (!slider) return;
+    opts = opts || {};
     ensureLoopStartInited();
     /* keep playhead from sitting left of splitter */
     if (playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
     slider.min = "0";
     slider.step = "1";
     slider.max = String(sliderUiMax());
-    slider.value = String(sliderUiFromFrac(playheadFrac));
+    /* opt51: overlay thumb/splitter stay 60fps via left%; throttle native
+       #time-slider.value so layout isn't thrashed every rAF while playing. */
+    var forceVal = !!opts.force || !playAnimating || scrubbing;
+    var nowMs = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    if (forceVal || (nowMs - playSliderWriteMs) >= PLAY_SLIDER_THROTTLE_MS) {
+      playSliderWriteMs = nowMs;
+      slider.value = String(sliderUiFromFrac(playheadFrac));
+    }
     syncPlayheadThumb();
   }
 
@@ -970,6 +978,9 @@
    *   when flow cold (~70ms grace); end+Loop-off status feedback.
    * opt48: continuous playheadFrac + rAF (not tick→frame); Play starts/loops
    *   at Now−1h; unlabeled 6/12/24h range next to Overlay.
+   * opt51: safe fluid polish — write-path canvas attrs (alpha, no WRF on rAF),
+   *   hi-res only floor/ceil/+1 while playing, throttle #time-slider.value,
+   *   CSS contain on play layer, warmer in-flight ≤1–2 during Play.
    */
   var CLOUD_FADE_MS = 320; /* opt37: readable soften at 1x; scaled via playFadeMs */
   var PLAY_PACE_MS = 600; /* opt46: ~600ms @1x — continuous motion, not slideshow */
@@ -1037,6 +1048,9 @@
   var playHiResPending = Object.create(null);
   var playHiResFade = { pairKey: "", opacity: 0, t0: 0, active: false };
   var playHiResRaf = 0;
+  var playSliderWriteMs = 0; /* opt51: throttle native range value during rAF play */
+  var PLAY_SLIDER_THROTTLE_MS = 32;
+  var playHiResInFlight = 0; /* opt51: cap concurrent hi-res fetches while playing */
   var playLoadGen = 0;
   var playFadeRaf = 0;
   var playMoveTimer = null;
@@ -1798,14 +1812,17 @@
           return;
         }
       } catch (ePump) {}
-      /* Yield while Play is loading/decoding the active frame */
+      /* Yield while active frame is decoding; while animating only cap concurrency */
       if (playBusy && !scrubbing) {
         playWarmTimer = setTimeout(pump, 180);
         return;
       }
 
       var order = warmOrderIndices();
-      var limit = (playTimer || isPlaying()) && !scrubbing ? 2 : PLAY_WARM_CONCURRENCY;
+      /* opt51: never steal more than soft concurrency while Play animates (cap 1–2) */
+      var limit = PLAY_WARM_CONCURRENCY;
+      if (!scrubbing && playAnimating) limit = 1;
+      else if (!scrubbing && (playTimer || isPlaying() || playMode)) limit = 2;
 
       while (playWarmInFlight < limit && cursor < order.length) {
         var idx = order[cursor++];
@@ -1872,6 +1889,7 @@
     playHiResCache = Object.create(null);
     playHiResOrder = [];
     playHiResPending = Object.create(null);
+    playHiResInFlight = 0;
     playHiResFade = { pairKey: "", opacity: 0, t0: 0, active: false };
     playFlowCache = Object.create(null);
     playFlowOrder = [];
@@ -2030,15 +2048,28 @@
     }
   }
 
+  function countHiResPending() {
+    var n = 0, k;
+    for (k in playHiResPending) {
+      if (Object.prototype.hasOwnProperty.call(playHiResPending, k) && playHiResPending[k]) n += 1;
+    }
+    return n;
+  }
+
   function kickLoadHiResIndex(idx) {
     try {
       if (playUseOpenMeteo || !cloudTimes.length || !playHiResWorthwhile()) return;
       var isoN = cloudTimes[clampIndex(idx)];
       if (!isoN) return;
       var metaN = gibsWmsHiResMeta(isoN, origin ? origin.lon : null);
+      /* Already cached or in-flight — free */
+      if ((playHiResCache[metaN.key] && playHiResCache[metaN.key].ok) || playHiResPending[metaN.key]) return;
+      /* opt51: while playing, never let hi-res exceed soft concurrency (cap 2) */
+      if (playAnimating && countHiResPending() >= 2) return;
+      playHiResInFlight = countHiResPending() + 1;
       loadHiResImageSrc(metaN.url, metaN.key).then(function (rec) {
+        playHiResInFlight = countHiResPending();
         if (!rec || !rec.ok) return;
-        /* If still on this floor/ceil, refresh progressive overlay */
         try {
           if (playAnimating || playCanvasSession) paintContinuousClouds();
         } catch (eP) {}
@@ -2574,6 +2605,26 @@
     try { hideHiResCanvas(); } catch (eHr) {}
   }
 
+
+  /* opt51: write-path contexts prefer alpha; willReadFrequently ONLY where getImageData runs */
+  function canvas2dWrite(c) {
+    if (!c) return null;
+    try {
+      return c.getContext("2d", { alpha: true });
+    } catch (eW) {
+      try { return c.getContext("2d"); } catch (e2) { return null; }
+    }
+  }
+
+  function canvas2dRead(c) {
+    if (!c) return null;
+    try {
+      return c.getContext("2d", { alpha: true, willReadFrequently: true });
+    } catch (eR) {
+      try { return c.getContext("2d", { willReadFrequently: true }); } catch (e2) { return null; }
+    }
+  }
+
   function showMotionCanvas(op) {
     var c = motionCanvasEl();
     if (!c) return null;
@@ -2627,7 +2678,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt50");
+      playFlowWorker = new Worker("flow-worker.js?v=opt51");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -2706,7 +2757,7 @@
     var c = document.createElement("canvas");
     c.width = w;
     c.height = h;
-    var ctx = c.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dRead(c);
     if (!ctx) return null;
     try {
       ctx.drawImage(img, 0, 0, w, h);
@@ -2753,7 +2804,7 @@
     var c = document.createElement("canvas");
     c.width = w;
     c.height = h;
-    var ctx = c.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dRead(c);
     if (!ctx) return null;
     try {
       ctx.drawImage(bmp, 0, 0, w, h);
@@ -3086,7 +3137,7 @@
       canvas.width = w;
       canvas.height = h;
     }
-    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dWrite(canvas);
     if (!ctx) {
       if (!playAnimating) {
         hideMotionCanvas();
@@ -3198,7 +3249,7 @@
       canvas.width = outW;
       canvas.height = outH;
     }
-    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dWrite(canvas);
     if (!ctx) {
       if (!playAnimating) {
         hideMotionCanvas();
@@ -3299,7 +3350,7 @@
     var h = Math.max(24, Math.round(nh * scale));
     canvas.width = w;
     canvas.height = h;
-    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dWrite(canvas);
     if (!ctx) {
       resolve(false);
       return;
@@ -3752,7 +3803,7 @@
       var sz = playImageSize();
       canvas.width = sz.w;
       canvas.height = sz.h;
-      var ctx = canvas.getContext("2d");
+      var ctx = canvas2dWrite(canvas);
       if (!ctx) return false;
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, sz.w, sz.h);
@@ -4902,7 +4953,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt50");
+      beachWorker = new Worker("beach-worker.js?v=opt51");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -7057,7 +7108,7 @@
 
   function paintAlphaAtT(canvas, imgA, imgB, t) {
     var dim = fitMotionCanvas(canvas, imgA, imgB);
-    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dWrite(canvas);
     if (!ctx) return false;
     try {
       ctx.globalAlpha = 1;
@@ -7081,7 +7132,7 @@
       canvas.width = outW;
       canvas.height = outH;
     }
-    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    var ctx = canvas2dWrite(canvas);
     if (!ctx) return false;
     try {
       renderMotionFrame(ctx, flowRec.pixA, flowRec.pixB, flowRec, t, outW, outH);
@@ -7171,8 +7222,10 @@
     kickLoadCloudIndex(i0);
     kickLoadCloudIndex(i1);
     kickLoadCloudIndex(i2);
+    /* opt51: hi-res only floor/ceil (+1) — never distant frames while playing */
     try { kickLoadHiResIndex(i0); } catch (eH0) {}
     try { kickLoadHiResIndex(i1); } catch (eH1) {}
+    try { kickLoadHiResIndex(i2); } catch (eH2) {}
     if (i0 === playPrefetchAt) return;
     playPrefetchAt = i0;
     try { prefetchPlayIndices(i0); } catch (eP) {}
@@ -8275,7 +8328,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt50").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt51").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

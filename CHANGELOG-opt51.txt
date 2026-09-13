@@ -1,0 +1,16 @@
+SUNNY opt51 — safe fluid animation polish
+
+1) Canvas getContext: write/blend paths use { alpha: true } via canvas2dWrite;
+   willReadFrequently ONLY on downsample/bitmap paths that call getImageData.
+2) Hi-res during Play: floor/ceil/+1 only; concurrent pending capped at 2 while
+   playAnimating so distant/full-res never starves soft prefetch.
+3) Scrubber DOM: playhead-thumb / loop-splitter still update every rAF (left%);
+   native #time-slider.value throttled to ~32ms while continuous play runs.
+4) CSS contain: layout style on #cloud-play-layer; layout style paint on
+   motion/hires. will-change opacity/left only while actively on/dragging.
+5) Warmer: playBusy still yields fully; while playAnimating in-flight soft warm
+   capped to 1 (else ≤2 in playMode). No boot freeze / cache-only advance.
+6) desynchronized: SKIPPED — flicker risk on alpha-blend/motion paths.
+
+Kept: opt50 progressive hi-res fade, opt49 splitter, opt48 continuous playhead.
+No starcode. ?v=opt51; CACHE=sunny-v-opt51.

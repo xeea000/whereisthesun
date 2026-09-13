@@ -75,6 +75,8 @@ html, body {
   background: transparent;
   filter: contrast(1.15) brightness(1.05);
   --cloud-play-op: 0.90;
+  /* opt51: limit reflow; no paint contain — preserves mix-blend-mode with map */
+  contain: layout style;
 }
 #cloud-play-layer.clouds-solid {
   mix-blend-mode: normal;
@@ -140,6 +142,7 @@ html, body {
   display: none;
   object-fit: fill;
   image-rendering: auto;
+  contain: layout style paint;
 }
 #cloud-play-layer .cloud-play-motion.is-on {
   display: block;
@@ -157,10 +160,12 @@ html, body {
   display: none;
   object-fit: fill;
   image-rendering: auto;
-  will-change: opacity;
+  contain: layout style paint;
 }
 #cloud-play-layer .cloud-play-hires.is-on {
   display: block;
+  /* opt51: will-change only while actively fading/visible */
+  will-change: opacity;
 }
 
 .hud {
@@ -468,10 +473,10 @@ html, body {
   pointer-events: none;
   z-index: 3;
   display: none;
-  will-change: left;
 }
 .playhead-thumb.is-on {
   display: block;
+  will-change: left;
 }
 
 /* opt49: loop-start splitter — Loop rewinds / Play starts here */
@@ -489,7 +494,6 @@ html, body {
   z-index: 4;
   cursor: grab;
   touch-action: none;
-  will-change: left;
   user-select: none;
 }
 .loop-splitter:hover {
@@ -499,6 +503,7 @@ html, body {
 .loop-splitter:active,
 .loop-splitter.is-dragging {
   cursor: grabbing;
+  will-change: left;
 }
 .track-wrap.is-playing-smooth #time-slider::-webkit-slider-thumb {
   opacity: 0;
