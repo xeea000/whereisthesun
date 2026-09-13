@@ -455,19 +455,31 @@
     }
     if (goesTimeProbe) return goesTimeProbe;
     var startMs = goesWallLatestMs();
-    goesTimeProbe = (function tryAt(step) {
-      if (step > GOES_PROBE_BACK_STEPS) {
+    /* opt52: probe several 10-min slots in parallel instead of serial walk-back */
+    var PROBE_BATCH = 4;
+    goesTimeProbe = (function tryBatch(startStep) {
+      if (startStep > GOES_PROBE_BACK_STEPS) {
         var fb = goesLatestIsoSync();
         rememberGoesGood(fb);
         return Promise.resolve(fb);
       }
-      var iso = toGoesIso(startMs - step * GOES_STEP_MS);
-      return probeGoesWmtsTile(iso, lon).then(function (ok) {
-        if (ok) {
-          rememberGoesGood(iso);
-          return iso;
+      var probes = [];
+      var s;
+      for (s = startStep; s <= GOES_PROBE_BACK_STEPS && probes.length < PROBE_BATCH; s++) {
+        (function (step) {
+          var iso = toGoesIso(startMs - step * GOES_STEP_MS);
+          probes.push({ step: step, iso: iso, p: probeGoesWmtsTile(iso, lon) });
+        })(s);
+      }
+      return Promise.all(probes.map(function (x) { return x.p; })).then(function (oks) {
+        var j;
+        for (j = 0; j < oks.length; j++) {
+          if (oks[j]) {
+            rememberGoesGood(probes[j].iso);
+            return probes[j].iso;
+          }
         }
-        return tryAt(step + 1);
+        return tryBatch(startStep + probes.length);
       });
     })(0).then(function (iso) {
       goesTimeProbe = null;
@@ -2678,7 +2690,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt51");
+      playFlowWorker = new Worker("flow-worker.js?v=opt52");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3703,6 +3715,39 @@
     } else {
       try { prefetchFlowAhead(fromIndex); } catch (eP3) {}
     }
+  }
+
+  /* opt52: after first paint (2 rAF) + idle — map shell/tiles win the network */
+  function afterMapBasicsReady(fn) {
+    function go() {
+      try { fn(); } catch (eAf) {}
+    }
+    try {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (typeof requestIdleCallback === "function") {
+            requestIdleCallback(function () { go(); }, { timeout: 900 });
+          } else {
+            setTimeout(go, 50);
+          }
+        });
+      });
+    } catch (eRaf) {
+      setTimeout(go, 120);
+    }
+  }
+
+  function prefetchFlowWorkerScript() {
+    /* Warm HTTP/SW cache only — Worker still constructed lazily on Play. */
+    try {
+      if (document.querySelector('link[data-sunny-flow-prefetch]')) return;
+      var link = document.createElement("link");
+      link.rel = "prefetch";
+      link.as = "script";
+      link.href = "flow-worker.js?v=opt52";
+      link.setAttribute("data-sunny-flow-prefetch", "1");
+      document.head.appendChild(link);
+    } catch (ePf) {}
   }
 
   function cancelIdleGoesWarm() {
@@ -4953,7 +4998,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt51");
+      beachWorker = new Worker("beach-worker.js?v=opt52");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -7027,11 +7072,16 @@
       muteCloudsForRadar();
       if (btnPlay) btnPlay.setAttribute("aria-label", "Play radar animation");
       if (!opts.silent) setStatus("Radar on — Play loops rain.");
-      fetchAndApplyRadar({ quiet: false, jumpLatest: true }).then(function (ok) {
-        if (!radarOn()) return;
-        if (ok && !tabHidden) startRadarRefresh();
-        if (!opts.silent && !ok) setStatus("Radar unavailable right now.");
-      });
+      function kickRadarFetch() {
+        fetchAndApplyRadar({ quiet: !!opts.silent, jumpLatest: true }).then(function (ok) {
+          if (!radarOn()) return;
+          if (ok && !tabHidden) startRadarRefresh();
+          if (!opts.silent && !ok) setStatus("Radar unavailable right now.");
+        });
+      }
+      /* opt52: on boot restore, let basemap paint before RainViewer manifest */
+      if (opts.deferFetch) afterMapBasicsReady(kickRadarFetch);
+      else kickRadarFetch();
     } else {
       /* Switching to Clouds: stop radar play/refresh; remove radar; restore clouds */
       stopRadarPlayOnly();
@@ -7470,7 +7520,7 @@
       else applyOverlay();
     } catch (e3) {}
     try {
-      setOverlayMode(overlayMode, { force: true, silent: true });
+      setOverlayMode(overlayMode, { force: true, silent: true, deferFetch: true });
     } catch (eRadarR) {}
     try {
       var raw = localStorage.getItem(VIEW_KEY);
@@ -7835,6 +7885,7 @@
   });
 
   map.on("load", function () {
+    /* opt52: critical path — map shell, basemap, GOES tip; defer beach/workers/warm */
     cloudTimes = buildCloudTimes();
     refreshPlayCacheCaps();
     playheadFrac = sliderMax();
@@ -7886,9 +7937,17 @@
     var lastGps = readLastLocate();
     var bootLat = lastGps ? lastGps.lat : DEFAULT_WARM_LAT;
     var bootLon = lastGps ? lastGps.lon : DEFAULT_WARM_LON;
-    preloadRegionsNearLastGps();
-    loadBeachDb({ quiet: true, lat: bootLat, lon: bootLon }).catch(function () {});
+    /* locate stays quiet/async — never blocks map paint */
     locate({ boot: true });
+    /* Heavy work after first paint + idle; independent tasks fire in parallel */
+    afterMapBasicsReady(function () {
+      preloadRegionsNearLastGps();
+      loadBeachDb({ quiet: true, lat: bootLat, lon: bootLon }).catch(function () {});
+      scheduleIdleGoesWarm();
+      setTimeout(function () {
+        if (!tabHidden) prefetchFlowWorkerScript();
+      }, 2000);
+    });
   });
 
   map.on("idle", function () {
@@ -8328,7 +8387,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt51").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt52").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

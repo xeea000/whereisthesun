@@ -1,0 +1,21 @@
+SUNNY opt52 — faster boot: basics first, heavy work parallel/deferred
+
+1) Critical path on map.load: shell UI, basemap, beach layers, GOES tip probe.
+   Locate stays quiet/async (never blocks paint).
+
+2) Deferred until after first paint (2×rAF) + idle:
+   beach DB warm, GPS region preload, idle GOES warm, flow-worker script
+   prefetch (2s later). Beach/flow Workers still lazy-constructed on need.
+
+3) Parallel: GOES latest probe batches 4 WMTS slots via Promise.all (was
+   serial walk-back). Independent deferred heavies fire together.
+
+4) Radar: clouds mode still skips RainViewer until Overlay=Radar. Boot
+   restore of Radar mutes clouds immediately but defers manifest fetch
+   until after first paint.
+
+5) SW: CACHE=sunny-v-opt52; precache shell only (no beach/flow workers) so
+   install does not compete with first paint. Network-first unchanged.
+
+Do not gimp Play quality / hi-res fade / continuous playhead / splitter.
+No starcode. ?v=opt52.
