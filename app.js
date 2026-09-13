@@ -688,6 +688,9 @@
    * opt46: persistent motion canvas for whole Play session (no hide+snap join
    *   pop); flow-gated advances only (no opacity dissolve while animating);
    *   kill schedule(80) cold stutter; step=1 always; optional boot warm.
+   * opt47: smash Play reliability — start clock NOW (no 10-frame boot gate);
+   *   always advance playhead (no cache freeze); canvas alpha-blend fallback
+   *   when flow cold (~70ms grace); end+Loop-off status feedback.
    */
   var CLOUD_FADE_MS = 320; /* opt37: readable soften at 1x; scaled via playFadeMs */
   var PLAY_PACE_MS = 600; /* opt46: ~600ms @1x — continuous motion, not slideshow */
@@ -695,7 +698,8 @@
   var FRAME_LOAD_STUCK_MS = 1000; /* "Downloading cloud frame…" only if WMS >~1s */
   var FRAME_PLAY_STEP = 1; /* opt46: always 1 — speed only changes dwell */
   var PLAY_PREFETCH = 10; /* opt46: deeper warm ahead (step always 1) */
-  var PLAY_BOOT_WARM_MIN = 10; /* opt46: warm nearby before first tick if cold */
+  var PLAY_BOOT_WARM_MIN = 2; /* opt47: at most 2 nearby frames; never block clock */
+  var PLAY_BOOT_WARM_MS = 1200; /* opt47: hard cap if we briefly race warm */
   var PLAY_MOVE_DEBOUNCE_MS = 180; /* opt23: WMS reload after gesture ends */
   var PLAY_LRU_CAP = 160; /* opt44: raised dynamically with cloudTimes */
   var PLAY_LRU_CAP_MAX = 200; /* opt44: memory bound */
@@ -742,7 +746,7 @@
   var playMoveTimer = null;
   /* opt41/opt42/opt43/opt44: optical-flow motion lerp */
   var FLOW_GRACE_MS = 50; /* scrub/one-shot: brief grace then opacity OK */
-  var FLOW_WAIT_MS = 220; /* opt46: Play animating — wait for flow before advance */
+  var FLOW_WAIT_MS = 70; /* opt47: short grace then canvas alpha-blend (not freeze) */
   var FLOW_CACHE_CAP = 150; /* opt44: survive full loop; raised with cloudTimes */
   var FLOW_CACHE_CAP_MAX = 200;
   var FLOW_BLOCK = 12; /* opt42: larger blocks = fewer SADs */
@@ -1967,7 +1971,7 @@
   }
 
   function flowWaitMs() {
-    /* opt46: while Play animating, wait longer for flow before advancing. */
+    /* opt47: brief wait for cached/in-flight flow; then canvas alpha-blend. */
     return FLOW_WAIT_MS;
   }
 
@@ -2053,7 +2057,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt46");
+      playFlowWorker = new Worker("flow-worker.js?v=opt47");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -2480,6 +2484,132 @@
     });
   }
 
+  function rafCanvasAlphaBlend(back, front, gen, resolve) {
+    /* opt47: while Play animating + flow cold — draw A then B with rising
+       alpha on the persistent motion canvas. Not HTML opacity slideshow,
+       not resolve(false) freeze. Motion lerp still preferred when flow ready. */
+    var targetOp = gibsEffectiveOpacity();
+    var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    var dur = playFadeMs();
+    var canvas = showMotionCanvas(targetOp);
+    if (!canvas) {
+      if (!playAnimating) rafCrossfade(back, front, gen, resolve);
+      else resolve(false);
+      return;
+    }
+    if (!back || !back.naturalWidth) {
+      clearPlayFrameHints();
+      resolve(false);
+      return;
+    }
+    var maxW = flowMaxWidth();
+    var nw = back.naturalWidth;
+    var nh = back.naturalHeight;
+    if (front && front.naturalWidth) {
+      nw = Math.max(nw, front.naturalWidth);
+      nh = Math.max(nh, front.naturalHeight);
+    }
+    var scale = Math.min(1, maxW / nw);
+    var w = Math.max(32, Math.round(nw * scale));
+    var h = Math.max(24, Math.round(nh * scale));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      if (!playAnimating) {
+        hideMotionCanvas();
+        rafCrossfade(back, front, gen, resolve);
+      } else resolve(false);
+      return;
+    }
+    playMotionActive = true;
+    playCanvasSession = true;
+    if (front) {
+      front.style.opacity = "0";
+      clearPlayBufFilter(front);
+      front.classList.remove("is-front");
+      front.classList.remove("is-incoming");
+    }
+    back.style.opacity = "0";
+    clearPlayBufFilter(back);
+    back.classList.remove("is-front");
+    back.classList.add("is-incoming");
+
+    function step(now) {
+      playFadeRaf = 0;
+      if (gen !== playLoadGen) {
+        playMotionActive = false;
+        clearBlendingHint();
+        if (!playAnimating) hideMotionCanvas();
+        try { back.classList.remove("is-incoming"); } catch (eI) {}
+        resolve(false);
+        return;
+      }
+      var t = Math.min(1, (now - start) / dur);
+      var e = playEase(t);
+      try {
+        ctx.globalAlpha = 1;
+        ctx.clearRect(0, 0, w, h);
+        if (front && front.naturalWidth) {
+          ctx.drawImage(front, 0, 0, w, h);
+        }
+        ctx.globalAlpha = e;
+        ctx.drawImage(back, 0, 0, w, h);
+        ctx.globalAlpha = 1;
+      } catch (eRen) {
+        playMotionActive = false;
+        clearBlendingHint();
+        if (!playAnimating) {
+          hideMotionCanvas();
+          rafCrossfade(back, front, gen, resolve);
+        } else {
+          /* Still try to park B so playhead can advance */
+          try {
+            ctx.globalAlpha = 1;
+            ctx.drawImage(back, 0, 0, w, h);
+          } catch (ePark) {}
+          back.classList.remove("is-incoming");
+          back.classList.add("is-front");
+          releasePlayStaticHold();
+          resolve(true);
+        }
+        return;
+      }
+      if (t < 1) {
+        playFadeRaf = requestAnimationFrame(step);
+      } else {
+        playMotionActive = false;
+        clearBlendingHint();
+        try {
+          ctx.globalAlpha = 1;
+          ctx.drawImage(back, 0, 0, w, h);
+        } catch (eEnd) {}
+        back.classList.remove("is-incoming");
+        back.classList.add("is-front");
+        back.style.opacity = "0";
+        if (front) {
+          front.style.opacity = "0";
+          front.classList.remove("is-front");
+          front.classList.remove("is-incoming");
+        }
+        if (!playAnimating) {
+          back.style.opacity = String(targetOp);
+          clearPlayBufFilter(back);
+          if (front) {
+            front.style.opacity = "0";
+            clearPlayBufFilter(front);
+          }
+          hideMotionCanvas();
+        }
+        releasePlayStaticHold();
+        resolve(true);
+      }
+    }
+    playFadeRaf = requestAnimationFrame(step);
+  }
+
   function rafMotionLerp(back, front, flowRec, gen, resolve) {
     var targetOp = gibsEffectiveOpacity();
     var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
@@ -2547,8 +2677,8 @@
           hideMotionCanvas();
           rafCrossfade(back, front, gen, resolve);
         } else {
-          /* Hold last good canvas pixels; do not opacity-dissolve */
-          resolve(false);
+          /* opt47: motion render failed — canvas alpha-blend, keep advancing */
+          rafCanvasAlphaBlend(back, front, gen, resolve);
         }
         return;
       }
@@ -2624,10 +2754,9 @@
   }
 
   function beginPlayTransition(back, front, gen, backKey, resolve) {
-    /* opt46: while playAnimating — motion-only path (persistent canvas).
-       Never use opacity rafCrossfade as the normal Play path (slideshow).
-       Wait up to FLOW_WAIT_MS for flow; if still cold: hold canvas / reuse
-       last flow lightly; skip opacity dissolve between GOES frames. */
+    /* opt47: while playAnimating — prefer motion lerp on persistent canvas.
+       Short FLOW_WAIT_MS grace; if flow cold: canvas alpha-blend (A→B on
+       same canvas). Never HTML opacity slideshow; never freeze on resolve(false). */
     if (!back || !back.naturalWidth) {
       clearPlayFrameHints();
       resolve(false);
@@ -2661,7 +2790,7 @@
         return;
       }
       if (playAnimating) {
-        /* No flow after budget: try light reuse of last vectors if dims match */
+        /* No flow after short grace: try light reuse, else canvas alpha-blend */
         var reuse = playLastFlowRec;
         if (reuse && reuse.flow && reuse.pixA && reuse.pixB &&
             reuse.w && back.naturalWidth) {
@@ -2684,18 +2813,20 @@
                 rafMotionLerp(back, front, light, gen, resolve);
               } else {
                 clearBlendingHint();
-                /* Hold last canvas frame — do not dissolve */
-                resolve(false);
+                scheduleBlendingHint(fromCachedDownload);
+                rafCanvasAlphaBlend(back, front, gen, resolve);
               }
             }).catch(function () {
               clearBlendingHint();
-              resolve(false);
+              scheduleBlendingHint(fromCachedDownload);
+              rafCanvasAlphaBlend(back, front, gen, resolve);
             });
             return;
           } catch (eRu) {}
         }
         clearBlendingHint();
-        resolve(false);
+        scheduleBlendingHint(fromCachedDownload);
+        rafCanvasAlphaBlend(back, front, gen, resolve);
         return;
       }
       /* Scrub / one-shot: opacity OK */
@@ -4197,7 +4328,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt46");
+      beachWorker = new Worker("beach-worker.js?v=opt47");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6658,6 +6789,7 @@
       else {
         playAnimating = false;
         setPlayButtonPlaying(false);
+        try { setStatus("At latest — enable Loop or scrub back"); } catch (eEnd) {}
       }
       return;
     }
@@ -6727,23 +6859,12 @@
         next = cloudIndex + playFrameStep();
         if (next >= sliderMax()) next = sliderMax();
       }
-      /* opt46: only advance when next image is cached AND flow for current→next
-         is ready (or finishes within FLOW_WAIT inside beginPlayTransition).
-         While waiting: keep last canvas/hold frame; warmer loads ahead.
-         No schedule(80) spin. No opacity dissolve path while animating. */
-      if (holdTarget == null && !playFrameIsCached(next)) {
-        prefetchPlayIndices(cloudIndex);
-        kickLoadIndex(next);
-        kickLoadIndex(next + 1);
-        try { startPlayTimelineWarm(); } catch (eW) {}
-        try { prefetchFlowAhead(cloudIndex); } catch (ePf) {}
-        schedule(280);
-        return;
-      }
-      /* Triple-buffer: kick i+2 image + flow(i+1→i+2) while we prepare this step.
-         Flow wait budget lives in beginPlayTransition (FLOW_WAIT_MS) — do not
-         add another poll layer here (that stacked pauses). */
+      /* opt47: ALWAYS advance playhead — missing cache must not freeze Play.
+         Prefetch/warmer still help; setCloudFrame loads as needed.
+         No schedule(280) cache spin. No schedule(80) cold stutter. */
+      kickLoadIndex(next);
       kickLoadIndex(next + 1);
+      try { startPlayTimelineWarm(); } catch (eW) {}
       try { prefetchFlowAhead(cloudIndex); } catch (ePf2) {}
       if (holdTarget == null && !playUseOpenMeteo && !playFlowIsCachedForPair(cloudIndex, next)) {
         try { ensureFlowPairForIndices(cloudIndex, next); } catch (eEf) {}
@@ -6791,7 +6912,7 @@
       if (cloudTimes.length) slider.max = String(sliderMax());
       slider.value = String(startIdx);
     }
-    function beginTicksAfterWarm() {
+    function beginTicks() {
       if (playSession !== session || !playAnimating) return;
       withPlayFrameTimeout(setCloudFrame(startIdx), PLAY_FRAME_TIMEOUT_MS).then(function () {
         playBusy = false;
@@ -6804,30 +6925,29 @@
     }
     testWmsCors().then(function () {
       if (playSession !== session || !playAnimating) return;
-      /* opt46: if few nearby frames cached, briefly warm then start clock */
-      var have = countCachedAround(startIdx, PLAY_BOOT_WARM_MIN);
-      if (!playUseOpenMeteo && have < PLAY_BOOT_WARM_MIN) {
-        cachingFramesHint = true;
-        try { setStatus("Caching cloud frames…"); } catch (eSt) {}
-        warmNearbyFrames(startIdx, PLAY_BOOT_WARM_MIN).then(function () {
-          if (playSession !== session || !playAnimating) return;
-          clearCachingFramesHint();
-          /* Warm first flow pair best-effort before ticks */
-          ensureFlowPairForIndices(startIdx, clampIndex(startIdx + 1)).then(function () {
-            beginTicksAfterWarm();
-          }).catch(function () { beginTicksAfterWarm(); });
-        }).catch(function () {
-          clearCachingFramesHint();
-          beginTicksAfterWarm();
-        });
-        return;
+      /* opt47: never block the clock on boot warm. Kick ≤2 frames + flow in
+         background (hard-capped); start ticks immediately. Timeline warmer
+         remains background-only via startPlayTimelineWarm. */
+      clearCachingFramesHint();
+      if (!playUseOpenMeteo) {
+        try {
+          var warmRace = warmNearbyFrames(startIdx, PLAY_BOOT_WARM_MIN);
+          var warmCap = new Promise(function (resolve) {
+            setTimeout(function () { resolve(0); }, PLAY_BOOT_WARM_MS);
+          });
+          Promise.race([warmRace, warmCap]).then(function () {
+            if (playSession !== session || !playAnimating) return;
+            try { ensureFlowPairForIndices(startIdx, clampIndex(startIdx + 1)); } catch (eEf0) {}
+          }).catch(function () {});
+        } catch (eBoot) {}
       }
-      beginTicksAfterWarm();
+      try { startPlayTimelineWarm(); } catch (eTw) {}
+      beginTicks();
     });
   }
 
   function togglePlay() {
-    /* opt45/opt46: if animating → always stop; else start. Never "pressed but no timer → resume". */
+    /* opt45/opt47: if animating → always stop; else start. Never "pressed but no timer → resume". */
     if (playAnimating) {
       stopPlay();
       return;
@@ -7305,7 +7425,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt46").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt47").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

@@ -1,0 +1,25 @@
+SUNNY opt47 — smash Play reliability (start now, never freeze)
+
+User report: Play still horribly laggy; pressing Play sometimes does nothing.
+Root causes verified in opt46:
+1) Blocking boot warm of 10 WMS frames before any tick ("Caching…" forever).
+2) Cache gate schedule(280) while next uncached — canvas frozen spin.
+3) Flow miss → resolve(false) while animating → retries/hold = stuck.
+4) At end + Loop off: intentional no-op with no feedback.
+
+Fixes (reliability over perfection):
+A) Play starts NOW — no blocking 10-frame warm. At most race 2 frames with
+   1.2s hard cap in background; beginTicks immediately; timeline warmer
+   stays background-only (startPlayTimelineWarm).
+B) Always setCloudFrame(next) — deleted "only advance if cached" gate.
+   Prefetch/warmer still help; missing cache must not freeze Play.
+C) Short FLOW_WAIT (~70ms); on miss prefer canvas alpha-blend (draw A then
+   B with rising alpha on persistent motion canvas). Not HTML opacity
+   slideshow, not resolve(false) freeze. Motion lerp when flow cached.
+D) At end + Loop off: status "At latest — enable Loop or scrub back";
+   keep Play icon. Empty cloudTimes message unchanged.
+
+Kept: full timeline LRU (opt44), honest download status, single radar,
+locate, GOES lag, step=1, honest playAnimating/Pause (opt45), persistent
+canvas session (opt46). No schedule(80) cold spin freeze. No starcode.
+?v=opt47; CACHE=sunny-v-opt47.
