@@ -145,6 +145,24 @@ html, body {
   display: block;
 }
 
+/* opt50: progressive full-res overlay — fades in over soft preview */
+#cloud-play-layer .cloud-play-hires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 4;
+  pointer-events: none;
+  display: none;
+  object-fit: fill;
+  image-rendering: auto;
+  will-change: opacity;
+}
+#cloud-play-layer .cloud-play-hires.is-on {
+  display: block;
+}
+
 .hud {
   position: fixed;
   top: max(10px, env(safe-area-inset-top));

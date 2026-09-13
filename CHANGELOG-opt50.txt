@@ -1,0 +1,18 @@
+SUNNY opt50 — progressive full-res cloud fade-in
+
+1) Soft preview unchanged: computePlayImageSize / wmsMaxSide caps stay the
+   fast Play path. Never hard-swap to a worse or incomplete paint.
+
+2) Hi-res WMS: computePlayHiResSize ≈ CSS×devicePixelRatio (max 1920).
+   Separate LRU (playHiResCache, cap 36) with distinct keys (|hi).
+   Background fetch for current floor/ceil while soft stays visible.
+
+3) Progressive enhance: .cloud-play-hires canvas over motion canvas.
+   When hi-res ready for current floor/ceil, opacity lerp ~400ms onto
+   the persistent play canvas. Incomplete hi-res → keep soft only.
+
+4) Static GIBS: raster-fade-duration ~400ms so tiles fade in over pop.
+   Pause settle prefers hi-res URL when already cached.
+
+Kept: opt49 loop splitter, opt48 continuous playhead, opt47 reliability.
+No starcode. ?v=opt50; CACHE=sunny-v-opt50.
