@@ -93,6 +93,8 @@
   var LOOP_KEY = "sunny-loop";
   var SPEED_KEY = "sunny-play-speed";
   var RANGE_KEY = "sunny-hours-back";
+  var LOOP_START_KEY = "sunny-loop-start"; /* opt49: 0–1 fraction of timeline */
+  var _sunnySavedLoopStartFrac = null;
   /* opt19: overlayMode clouds|radar — remember opacity while radar mutes clouds */
   var overlayMode = "clouds"; /* "clouds" | "radar" */
   var playLoop = true; /* opt21: Loop checkbox default ON */
@@ -163,6 +165,13 @@
     var rN = Number(savedRange);
     if (rN === 6 || rN === 12 || rN === 24) HOURS_BACK = rN;
   } catch (eRange) {}
+  try {
+    var savedLs = localStorage.getItem(LOOP_START_KEY);
+    if (savedLs != null && savedLs !== "") {
+      var lsN = Number(savedLs);
+      if (isFinite(lsN) && lsN >= 0 && lsN <= 1) _sunnySavedLoopStartFrac = lsN;
+    }
+  } catch (eLs) {}
   if (playSpeedEl) playSpeedEl.value = String(playSpeed);
   var allMode = false;
   var nearbyBeaches = [];
@@ -486,6 +495,12 @@
       cloudIndex = clampIndex(cloudIndex);
     }
     playheadFrac = cloudIndex;
+    if (loopStartInited) {
+      loopStartFrac = clampLoopStart(loopStartFrac);
+      if (playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
+    } else {
+      ensureLoopStartInited();
+    }
     syncSliderUi();
     rebuildTimeTicks();
   }
@@ -680,7 +695,7 @@
     return best;
   }
 
-  function playLoopStartIndex() {
+  function defaultCloudLoopStartIndex() {
     if (!cloudTimes.length) return 0;
     var latest = goesIsoMs(cloudTimes[cloudTimes.length - 1]);
     if (!isFinite(latest)) return 0;
@@ -690,7 +705,7 @@
     return idx;
   }
 
-  function radarLoopStartIndex() {
+  function defaultRadarLoopStartIndex() {
     if (!radarPast || !radarPast.length) return 0;
     var last = radarPast[radarPast.length - 1];
     var latestMs = last && last.time != null ? Number(last.time) * 1000 : NaN;
@@ -714,9 +729,133 @@
     return best;
   }
 
+  /* compat aliases used by older call sites — return user loopStartFrac */
+  function playLoopStartIndex() {
+    ensureLoopStartInited();
+    return clampLoopStart(loopStartFrac);
+  }
+
+  function radarLoopStartIndex() {
+    ensureLoopStartInited();
+    return clampLoopStart(loopStartFrac);
+  }
+
+  function clampLoopStart(f) {
+    var n = Number(f);
+    if (!isFinite(n)) n = 0;
+    var max = activeSliderMax();
+    if (n < 0) n = 0;
+    if (n > max) n = max;
+    return n;
+  }
+
+  function loopStartMs() {
+    ensureLoopStartInited();
+    var f = clampLoopStart(loopStartFrac);
+    if (typeof radarOn === "function" && radarOn() && radarPast && radarPast.length) {
+      var i = clampRadarIndex(Math.round(f));
+      var fr = radarPast[i];
+      return fr && fr.time != null ? Number(fr.time) * 1000 : NaN;
+    }
+    if (cloudTimes.length) {
+      var iso = cloudTimes[clampIndex(Math.round(f))];
+      return goesIsoMs(iso);
+    }
+    return NaN;
+  }
+
+  function persistLoopStart() {
+    var max = activeSliderMax();
+    var frac01 = max <= 0 ? 0 : (clampLoopStart(loopStartFrac) / max);
+    if (frac01 < 0) frac01 = 0;
+    if (frac01 > 1) frac01 = 1;
+    try { localStorage.setItem(LOOP_START_KEY, String(frac01)); } catch (eP) {}
+    savedLoopStartFrac = frac01;
+  }
+
+  function ensureLoopStartInited() {
+    if (loopStartInited) {
+      loopStartFrac = clampLoopStart(loopStartFrac);
+      return;
+    }
+    var max = activeSliderMax();
+    if (max <= 0 && !(cloudTimes && cloudTimes.length) && !(radarPast && radarPast.length)) {
+      loopStartFrac = 0;
+      return;
+    }
+    if (savedLoopStartFrac != null && isFinite(savedLoopStartFrac)) {
+      loopStartFrac = clampLoopStart(savedLoopStartFrac * max);
+    } else {
+      var def = (typeof radarOn === "function" && radarOn() && radarPast && radarPast.length)
+        ? defaultRadarLoopStartIndex()
+        : defaultCloudLoopStartIndex();
+      loopStartFrac = clampLoopStart(def);
+    }
+    loopStartInited = true;
+  }
+
+  function setLoopStartFrac(f, opts) {
+    opts = opts || {};
+    ensureLoopStartInited();
+    loopStartFrac = clampLoopStart(f);
+    if (playheadFrac < loopStartFrac) {
+      playheadFrac = loopStartFrac;
+      if (typeof radarOn === "function" && radarOn()) {
+        radarIndex = clampRadarIndex(Math.round(playheadFrac));
+      } else {
+        cloudIndex = clampIndex(Math.round(playheadFrac));
+      }
+    }
+    if (!opts.skipPersist) persistLoopStart();
+    syncLoopSplitter();
+    syncSliderUi();
+  }
+
   function activeLoopStart() {
-    if (typeof radarOn === "function" && radarOn()) return radarLoopStartIndex();
-    return playLoopStartIndex();
+    ensureLoopStartInited();
+    return clampLoopStart(loopStartFrac);
+  }
+
+  function syncLoopSplitter() {
+    var el = document.getElementById("loop-splitter");
+    if (!el || !slider) return;
+    ensureLoopStartInited();
+    var max = activeSliderMax();
+    var frac = max <= 0 ? 0 : (clampLoopStart(loopStartFrac) / max);
+    if (frac < 0) frac = 0;
+    if (frac > 1) frac = 1;
+    el.style.left = (frac * 100).toFixed(3) + "%";
+    el.setAttribute("aria-valuenow", String(Math.round(frac * 100)));
+    el.setAttribute("aria-valuemax", "100");
+  }
+
+  function fracFromTrackClientX(clientX) {
+    var wrap = slider && slider.parentNode;
+    if (!wrap) return 0;
+    var rect = wrap.getBoundingClientRect();
+    var w = rect.width || 1;
+    var x = clientX - rect.left;
+    var t = x / w;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    return t * activeSliderMax();
+  }
+
+  function applyScrubPlayhead(dragged) {
+    ensureLoopStartInited();
+    var d = Number(dragged);
+    if (!isFinite(d)) d = playheadFrac;
+    var ls = clampLoopStart(loopStartFrac);
+    if (d < ls) {
+      /* pull splitter left with the dot; never leave playhead left of splitter */
+      loopStartFrac = clampLoopStart(d);
+      playheadFrac = loopStartFrac;
+      persistLoopStart();
+      syncLoopSplitter();
+    } else {
+      /* right never moves splitter */
+      playheadFrac = clampFrac(d);
+    }
   }
 
   function playHoursBack() {
@@ -752,10 +891,14 @@
     }
     if (playAnimating) el.classList.add("is-on");
     else el.classList.remove("is-on");
+    syncLoopSplitter();
   }
 
   function syncSliderUi() {
     if (!slider) return;
+    ensureLoopStartInited();
+    /* keep playhead from sitting left of splitter */
+    if (playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
     slider.min = "0";
     slider.step = "1";
     slider.max = String(sliderUiMax());
@@ -858,6 +1001,10 @@
   var playBusy = false;
   var playAnimating = false; /* opt45: true only while Play clock/ticks run */
   var playheadFrac = 0; /* opt48: continuous frame index while playing */
+  var loopStartFrac = 0; /* opt49: continuous; Loop rewind / Play window start */
+  var loopStartInited = false;
+  var loopSplitterDragging = false;
+  var savedLoopStartFrac = _sunnySavedLoopStartFrac; /* 0–1 from localStorage, applied when timeline ready */
   var playRafId = 0;
   var playRafLastMs = 0;
   var playPrefetchAt = -1;
@@ -2197,7 +2344,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt48");
+      playFlowWorker = new Worker("flow-worker.js?v=opt49");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -4472,7 +4619,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt48");
+      beachWorker = new Worker("beach-worker.js?v=opt49");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6233,6 +6380,9 @@
   }
 
   function applyRadarPastKeep(keepMs) {
+    /* Only remap loopStartFrac onto radar indices while Radar overlay is active */
+    var keepLoopMs = (loopStartInited && typeof radarOn === "function" && radarOn())
+      ? loopStartMs() : NaN;
     radarPast = radarPastForRange(radarPastAll);
     if (isFinite(keepMs) && radarPast.length) {
       var best = 0, bestD = Infinity, i, ms, d;
@@ -6247,6 +6397,24 @@
     } else if (radarPast.length) {
       radarIndex = radarSliderMax();
       if (!playAnimating) playheadFrac = radarIndex;
+    }
+    if (radarPast.length && typeof radarOn === "function" && radarOn()) {
+      if (isFinite(keepLoopMs)) {
+        var lb = 0, ld = Infinity, j, jms, jd;
+        for (j = 0; j < radarPast.length; j++) {
+          if (!radarPast[j] || radarPast[j].time == null) continue;
+          jms = Number(radarPast[j].time) * 1000;
+          jd = Math.abs(jms - keepLoopMs);
+          if (jd < ld) { ld = jd; lb = j; }
+        }
+        loopStartFrac = lb;
+        loopStartInited = true;
+        persistLoopStart();
+      } else {
+        ensureLoopStartInited();
+        loopStartFrac = clampLoopStart(loopStartFrac);
+      }
+      if (playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
     }
   }
 
@@ -6815,6 +6983,7 @@
       return;
     }
     var keepMs = currentPlayheadMs();
+    var keepLoopMs = loopStartMs();
     HOURS_BACK = h;
     try { localStorage.setItem(RANGE_KEY, String(h)); } catch (eH) {}
     syncRangeSeg();
@@ -6826,6 +6995,14 @@
     } else {
       playheadFrac = sliderMax();
     }
+    if (isFinite(keepLoopMs) && cloudTimes.length) {
+      loopStartFrac = nearestCloudIndexByMs(keepLoopMs);
+      loopStartInited = true;
+      persistLoopStart();
+    } else {
+      loopStartFrac = clampLoopStart(loopStartFrac);
+    }
+    if (playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
     cloudIndex = clampIndex(Math.round(playheadFrac));
     playPrefetchAt = -1;
     if (radarPastAll && radarPastAll.length) applyRadarPastKeep(keepMs);
@@ -6898,7 +7075,7 @@
     var end = radarSliderMax();
     var cur = clampFrac(playheadFrac);
     if (Math.abs(cur - radarIndex) > 1.5) cur = radarIndex;
-    /* opt48: from Now/end jump to Now−1h (even Loop off — play the hour then stop) */
+    /* opt49: from Now/end jump to loop-start splitter (even Loop off — play window then stop) */
     if (cur >= end - 1e-6) playheadFrac = radarLoopStartIndex();
     else playheadFrac = cur;
     radarIndex = clampRadarIndex(Math.floor(playheadFrac));
@@ -7200,7 +7377,7 @@
     var end = sliderMax();
     var cur = clampFrac(playheadFrac);
     if (Math.abs(cur - cloudIndex) > 1.5) cur = cloudIndex;
-    /* opt48: jump to Now−1h only when starting from end/Now; else resume. */
+    /* opt49: jump to loop-start splitter only when starting from end/Now; else resume. */
     if (cur >= end - 1e-6) playheadFrac = playLoopStartIndex();
     else playheadFrac = cur;
     cloudIndex = clampIndex(Math.floor(playheadFrac));
@@ -7321,6 +7498,7 @@
     refreshPlayCacheCaps();
     playheadFrac = sliderMax();
     cloudIndex = sliderMax();
+    ensureLoopStartInited();
     syncSliderUi();
     syncRangeSeg();
     rebuildTimeTicks();
@@ -7486,7 +7664,7 @@
   function applyScrubFrame() {
     var raw = scrubDesiredIdx != null ? scrubDesiredIdx : slider.value;
     scrubDesiredIdx = null;
-    playheadFrac = fracFromSliderUi(raw);
+    applyScrubPlayhead(fracFromSliderUi(raw));
     if (radarOn()) {
       setRadarFrame(clampRadarIndex(Math.round(playheadFrac)));
       return;
@@ -7529,6 +7707,77 @@
     }
   }
 
+  /* opt49: loop-start splitter drag */
+  (function bindLoopSplitter() {
+    var el = document.getElementById("loop-splitter");
+    if (!el) return;
+    var pid = null;
+    function onDown(ev) {
+      if (ev.button != null && ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      loopSplitterDragging = true;
+      el.classList.add("is-dragging");
+      pid = ev.pointerId != null ? ev.pointerId : null;
+      try { if (pid != null) el.setPointerCapture(pid); } catch (eC) {}
+      ensureLoopStartInited();
+      setLoopStartFrac(fracFromTrackClientX(ev.clientX));
+      if (radarOn()) {
+        setRadarFrame(clampRadarIndex(Math.round(playheadFrac)));
+      } else if (cloudTimes.length) {
+        setCloudFrame(playheadFrac, { forceHires: true, frac: playheadFrac });
+      }
+    }
+    function onMove(ev) {
+      if (!loopSplitterDragging) return;
+      if (pid != null && ev.pointerId != null && ev.pointerId !== pid) return;
+      ev.preventDefault();
+      setLoopStartFrac(fracFromTrackClientX(ev.clientX));
+      if (radarOn()) {
+        setRadarFrame(clampRadarIndex(Math.round(playheadFrac)));
+      } else if (cloudTimes.length) {
+        setCloudFrame(playheadFrac, { forceHires: true, frac: playheadFrac });
+      }
+    }
+    function onUp(ev) {
+      if (!loopSplitterDragging) return;
+      if (pid != null && ev.pointerId != null && ev.pointerId !== pid) return;
+      loopSplitterDragging = false;
+      el.classList.remove("is-dragging");
+      try { if (pid != null) el.releasePointerCapture(pid); } catch (eR) {}
+      pid = null;
+      persistLoopStart();
+      syncLoopSplitter();
+    }
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    el.addEventListener("keydown", function (ev) {
+      ensureLoopStartInited();
+      var max = activeSliderMax();
+      var step = Math.max(0.25, max / 100);
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowDown") {
+        ev.preventDefault();
+        setLoopStartFrac(loopStartFrac - step);
+      } else if (ev.key === "ArrowRight" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        setLoopStartFrac(loopStartFrac + step);
+        if (playheadFrac < loopStartFrac) {
+          playheadFrac = loopStartFrac;
+          syncSliderUi();
+        }
+      } else if (ev.key === "Home") {
+        ev.preventDefault();
+        setLoopStartFrac(0);
+      } else if (ev.key === "End") {
+        ev.preventDefault();
+        setLoopStartFrac(max);
+      }
+    });
+    syncLoopSplitter();
+  })();
+
   slider.addEventListener("pointerdown", beginScrub);
   slider.addEventListener("mousedown", beginScrub);
   slider.addEventListener("touchstart", beginScrub, { passive: true });
@@ -7536,7 +7785,9 @@
     if (!scrubbing) beginScrub();
     cancelIdleGoesWarm();
     scrubDesiredIdx = Number(slider.value);
-    playheadFrac = fracFromSliderUi(scrubDesiredIdx);
+    applyScrubPlayhead(fracFromSliderUi(scrubDesiredIdx));
+    /* reflect clamp/pull back onto native range */
+    slider.value = String(sliderUiFromFrac(playheadFrac));
     syncPlayheadThumb();
     scheduleScrubFrame();
   });
@@ -7736,7 +7987,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt48").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt49").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

@@ -455,6 +455,33 @@ html, body {
 .playhead-thumb.is-on {
   display: block;
 }
+
+/* opt49: loop-start splitter — Loop rewinds / Play starts here */
+.loop-splitter {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 3px;
+  height: 26px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--sun);
+  box-shadow: 0 0 0 1px rgba(26, 20, 6, 0.4), 0 1px 3px rgba(0,0,0,0.35);
+  pointer-events: auto;
+  z-index: 4;
+  cursor: grab;
+  touch-action: none;
+  will-change: left;
+  user-select: none;
+}
+.loop-splitter:hover {
+  cursor: grab;
+  filter: brightness(1.08);
+}
+.loop-splitter:active,
+.loop-splitter.is-dragging {
+  cursor: grabbing;
+}
 .track-wrap.is-playing-smooth #time-slider::-webkit-slider-thumb {
   opacity: 0;
 }

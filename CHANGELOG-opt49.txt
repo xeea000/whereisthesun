@@ -1,0 +1,18 @@
+SUNNY opt49 — loop-start splitter on the playhead
+
+1) #loop-splitter on the time-slider track: vertical mark, grab cursor,
+   pointer-events, z-index above track. Aria-label "Loop start".
+
+2) loopStartFrac (continuous, same units as playheadFrac). Persist as
+   0–1 fraction in localStorage (sunny-loop-start). Default ≈ Now−1h
+   (opt48 PLAY_WINDOW_MS) until the user moves it; then user-owned.
+   Clamp when 6/12/24h range or radar past rebuilds (keep by absolute ms).
+
+3) Play from Now/end → jump to loopStartFrac. Loop wrap → playheadFrac
+   = loopStartFrac (continuous rAF). Scrub/dot: playhead = max(splitter,
+   dragged); dragging left into splitter pulls it left; dragging right
+   never moves splitter right. Splitter drag updates loopStartFrac only;
+   if playhead is left of new splitter, snap playhead up.
+
+Kept: opt48 continuous playhead, 6/12/24h, opt47 reliability, honest Pause.
+No starcode. ?v=opt49; CACHE=sunny-v-opt49.
