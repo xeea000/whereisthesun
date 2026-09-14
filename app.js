@@ -2704,7 +2704,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt54");
+      playFlowWorker = new Worker("flow-worker.js?v=opt55");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3758,7 +3758,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt54";
+      link.href = "flow-worker.js?v=opt55";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -5049,7 +5049,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt54");
+      beachWorker = new Worker("beach-worker.js?v=opt55");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6727,7 +6727,7 @@
 
 
 
-  /* === BEGIN WIND LINES (opt53/opt54) — Open-Meteo screen-space streamlets === */
+  /* === BEGIN WIND LINES (opt53–opt55) — Open-Meteo Windy-style particles === */
   var WIND_CACHE_TTL_MS = 8 * 60 * 1000;
   var WIND_COLS = 10;
   var WIND_ROWS = 7;
@@ -6741,6 +6741,8 @@
   var windParticles = [];
   var windRaf = 0;
   var windLastTs = 0;
+  var windAccumMs = 0; /* opt55: rAF throttle accumulator */
+  var WIND_FRAME_MS = 1000 / 28; /* ~28fps cheap smoothness */
   var windFetchGen = 0;
   var windMoveTimer = null;
   var windFetchPromise = null;
@@ -6749,11 +6751,12 @@
   function windParticleCap() {
     try {
       var w = window.innerWidth || 800;
-      if (w < 520) return 180;
-      if (w < 900) return 280;
-      return 420;
+      /* opt55: moderate density — Windy-like, avoid overdraw */
+      if (w < 520) return 140;
+      if (w < 900) return 220;
+      return 320;
     } catch (eC) {
-      return 280;
+      return 220;
     }
   }
 
@@ -7068,8 +7071,7 @@
         lon: p.lon,
         lat: p.lat,
         age: Math.random() * 2.5,
-        life: 1.8 + Math.random() * 2.8,
-        tips: []
+        life: 1.8 + Math.random() * 2.8
       });
     }
     if (windParticles.length > cap) windParticles.length = cap;
@@ -7081,10 +7083,9 @@
     p.lat = loc.lat;
     p.age = 0;
     p.life = 1.8 + Math.random() * 2.8;
-    p.tips = [];
   }
 
-  /* opt54: wind direction → fixed pixel-length screen segment (readable at any zoom) */
+  /* opt54/55: wind direction → fixed pixel-length screen segment (readable at any zoom) */
   function windScreenDelta(lon, lat, u, v, lengthPx) {
     var mag = Math.sqrt(u * u + v * v);
     if (!(mag > 1e-6) || !map) return { dx: lengthPx, dy: 0 };
@@ -7111,14 +7112,21 @@
     if (!windOn || tabHidden) return;
     if (windRaf) return;
     windLastTs = 0;
+    windAccumMs = 0;
     seedWindParticles(false);
     function frame(ts) {
       windRaf = 0;
       if (!windOn || tabHidden) return;
       if (!windLastTs) windLastTs = ts;
-      var dt = Math.min(0.05, (ts - windLastTs) / 1000);
+      var elapsed = ts - windLastTs;
       windLastTs = ts;
-      paintWindFrame(dt);
+      /* opt55: accumulate dt; paint ~24–30fps (cheap) */
+      windAccumMs += elapsed;
+      if (windAccumMs >= WIND_FRAME_MS) {
+        var dt = Math.min(0.08, windAccumMs / 1000);
+        windAccumMs = 0;
+        paintWindFrame(dt);
+      }
       windRaf = requestAnimationFrame(frame);
     }
     windRaf = requestAnimationFrame(frame);
@@ -7130,6 +7138,7 @@
       windRaf = 0;
     }
     windLastTs = 0;
+    windAccumMs = 0;
   }
 
   function paintWindFrame(dt) {
@@ -7138,7 +7147,6 @@
     if (!windCtx || !windCanvas || !map) return;
     var w = windCanvas.width;
     var h = windCanvas.height;
-    /* opt54: clear each frame — no fade-trail (that collapsed geo micro-steps into dots) */
     windCtx.clearRect(0, 0, w, h);
 
     if (!windField) return;
@@ -7151,11 +7159,13 @@
     var south = b.getSouth();
     var north = b.getNorth();
     var wrap = east < west;
-    var i, p, uv, pt, speedKmh, stepScale, lengthPx, delta, sx, sy, tip, ti, tipAlpha, tipLen, tipLw;
+    var i, p, uv, pt, speedKmh, stepScale, lengthPx, delta, sx, sy;
+    var tx, ty, hx, hy, lwCss, lw, maxA, lifeFade, grad;
     var METERS_PER_DEG_LAT = 111320;
 
     windCtx.lineCap = "round";
     windCtx.lineJoin = "round";
+    windCtx.globalCompositeOperation = "source-over";
 
     for (i = 0; i < windParticles.length; i++) {
       p = windParticles[i];
@@ -7165,11 +7175,9 @@
       }
       uv = sampleWindUV(p.lon, p.lat);
       speedKmh = uv.speed;
-      /* advect in geo for motion; visible length comes from screen-space segments */
       stepScale = Math.max(0.2, Math.min(3.8, speedKmh / 16));
       var cosLat = Math.cos(p.lat * Math.PI / 180);
       if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
-      /* slightly faster motion than opt53 — stronger wind reads stronger */
       var vis = 34 * stepScale;
       p.lon += (uv.u * dt * vis) / (METERS_PER_DEG_LAT * cosLat);
       p.lat += (uv.v * dt * vis) / METERS_PER_DEG_LAT;
@@ -7198,31 +7206,40 @@
         respawnParticle(p);
         continue;
       }
-      lengthPx = Math.max(14, Math.min(72, 14 + speedKmh * 1.1)) * windDpr;
+      /* opt55: Windy-like short thin streamlets ~10–28 CSS px */
+      lengthPx = Math.max(10, Math.min(28, 10 + speedKmh * 0.45)) * windDpr;
       delta = windScreenDelta(p.lon, p.lat, uv.u, uv.v, lengthPx);
-      if (!p.tips) p.tips = [];
-      p.tips.push({ x: sx, y: sy, dx: delta.dx, dy: delta.dy, sp: speedKmh });
-      if (p.tips.length > 4) p.tips = p.tips.slice(p.tips.length - 4);
+      /* head at particle; tail behind along -delta */
+      hx = sx;
+      hy = sy;
+      tx = sx - delta.dx;
+      ty = sy - delta.dy;
 
-      var lifeFade = 1;
-      if (p.age < 0.2) lifeFade = p.age / 0.2;
-      else if (p.age > p.life - 0.3) lifeFade = Math.max(0, (p.life - p.age) / 0.3);
+      lifeFade = 1;
+      if (p.age < 0.18) lifeFade = p.age / 0.18;
+      else if (p.age > p.life - 0.28) lifeFade = Math.max(0, (p.life - p.age) / 0.28);
 
-      for (ti = 0; ti < p.tips.length; ti++) {
-        tip = p.tips[ti];
-        tipAlpha = Math.min(0.95, 0.42 + tip.sp / 50) * lifeFade;
-        /* older tips slightly fainter */
-        tipAlpha *= 0.45 + 0.55 * ((ti + 1) / p.tips.length);
-        tipLen = 0.72 + 0.28 * ((ti + 1) / p.tips.length);
-        tipLw = Math.max(1.2, Math.min(3.2, 1.15 + tip.sp / 26)) * windDpr;
-        tipLw *= 0.85 + 0.15 * ((ti + 1) / p.tips.length);
-        windCtx.strokeStyle = "rgba(230, 245, 255," + tipAlpha.toFixed(3) + ")";
-        windCtx.lineWidth = tipLw;
-        windCtx.beginPath();
-        windCtx.moveTo(tip.x - tip.dx * tipLen, tip.y - tip.dy * tipLen);
-        windCtx.lineTo(tip.x, tip.y);
-        windCtx.stroke();
+      /* subtle soft white/blue-white; head ~0.35–0.55, tail → 0 */
+      maxA = Math.min(0.55, 0.35 + speedKmh / 140) * lifeFade;
+      if (maxA < 0.02) continue;
+
+      lwCss = Math.max(0.8, Math.min(1.4, 0.85 + speedKmh / 90));
+      lw = lwCss * windDpr;
+
+      try {
+        grad = windCtx.createLinearGradient(tx, ty, hx, hy);
+        grad.addColorStop(0, "rgba(235,245,255,0)");
+        grad.addColorStop(0.45, "rgba(235,245,255," + (maxA * 0.35).toFixed(3) + ")");
+        grad.addColorStop(1, "rgba(235,245,255," + maxA.toFixed(3) + ")");
+        windCtx.strokeStyle = grad;
+      } catch (eG) {
+        windCtx.strokeStyle = "rgba(235,245,255," + (maxA * 0.55).toFixed(3) + ")";
       }
+      windCtx.lineWidth = lw;
+      windCtx.beginPath();
+      windCtx.moveTo(tx, ty);
+      windCtx.lineTo(hx, hy);
+      windCtx.stroke();
     }
   }
 
@@ -7231,7 +7248,7 @@
     saveSetting(WIND_KEY, on ? "1" : "0");
     setWindUi(on);
     if (on) {
-      try { setStatus("Wind on — Open-Meteo 10 m wind lines (longer/faster = stronger)."); } catch (eS) {}
+      try { setStatus("Wind on — Open-Meteo particles (subtle streaks; stronger = longer)."); } catch (eS) {}
     }
   }
 
@@ -7244,7 +7261,7 @@
       setWindUi(true);
     });
   }
-  /* === END WIND LINES (opt53/opt54) === */
+  /* === END WIND LINES (opt53–opt55) === */
 
   /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + single-buffer fade (opt40) === */
   var RADAR_SRC = "radar";
@@ -8989,7 +9006,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt54").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt55").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

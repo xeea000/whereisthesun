@@ -1,0 +1,12 @@
+SUNNY opt55 — Windy-style subtle wind particles
+
+1) Wind paint: short thin screen-space streamlets (~10–28 CSS px,
+   lineWidth ~0.8–1.4). Per-line createLinearGradient tail→head with
+   alpha 0 → ~0.35–0.55 soft rgba(235,245,255,…). No opaque blobs;
+   clear each painted frame. Moderate particle density.
+
+2) Cheap smoothness: rAF accumulates dt and paints ~28fps (skip frames).
+   Keep Open-Meteo field, #toggle-wind, Labels heal, Play stack untouched.
+   Toggle title clarified to “Wind particles”.
+
+3) SW: CACHE=sunny-v-opt55. No starcode. ?v=opt55.
