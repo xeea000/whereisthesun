@@ -22,8 +22,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt53">
-  <link rel="stylesheet" href="styles.css?v=opt53">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt54">
+  <link rel="stylesheet" href="styles.css?v=opt54">
 </head>
 <body>
   <div id="map"></div>
@@ -36,7 +36,7 @@
     <canvas class="cloud-play-motion" aria-hidden="true"></canvas>
     <canvas class="cloud-play-hires" aria-hidden="true"></canvas>
   </div>
-  <!-- opt53: Windy-style wind particles (Open-Meteo); sits over Clouds|Radar -->
+  <!-- opt54: screen-space wind streamlets (Open-Meteo); sits over Clouds|Radar -->
   <div id="wind-layer" aria-hidden="true" hidden>
     <canvas id="wind-canvas" aria-hidden="true"></canvas>
   </div>
@@ -156,7 +156,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt53"></script>
-  <script defer src="app.js?v=opt53"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt54"></script>
+  <script defer src="app.js?v=opt54"></script>
 </body>
 </html>

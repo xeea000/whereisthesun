@@ -1421,6 +1421,8 @@
     if (!map || !map.getLayer("radar")) return;
     var before = radarStackBefore();
     try { map.moveLayer("radar", before); } catch (eMvR) {}
+    /* opt54: radar moved — keep Labels above if enabled */
+    if (overlayVisible() && overlayReady) healLabels();
   }
 
   function restackCloudRasters() {
@@ -1433,6 +1435,8 @@
         try { map.moveLayer(ids[i], before); } catch (eMv) {}
       }
     }
+    /* opt54: clouds moved — keep Labels above if enabled */
+    if (overlayVisible() && overlayReady) healLabels();
   }
 
   function cloudResamplingForZoom(z) {
@@ -2700,7 +2704,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt53");
+      playFlowWorker = new Worker("flow-worker.js?v=opt54");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3754,7 +3758,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt53";
+      link.href = "flow-worker.js?v=opt54";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -3944,7 +3948,11 @@
       presentStaticGibs(url);
     }
     restackCloudRasters();
-    if (overlayVisible()) restackOverlay();
+    if (overlayVisible()) {
+      restackOverlay();
+      healLabels();
+      armLabelsIdleHeal();
+    }
     /* opt26: hires only via NOW+zoom rules / ready dates — not forced visible on exit */
     try { applyHires(); } catch (eAh) {}
   }
@@ -4345,6 +4353,7 @@
     }
     applyBaseMap();
     applyHires();
+    if (overlayVisible()) healLabels();
   }
 
   function applyCloudOpacity() {
@@ -4426,6 +4435,34 @@
     });
   }
 
+  var labelsIdleHealArmed = false;
+  var labelsHealBusy = false;
+
+  /* opt54: re-ensure Labels above cloud/radar after restacks / glyph arrival */
+  function healLabels() {
+    if (!map || !overlayVisible() || labelsHealBusy) return;
+    labelsHealBusy = true;
+    try {
+      ensureOverlayLayers();
+      overlayReady = true;
+      var before = map.getLayer("beaches-fill") ? "beaches-fill" : undefined;
+      var i, id;
+      for (i = 0; i < overlayIds.length; i++) {
+        id = overlayIds[i];
+        if (map.getLayer(id)) {
+          try { map.moveLayer(id, before); } catch (eMv) {}
+        }
+      }
+      applyOverlay();
+      try { map.triggerRepaint(); } catch (eRp) {}
+    } catch (eHeal) {}
+    labelsHealBusy = false;
+  }
+
+  function armLabelsIdleHeal() {
+    if (overlayVisible()) labelsIdleHealArmed = true;
+  }
+
   function ensureOverlayLayers() {
     /* Fetch glyphs only when Labels are turned on */
     try {
@@ -4442,7 +4479,11 @@
         attribution: "OpenFreeMap · OSM"
       });
     }
-    if (map.getLayer("ov-road-casing")) return;
+    if (map.getLayer("ov-road-casing")) {
+      /* Layers already exist — still apply visibility (glyphs may have just been set) */
+      applyOverlay();
+      return;
+    }
     var before = map.getLayer("beaches-fill") ? "beaches-fill" : undefined;
     var roadFilter = [
       "all",
@@ -4513,7 +4554,7 @@
         "text-size": ["interpolate", ["linear"], ["zoom"], 3, 11, 8, 14, 12, 18],
         "text-anchor": "bottom",
         "text-padding": 6,
-        "text-optional": true
+        "text-optional": false
       },
       paint: {
         "text-color": "#fff",
@@ -5008,7 +5049,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt53");
+      beachWorker = new Worker("beach-worker.js?v=opt54");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6686,7 +6727,7 @@
 
 
 
-  /* === BEGIN WIND LINES (opt53) — Open-Meteo Windy-style particles === */
+  /* === BEGIN WIND LINES (opt53/opt54) — Open-Meteo screen-space streamlets === */
   var WIND_CACHE_TTL_MS = 8 * 60 * 1000;
   var WIND_COLS = 10;
   var WIND_ROWS = 7;
@@ -7028,7 +7069,7 @@
         lat: p.lat,
         age: Math.random() * 2.5,
         life: 1.8 + Math.random() * 2.8,
-        trail: []
+        tips: []
       });
     }
     if (windParticles.length > cap) windParticles.length = cap;
@@ -7040,7 +7081,30 @@
     p.lat = loc.lat;
     p.age = 0;
     p.life = 1.8 + Math.random() * 2.8;
-    p.trail = [];
+    p.tips = [];
+  }
+
+  /* opt54: wind direction → fixed pixel-length screen segment (readable at any zoom) */
+  function windScreenDelta(lon, lat, u, v, lengthPx) {
+    var mag = Math.sqrt(u * u + v * v);
+    if (!(mag > 1e-6) || !map) return { dx: lengthPx, dy: 0 };
+    var stepM = 400;
+    var cosLat = Math.cos(lat * Math.PI / 180);
+    if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
+    var dLon = (u / mag * stepM) / (111320 * cosLat);
+    var dLat = (v / mag * stepM) / 111320;
+    var p0, p1, dx, dy, len;
+    try {
+      p0 = map.project([lon, lat]);
+      p1 = map.project([lon + dLon, lat + dLat]);
+    } catch (ePr) {
+      return { dx: lengthPx, dy: 0 };
+    }
+    dx = (p1.x - p0.x) * windDpr;
+    dy = (p1.y - p0.y) * windDpr;
+    len = Math.sqrt(dx * dx + dy * dy);
+    if (!(len > 1e-3)) return { dx: lengthPx, dy: 0 };
+    return { dx: (dx / len) * lengthPx, dy: (dy / len) * lengthPx };
   }
 
   function startWindAnim() {
@@ -7074,11 +7138,8 @@
     if (!windCtx || !windCanvas || !map) return;
     var w = windCanvas.width;
     var h = windCanvas.height;
-    /* fade trails */
-    windCtx.fillStyle = "rgba(0, 0, 0, 0.09)";
-    windCtx.globalCompositeOperation = "destination-out";
-    windCtx.fillRect(0, 0, w, h);
-    windCtx.globalCompositeOperation = "source-over";
+    /* opt54: clear each frame — no fade-trail (that collapsed geo micro-steps into dots) */
+    windCtx.clearRect(0, 0, w, h);
 
     if (!windField) return;
     var cap = windParticleCap();
@@ -7090,7 +7151,7 @@
     var south = b.getSouth();
     var north = b.getNorth();
     var wrap = east < west;
-    var i, p, uv, lon, lat, pt, trailLen, speedKmh, stepScale;
+    var i, p, uv, pt, speedKmh, stepScale, lengthPx, delta, sx, sy, tip, ti, tipAlpha, tipLen, tipLw;
     var METERS_PER_DEG_LAT = 111320;
 
     windCtx.lineCap = "round";
@@ -7104,12 +7165,12 @@
       }
       uv = sampleWindUV(p.lon, p.lat);
       speedKmh = uv.speed;
-      /* advect: stronger wind → faster motion */
-      stepScale = Math.max(0.15, Math.min(3.2, speedKmh / 18));
+      /* advect in geo for motion; visible length comes from screen-space segments */
+      stepScale = Math.max(0.2, Math.min(3.8, speedKmh / 16));
       var cosLat = Math.cos(p.lat * Math.PI / 180);
       if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
-      /* exaggerate for readable streamlets (visual, still proportional) */
-      var vis = 26 * stepScale;
+      /* slightly faster motion than opt53 — stronger wind reads stronger */
+      var vis = 34 * stepScale;
       p.lon += (uv.u * dt * vis) / (METERS_PER_DEG_LAT * cosLat);
       p.lat += (uv.v * dt * vis) / METERS_PER_DEG_LAT;
       if (p.lon > 180) p.lon -= 360;
@@ -7131,34 +7192,37 @@
         respawnParticle(p);
         continue;
       }
-      var sx = pt.x * windDpr;
-      var sy = pt.y * windDpr;
-      if (sx < -40 || sy < -40 || sx > w + 40 || sy > h + 40) {
+      sx = pt.x * windDpr;
+      sy = pt.y * windDpr;
+      if (sx < -80 || sy < -80 || sx > w + 80 || sy > h + 80) {
         respawnParticle(p);
         continue;
       }
-      p.trail.push(sx, sy);
-      /* longer trail for stronger wind */
-      trailLen = Math.max(6, Math.min(20, Math.round(6 + speedKmh / 5))) * 2;
-      if (p.trail.length > trailLen) {
-        p.trail = p.trail.slice(p.trail.length - trailLen);
-      }
-      if (p.trail.length < 4) continue;
-      var alpha = Math.min(0.95, 0.38 + speedKmh / 55);
+      lengthPx = Math.max(14, Math.min(72, 14 + speedKmh * 1.1)) * windDpr;
+      delta = windScreenDelta(p.lon, p.lat, uv.u, uv.v, lengthPx);
+      if (!p.tips) p.tips = [];
+      p.tips.push({ x: sx, y: sy, dx: delta.dx, dy: delta.dy, sp: speedKmh });
+      if (p.tips.length > 4) p.tips = p.tips.slice(p.tips.length - 4);
+
       var lifeFade = 1;
-      if (p.age < 0.25) lifeFade = p.age / 0.25;
-      else if (p.age > p.life - 0.35) lifeFade = Math.max(0, (p.life - p.age) / 0.35);
-      alpha *= lifeFade;
-      var lw = Math.max(1.1, Math.min(2.8, 1.0 + speedKmh / 28)) * windDpr;
-      windCtx.strokeStyle = "rgba(230, 245, 255," + alpha.toFixed(3) + ")";
-      windCtx.lineWidth = lw;
-      windCtx.beginPath();
-      windCtx.moveTo(p.trail[0], p.trail[1]);
-      var t;
-      for (t = 2; t < p.trail.length; t += 2) {
-        windCtx.lineTo(p.trail[t], p.trail[t + 1]);
+      if (p.age < 0.2) lifeFade = p.age / 0.2;
+      else if (p.age > p.life - 0.3) lifeFade = Math.max(0, (p.life - p.age) / 0.3);
+
+      for (ti = 0; ti < p.tips.length; ti++) {
+        tip = p.tips[ti];
+        tipAlpha = Math.min(0.95, 0.42 + tip.sp / 50) * lifeFade;
+        /* older tips slightly fainter */
+        tipAlpha *= 0.45 + 0.55 * ((ti + 1) / p.tips.length);
+        tipLen = 0.72 + 0.28 * ((ti + 1) / p.tips.length);
+        tipLw = Math.max(1.2, Math.min(3.2, 1.15 + tip.sp / 26)) * windDpr;
+        tipLw *= 0.85 + 0.15 * ((ti + 1) / p.tips.length);
+        windCtx.strokeStyle = "rgba(230, 245, 255," + tipAlpha.toFixed(3) + ")";
+        windCtx.lineWidth = tipLw;
+        windCtx.beginPath();
+        windCtx.moveTo(tip.x - tip.dx * tipLen, tip.y - tip.dy * tipLen);
+        windCtx.lineTo(tip.x, tip.y);
+        windCtx.stroke();
       }
-      windCtx.stroke();
     }
   }
 
@@ -7180,7 +7244,7 @@
       setWindUi(true);
     });
   }
-  /* === END WIND LINES (opt53) === */
+  /* === END WIND LINES (opt53/opt54) === */
 
   /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + single-buffer fade (opt40) === */
   var RADAR_SRC = "radar";
@@ -8023,8 +8087,11 @@
       setBasemapMode(basemapMode);
     } catch (e2) {}
     try {
-      if (overlayVisible()) restackOverlay();
-      else applyOverlay();
+      if (overlayVisible()) {
+        restackOverlay();
+        healLabels();
+        armLabelsIdleHeal();
+      } else applyOverlay();
     } catch (e3) {}
     try {
       setOverlayMode(overlayMode, { force: true, silent: true, deferFetch: true });
@@ -8441,8 +8508,11 @@
       } catch (eBoot) {}
     }
     applyBaseMap();
-    if (overlayVisible()) restackOverlay();
-    else {
+    if (overlayVisible()) {
+      restackOverlay();
+      healLabels();
+      armLabelsIdleHeal();
+    } else {
       restackCloudRasters();
       restackRadar();
     }
@@ -8465,6 +8535,11 @@
 
   map.on("idle", function () {
     maybeIdlePrefetchRing();
+    /* opt54: glyphs often arrive after first Labels enable — heal once on idle */
+    if (labelsIdleHealArmed && overlayVisible()) {
+      labelsIdleHealArmed = false;
+      healLabels();
+    }
   });
 
   ["beaches-fill", "beaches-line", "beaches-dot"].forEach(function (layer) {
@@ -8727,6 +8802,12 @@
   toggleMap.addEventListener("change", function () {
     restackOverlay();
     saveSetting(LABELS_KEY, toggleMap.checked ? "1" : "0");
+    if (toggleMap.checked) {
+      healLabels();
+      armLabelsIdleHeal();
+    } else {
+      labelsIdleHealArmed = false;
+    }
   });
   if (toggleWind) {
     toggleWind.addEventListener("change", onWindToggleChange);
@@ -8908,7 +8989,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt53").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt54").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

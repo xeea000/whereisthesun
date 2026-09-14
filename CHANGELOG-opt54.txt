@@ -1,0 +1,18 @@
+SUNNY opt54 — real wind lines at all zooms; Labels heal
+
+1) Wind: draw screen-space streamlets every frame. Sample u/v at particle
+   lon/lat; stroke a pixel-length segment
+   lengthPx = clamp(14 + speedKmh * 1.1, 14, 72) * dpr so lines stay readable
+   from zoom ~3 through 12+. Short trail of up to 4 previous tips. Keep geo
+   advection for motion (slightly faster); do not rely on geo micro-steps for
+   visible length. Clear canvas each frame (no fade-trail dots).
+
+2) Labels: healLabels() ensures glyphs, layers, visibility=visible, and moves
+   ov-road*/ov-place above cloud/radar (under beaches). Called after cloud/
+   radar restack, basemap change, view restore, play exit, and Labels toggle.
+   One-shot map idle heal after enable (glyphs arrived). text-optional false
+   so collision does not drop all place labels. keep opt52 boot-light create-
+   on-enable.
+
+3) SW: CACHE=sunny-v-opt54. Wind toggle / Open-Meteo / Play / splitter /
+   range / hi-res / opt52–53 otherwise unchanged. No starcode. ?v=opt54.

@@ -94,7 +94,7 @@ html, body {
   z-index: 5 !important;
 }
 
-/* opt53: Windy-style wind particles — over Clouds/Radar, under markers */
+/* opt54: wind streamlets — over Clouds/Radar, under markers */
 #wind-layer {
   position: absolute;
   inset: 0;

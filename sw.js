@@ -1,13 +1,13 @@
 /* SUNNY service worker — network-first shell so deploys stick; beach data network-first. */
-var CACHE = "sunny-v-opt53";
-/* opt53: Windy-style wind lines (Open-Meteo). Precache shell only. */
+var CACHE = "sunny-v-opt54";
+/* opt54: screen-space wind lines + Labels heal. Precache shell only. */
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt53",
-  "app.js?v=opt53",
-  "vendor/maplibre-gl.js?v=opt53",
-  "vendor/maplibre-gl.slim.css?v=opt53",
+  "styles.css?v=opt54",
+  "app.js?v=opt54",
+  "vendor/maplibre-gl.js?v=opt54",
+  "vendor/maplibre-gl.slim.css?v=opt54",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png"
