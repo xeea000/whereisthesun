@@ -1,0 +1,17 @@
+SUNNY opt56 — wind streaks travel along drawn direction
+
+1) Authoritative paint: each particle stores last screen (sx,sy). After geo
+   advection + project, draw streak along actual screen displacement
+   (tail at previous, head at new), normalized to lengthPx. If displacement
+   < ~0.5px, fall back to projected u/v screen direction — never hardcode east.
+
+2) Open-Meteo: prefer wind_u_component_10m + wind_v_component_10m (east/north);
+   convert km/h → m/s for advection; length/speed still scale with intensity
+   (hypot or wind_speed_10m). Keep direction reconstruction as fallback.
+
+3) Multi-point parsing: support array-of-objects AND parallel-array single
+   object; map each sample to grid index by lat/lon match (then index fill).
+
+4) Keep Windy-style gradient, ~28fps throttle, Wind checkbox, subtle opacity.
+
+SW: CACHE=sunny-v-opt56. No starcode. ?v=opt56.

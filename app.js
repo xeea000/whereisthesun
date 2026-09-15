@@ -2704,7 +2704,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt55");
+      playFlowWorker = new Worker("flow-worker.js?v=opt56");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3758,7 +3758,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt55";
+      link.href = "flow-worker.js?v=opt56";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -5049,7 +5049,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt55");
+      beachWorker = new Worker("beach-worker.js?v=opt56");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6727,7 +6727,7 @@
 
 
 
-  /* === BEGIN WIND LINES (opt53–opt55) — Open-Meteo Windy-style particles === */
+  /* === BEGIN WIND LINES (opt53–opt56) — Open-Meteo Windy-style particles === */
   var WIND_CACHE_TTL_MS = 8 * 60 * 1000;
   var WIND_COLS = 10;
   var WIND_ROWS = 7;
@@ -6741,7 +6741,7 @@
   var windParticles = [];
   var windRaf = 0;
   var windLastTs = 0;
-  var windAccumMs = 0; /* opt55: rAF throttle accumulator */
+  var windAccumMs = 0; /* opt55/56: rAF throttle accumulator */
   var WIND_FRAME_MS = 1000 / 28; /* ~28fps cheap smoothness */
   var windFetchGen = 0;
   var windMoveTimer = null;
@@ -6884,23 +6884,121 @@
     };
   }
 
+  /* opt56: prefer true east/north u,v; fall back to meteorological FROM */
   function parseWindRow(row) {
     var cur = row && row.current ? row.current : row;
     if (!cur) return null;
+    var uRaw = cur.wind_u_component_10m;
+    var vRaw = cur.wind_v_component_10m;
     var sp = cur.wind_speed_10m;
     var dir = cur.wind_direction_10m;
-    if (sp == null || dir == null || !isFinite(Number(sp)) || !isFinite(Number(dir))) return null;
-    /* Open-Meteo default wind_speed unit = km/h; dir = meteorological FROM */
-    var speedKmh = Number(sp);
-    var fromDeg = Number(dir);
-    var toRad = ((fromDeg + 180) % 360) * Math.PI / 180;
-    var speedMs = speedKmh / 3.6;
-    return {
-      speedKmh: speedKmh,
-      fromDeg: fromDeg,
-      u: speedMs * Math.sin(toRad), /* eastward m/s */
-      v: speedMs * Math.cos(toRad)  /* northward m/s */
-    };
+    var u, v, speedKmh;
+    if (uRaw != null && vRaw != null && isFinite(Number(uRaw)) && isFinite(Number(vRaw))) {
+      /* with wind_speed_unit=kmh, Open-Meteo returns u/v in km/h */
+      var uKmh = Number(uRaw);
+      var vKmh = Number(vRaw);
+      u = uKmh / 3.6; /* eastward m/s */
+      v = vKmh / 3.6; /* northward m/s */
+      if (sp != null && isFinite(Number(sp))) speedKmh = Number(sp);
+      else speedKmh = Math.sqrt(uKmh * uKmh + vKmh * vKmh);
+    } else if (sp != null && dir != null && isFinite(Number(sp)) && isFinite(Number(dir))) {
+      speedKmh = Number(sp);
+      var fromDeg = Number(dir);
+      var toRad = ((fromDeg + 180) % 360) * Math.PI / 180;
+      var speedMs = speedKmh / 3.6;
+      u = speedMs * Math.sin(toRad);
+      v = speedMs * Math.cos(toRad);
+    } else {
+      return null;
+    }
+    if (!isFinite(speedKmh) || !isFinite(u) || !isFinite(v)) return null;
+    return { speedKmh: speedKmh, u: u, v: v };
+  }
+
+  /* opt56: array-of-objects OR parallel-array single object */
+  function normalizeWindApiRows(data) {
+    if (data == null) return [];
+    if (Array.isArray(data)) return data;
+    if (typeof data !== "object") return [];
+    if (Array.isArray(data.latitude) && Array.isArray(data.longitude)) {
+      var n = Math.min(data.latitude.length, data.longitude.length);
+      var curSrc = data.current || data;
+      var out = [];
+      var i, key, val, cur;
+      for (i = 0; i < n; i++) {
+        cur = {};
+        for (key in curSrc) {
+          if (!Object.prototype.hasOwnProperty.call(curSrc, key)) continue;
+          if (key === "time" || key === "interval") {
+            val = curSrc[key];
+            cur[key] = Array.isArray(val) ? val[i] : val;
+            continue;
+          }
+          val = curSrc[key];
+          cur[key] = Array.isArray(val) ? val[i] : val;
+        }
+        out.push({
+          latitude: data.latitude[i],
+          longitude: data.longitude[i],
+          location_id: Array.isArray(data.location_id) ? data.location_id[i] : i,
+          current: cur
+        });
+      }
+      return out;
+    }
+    return [data];
+  }
+
+  function windLonLatDist2(aLat, aLon, bLat, bLon) {
+    var dLat = aLat - bLat;
+    var dLon = aLon - bLon;
+    if (dLon > 180) dLon -= 360;
+    if (dLon < -180) dLon += 360;
+    return dLat * dLat + dLon * dLon;
+  }
+
+  /* Map each API sample onto the request grid (lat/lon match when present). */
+  function assignWindRowsToGrid(pts, rows) {
+    var n = pts.length;
+    var assigned = new Array(n);
+    var used = [];
+    var i, j, best, bestD, d, row, rLat, rLon, hasLL;
+    for (i = 0; i < rows.length; i++) used[i] = false;
+    for (i = 0; i < n; i++) assigned[i] = null;
+
+    for (i = 0; i < n; i++) {
+      best = -1;
+      bestD = Infinity;
+      for (j = 0; j < rows.length; j++) {
+        if (used[j]) continue;
+        row = rows[j];
+        if (!row) continue;
+        rLat = row.latitude != null ? Number(row.latitude) : NaN;
+        rLon = row.longitude != null ? Number(row.longitude) : NaN;
+        hasLL = isFinite(rLat) && isFinite(rLon);
+        if (hasLL) {
+          d = windLonLatDist2(pts[i].lat, pts[i].lon, rLat, rLon);
+          if (d < bestD) {
+            bestD = d;
+            best = j;
+          }
+        }
+      }
+      if (best >= 0 && bestD < 4) { /* ~2° snap tolerance */
+        assigned[i] = rows[best];
+        used[best] = true;
+      }
+    }
+    /* fill remaining by index order among unused rows */
+    var free = [];
+    for (j = 0; j < rows.length; j++) if (!used[j]) free.push(rows[j]);
+    var fi = 0;
+    for (i = 0; i < n; i++) {
+      if (assigned[i] == null && fi < free.length) {
+        assigned[i] = free[fi++];
+      }
+    }
+    return assigned;
   }
 
   function fetchWindBatch(points) {
@@ -6910,11 +7008,10 @@
     var url = METEO_URL +
       "?latitude=" + lats +
       "&longitude=" + lons +
-      "&current=wind_speed_10m,wind_direction_10m" +
+      "&current=wind_speed_10m,wind_direction_10m,wind_u_component_10m,wind_v_component_10m" +
       "&wind_speed_unit=kmh";
     return fetchWithTimeout(url, WX_FETCH_TIMEOUT_MS).then(readJsonSafe).then(function (data) {
-      var rows = Array.isArray(data) ? data : [data];
-      return rows;
+      return normalizeWindApiRows(data);
     });
   }
 
@@ -6959,13 +7056,14 @@
         var j;
         for (j = 0; j < rows.length; j++) flat.push(rows[j]);
       }
+      var mapped = assignWindRowsToGrid(pts, flat);
       var n = grid.cols * grid.rows;
       var u = new Float32Array(n);
       var v = new Float32Array(n);
       var speeds = new Float32Array(n);
       var pi;
       for (pi = 0; pi < pts.length; pi++) {
-        var parsed = parseWindRow(flat[pi]);
+        var parsed = parseWindRow(mapped[pi]);
         if (!parsed) continue;
         var idx = pts[pi].i;
         u[idx] = parsed.u;
@@ -7071,7 +7169,9 @@
         lon: p.lon,
         lat: p.lat,
         age: Math.random() * 2.5,
-        life: 1.8 + Math.random() * 2.8
+        life: 1.8 + Math.random() * 2.8,
+        sx: null,
+        sy: null
       });
     }
     if (windParticles.length > cap) windParticles.length = cap;
@@ -7083,12 +7183,14 @@
     p.lat = loc.lat;
     p.age = 0;
     p.life = 1.8 + Math.random() * 2.8;
+    p.sx = null;
+    p.sy = null;
   }
 
-  /* opt54/55: wind direction → fixed pixel-length screen segment (readable at any zoom) */
+  /* opt56: projected u/v screen direction — never hardcode east */
   function windScreenDelta(lon, lat, u, v, lengthPx) {
     var mag = Math.sqrt(u * u + v * v);
-    if (!(mag > 1e-6) || !map) return { dx: lengthPx, dy: 0 };
+    if (!(mag > 1e-6) || !map || !(lengthPx > 0)) return { dx: 0, dy: 0 };
     var stepM = 400;
     var cosLat = Math.cos(lat * Math.PI / 180);
     if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
@@ -7099,12 +7201,12 @@
       p0 = map.project([lon, lat]);
       p1 = map.project([lon + dLon, lat + dLat]);
     } catch (ePr) {
-      return { dx: lengthPx, dy: 0 };
+      return { dx: 0, dy: 0 };
     }
     dx = (p1.x - p0.x) * windDpr;
     dy = (p1.y - p0.y) * windDpr;
     len = Math.sqrt(dx * dx + dy * dy);
-    if (!(len > 1e-3)) return { dx: lengthPx, dy: 0 };
+    if (!(len > 1e-3)) return { dx: 0, dy: 0 };
     return { dx: (dx / len) * lengthPx, dy: (dy / len) * lengthPx };
   }
 
@@ -7162,6 +7264,7 @@
     var i, p, uv, pt, speedKmh, stepScale, lengthPx, delta, sx, sy;
     var tx, ty, hx, hy, lwCss, lw, maxA, lifeFade, grad;
     var METERS_PER_DEG_LAT = 111320;
+    var disp, ddx, ddy;
 
     windCtx.lineCap = "round";
     windCtx.lineJoin = "round";
@@ -7206,9 +7309,27 @@
         respawnParticle(p);
         continue;
       }
-      /* opt55: Windy-like short thin streamlets ~10–28 CSS px */
+      /* opt55/56: Windy-like short thin streamlets ~10–28 CSS px */
       lengthPx = Math.max(10, Math.min(28, 10 + speedKmh * 0.45)) * windDpr;
-      delta = windScreenDelta(p.lon, p.lat, uv.u, uv.v, lengthPx);
+
+      /* opt56 authoritative: streak along actual screen displacement */
+      delta = null;
+      if (p.sx != null && p.sy != null && isFinite(p.sx) && isFinite(p.sy)) {
+        ddx = sx - p.sx;
+        ddy = sy - p.sy;
+        disp = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (disp >= 0.5) {
+          delta = { dx: (ddx / disp) * lengthPx, dy: (ddy / disp) * lengthPx };
+        }
+      }
+      if (!delta) {
+        delta = windScreenDelta(p.lon, p.lat, uv.u, uv.v, lengthPx);
+      }
+      p.sx = sx;
+      p.sy = sy;
+
+      if (!(Math.abs(delta.dx) + Math.abs(delta.dy) > 1e-3)) continue;
+
       /* head at particle; tail behind along -delta */
       hx = sx;
       hy = sy;
@@ -7261,7 +7382,7 @@
       setWindUi(true);
     });
   }
-  /* === END WIND LINES (opt53–opt55) === */
+  /* === END WIND LINES (opt53–opt56) === */
 
   /* === BEGIN RAINVIEWER RADAR (opt16) + overlay mode (opt19) + single-buffer fade (opt40) === */
   var RADAR_SRC = "radar";
@@ -9006,7 +9127,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt55").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt56").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
