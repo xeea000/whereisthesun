@@ -1,6 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    /* opt57: users always stay on the main URL; ?v=optNN is internal cache-bust only */
+    (function () {
+      try {
+        var u = new URL(location.href);
+        var v = u.searchParams.get("v");
+        if (v && /^opt[-_]?\d+/i.test(String(v))) {
+          u.searchParams.delete("v");
+          var q = u.searchParams.toString();
+          history.replaceState(history.state, "", u.pathname + (q ? "?" + q : "") + u.hash);
+        }
+      } catch (eBare) {}
+    })();
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SUNNY</title>
@@ -22,8 +36,8 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt56">
-  <link rel="stylesheet" href="styles.css?v=opt56">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt57">
+  <link rel="stylesheet" href="styles.css?v=opt57">
 </head>
 <body>
   <div id="map"></div>
@@ -156,7 +170,7 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt56"></script>
-  <script defer src="app.js?v=opt56"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt57"></script>
+  <script defer src="app.js?v=opt57"></script>
 </body>
 </html>

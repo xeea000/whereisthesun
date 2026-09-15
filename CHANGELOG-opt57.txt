@@ -1,0 +1,16 @@
+SUNNY opt57 — bare main URL always latest; smooth Clouds↔Radar fade
+
+1) Users open the main app URL with no query and always get the newest
+   build. Asset filenames still use an internal ?v=opt57 cache-bust in
+   index.html / sw.js / workers. If the page is opened with ?v=optNN,
+   replaceState strips it so the address bar stays on the clean path.
+   SW: CACHE=sunny-v-opt57, network-first shell; on controllerchange
+   auto-reload once so a new deploy sticks without a hard refresh.
+
+2) Clouds ↔ Radar is a ~380ms crossfade (MapLibre raster-opacity, plus
+   play overlay if showing). Radar fades in while clouds fade out, then
+   the outgoing overlay is fully muted/removed. Flip again cancels the
+   in-flight fade. Wind, Play, Labels, and mutex (one primary overlay
+   after settle) stay as they were. Boot restore stays instant.
+
+No starcode. Do not document or require ?v=opt… for users.

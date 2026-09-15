@@ -2,6 +2,31 @@
 (function () {
   "use strict";
 
+  /* opt57: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
+  try {
+    if (typeof location !== "undefined" && typeof history !== "undefined" && history.replaceState) {
+      var __u = new URL(location.href);
+      var __v = __u.searchParams.get("v");
+      if (__v && /^opt[-_]?\d+/i.test(String(__v))) {
+        __u.searchParams.delete("v");
+        var __q = __u.searchParams.toString();
+        history.replaceState(history.state, "", __u.pathname + (__q ? "?" + __q : "") + __u.hash);
+      }
+    }
+  } catch (eBareUrl) {}
+
+  /* opt57: new SW claims the page → reload once so bare /whereisthesun/ gets the new shell */
+  try {
+    if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+      var __sunnySwReloaded = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (__sunnySwReloaded) return;
+        __sunnySwReloaded = true;
+        try { location.reload(); } catch (eRel) {}
+      });
+    }
+  } catch (eSwHook) {}
+
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var s = document.createElement("script");
@@ -102,6 +127,10 @@
   var playLoop = true; /* opt21: Loop checkbox default ON */
   var playSpeed = 1; /* opt22: 0.5|1|1.5|2|3 */
   var cloudOpacitySavedForRadar = null; /* 0–100 or null while muted */
+  var OVERLAY_XFADE_MS = 380; /* opt57: Clouds↔Radar crossfade */
+  var overlayXfadeRaf = 0;
+  var overlayXfadeGen = 0;
+  var overlayXfadeActive = false;
   var VIEW_KEY = "sunny-last-view";
   var BASEMAP_IDS = ["osm", "base-sat", "base-dark"];
   var basemapMode = "roads";
@@ -1484,6 +1513,7 @@
   }
 
   function applyCloudPaint(layerId, opacity) {
+    if (overlayXfadeActive) return;
     var m = cloudTargetMap();
     if (!m || !m.getLayer(layerId)) return;
     var paint = cloudRasterPaint(opacity, layerId);
@@ -2251,6 +2281,7 @@
   }
 
   function setMapLibreCloudsHidden(hidden) {
+    if (overlayXfadeActive) return;
     var m = cloudTargetMap();
     if (!m) return;
     var i, id;
@@ -2286,6 +2317,7 @@
     if (!layer) return;
     layer.classList.remove("is-active");
     layer.classList.remove("is-map-locked");
+    try { layer.style.opacity = ""; } catch (eOpReset) {}
     layer.hidden = true;
     layer.setAttribute("aria-hidden", "true");
     try { hideMotionCanvas(); } catch (eHM) {}
@@ -2704,7 +2736,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt56");
+      playFlowWorker = new Worker("flow-worker.js?v=opt57");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3758,7 +3790,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt56";
+      link.href = "flow-worker.js?v=opt57";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4190,6 +4222,7 @@
   }
 
   function applyCloudPaintMain(layerId, opacity) {
+    if (overlayXfadeActive) return;
     if (!map.getLayer(layerId)) return;
     /* opt14/opt33: short fade on IEM softens handoff; GOES stays snappy via applyCloudPaint */
     var fade = (layerId === "iem-vis") ? 320 : 0;
@@ -4247,7 +4280,7 @@
   }
 
   function applyHires() {
-    if (tabHidden || playMode || radarOn()) return;
+    if (tabHidden || playMode || radarOn() || overlayXfadeActive) return;
     removeLegacyDailyHires();
     var z = map.getZoom();
     var atNow = !cloudTimes.length || playheadFrac >= sliderMax() - 1e-6 || cloudIndex >= sliderMax();
@@ -4357,6 +4390,7 @@
   }
 
   function applyCloudOpacity() {
+    if (overlayXfadeActive) return;
     applyCloudSolidMode();
     if (playMode) setPlayLayerOpacity();
     applyHires();
@@ -5049,7 +5083,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt56");
+      beachWorker = new Worker("beach-worker.js?v=opt57");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -7600,20 +7634,37 @@
         }
       }
     }
+    var wantOp = RADAR_OPACITY;
+    if (opts.opacity != null && isFinite(Number(opts.opacity))) {
+      wantOp = Number(opts.opacity);
+    } else if (overlayXfadeActive) {
+      wantOp = 0;
+      try {
+        if (map.getLayer(RADAR_LAYER)) {
+          var curOp = Number(map.getPaintProperty(RADAR_LAYER, "raster-opacity"));
+          if (isFinite(curOp)) wantOp = curOp;
+        }
+      } catch (eCurOp) {}
+    }
+    if (overlayXfadeActive && (fade == null || fade < OVERLAY_XFADE_MS)) {
+      fade = OVERLAY_XFADE_MS;
+    }
     if (!map.getLayer(RADAR_LAYER)) {
       map.addLayer({
         id: RADAR_LAYER,
         type: "raster",
         source: RADAR_SRC,
         paint: {
-          "raster-opacity": RADAR_OPACITY,
+          "raster-opacity": wantOp,
           "raster-fade-duration": fade,
           "raster-resampling": "linear"
         }
       }, before);
     } else {
       try { map.setLayoutProperty(RADAR_LAYER, "visibility", "visible"); } catch (eVis) {}
-      try { map.setPaintProperty(RADAR_LAYER, "raster-opacity", RADAR_OPACITY); } catch (eOp) {}
+      if (!overlayXfadeActive || opts.opacity != null) {
+        try { map.setPaintProperty(RADAR_LAYER, "raster-opacity", wantOp); } catch (eOp) {}
+      }
       setRadarFadeDuration(fade);
       try { map.moveLayer(RADAR_LAYER, before); } catch (eMv) {}
     }
@@ -7722,8 +7773,78 @@
     });
   }
 
-  function muteCloudsForRadar() {
-    /* Keep slider value visible; disable it; hide rasters; stop cloud Play. */
+  function overlayXfadeEase(t) {
+    t = Math.max(0, Math.min(1, t));
+    return t * t * (3 - 2 * t);
+  }
+
+  function getLayerRasterOpacity(layerId) {
+    if (!map || !map.getLayer(layerId)) return 0;
+    try {
+      var vis = map.getLayoutProperty(layerId, "visibility");
+      if (vis === "none") return 0;
+    } catch (eVis) {}
+    try {
+      var v = Number(map.getPaintProperty(layerId, "raster-opacity"));
+      return isFinite(v) ? v : 0;
+    } catch (eOp) {
+      return 0;
+    }
+  }
+
+  function setLayerRasterOpacity(layerId, op) {
+    if (!map || !map.getLayer(layerId)) return;
+    try { map.setPaintProperty(layerId, "raster-opacity", op); } catch (eSet) {}
+  }
+
+  function playOverlayIsVisible() {
+    var layer = document.getElementById("cloud-play-layer");
+    return !!(layer && !layer.hidden && layer.classList.contains("is-active"));
+  }
+
+  function getPlayOverlayFade() {
+    var layer = document.getElementById("cloud-play-layer");
+    if (!layer || layer.hidden || !layer.classList.contains("is-active")) return 0;
+    var s = layer.style.opacity;
+    if (s !== "" && s != null) {
+      var n = Number(s);
+      if (isFinite(n)) return n;
+    }
+    return 1;
+  }
+
+  function setPlayOverlayFade(op) {
+    var layer = document.getElementById("cloud-play-layer");
+    if (!layer) return;
+    try { layer.style.opacity = String(op); } catch (eFade) {}
+  }
+
+  function cancelOverlayXfade() {
+    overlayXfadeGen += 1;
+    overlayXfadeActive = false;
+    if (overlayXfadeRaf) {
+      try { cancelAnimationFrame(overlayXfadeRaf); } catch (eC) {}
+      overlayXfadeRaf = 0;
+    }
+  }
+
+  function freezeCloudPlayVisual() {
+    /* Stop Play ticking but keep the last overlay frame for the crossfade. */
+    playSession += 1;
+    playBusy = false;
+    playAnimating = false;
+    cancelPlayRaf();
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    setPlayButtonPlaying(false);
+    try { cancelPlayFadeRafOnly(); } catch (eCf) {}
+    try { settleMotionToFront(); } catch (eSm) {}
+    try { cancelPlayTimelineWarm(); } catch (eTw) {}
+    try { forceClearPlayGesture("overlay-xfade"); } catch (eFg) {}
+    playMode = false;
+    playHoldStaticUntilFirst = false;
+  }
+
+  function captureCloudOpacityForRadar() {
     if (cloudOpacitySavedForRadar == null) {
       var fromEl = cloudOpacityEl ? Number(cloudOpacityEl.value) : Math.round(cloudOpacity * 100);
       if (!isFinite(fromEl) || fromEl < 0) fromEl = 90;
@@ -7740,7 +7861,76 @@
       }
       cloudOpacitySavedForRadar = Math.max(0, Math.min(100, Math.round(fromEl)));
     }
-    stopCloudPlayOnly();
+  }
+
+  function restoreCloudOpacityValue() {
+    var restore = cloudOpacitySavedForRadar != null ? cloudOpacitySavedForRadar : (
+      cloudOpacityEl ? Number(cloudOpacityEl.value) : Math.round(cloudOpacity * 100)
+    );
+    if (!isFinite(restore) || restore < 0) restore = 90;
+    cloudOpacity = Math.max(0, Math.min(1, restore / 100));
+    if (cloudOpacityEl) cloudOpacityEl.value = String(Math.round(restore));
+    return restore;
+  }
+
+  function showCloudRastersForXfade(startOp) {
+    var m = cloudTargetMap();
+    if (!m) return;
+    if (m.getLayer(GIBS_LAYER)) {
+      try { m.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eG) {}
+      try { m.setPaintProperty(GIBS_LAYER, "raster-opacity", startOp); } catch (eOp) {}
+      try { m.setPaintProperty(GIBS_LAYER, "raster-fade-duration", OVERLAY_XFADE_MS); } catch (eFd) {}
+    }
+  }
+
+  function runOverlayXfade(spec) {
+    cancelOverlayXfade();
+    var gen = overlayXfadeGen;
+    overlayXfadeActive = true;
+    var start = 0;
+    var ms = spec.ms || OVERLAY_XFADE_MS;
+    var cloudFromG = spec.cloudFromG;
+    var cloudFromI = spec.cloudFromI;
+    var cloudToG = spec.cloudToG;
+    var cloudToI = spec.cloudToI;
+    var radarFrom = spec.radarFrom;
+    var radarTo = spec.radarTo;
+    var playFrom = spec.playFrom;
+    var playTo = spec.playTo;
+    var fadePlay = spec.fadePlay;
+    function applyAt(e) {
+      setLayerRasterOpacity(GIBS_LAYER, cloudFromG + (cloudToG - cloudFromG) * e);
+      if (map && map.getLayer("iem-vis")) {
+        setLayerRasterOpacity("iem-vis", cloudFromI + (cloudToI - cloudFromI) * e);
+      }
+      if (radarTo != null || radarFrom > 0) {
+        if (map && map.getLayer(RADAR_LAYER)) {
+          setLayerRasterOpacity(RADAR_LAYER, radarFrom + (radarTo - radarFrom) * e);
+        }
+      }
+      if (fadePlay) setPlayOverlayFade(playFrom + (playTo - playFrom) * e);
+    }
+    applyAt(0);
+    function step(now) {
+      if (gen !== overlayXfadeGen) return;
+      if (!start) start = now;
+      var t = Math.max(0, Math.min(1, (now - start) / ms));
+      applyAt(overlayXfadeEase(t));
+      if (t < 1) {
+        overlayXfadeRaf = requestAnimationFrame(step);
+        return;
+      }
+      overlayXfadeRaf = 0;
+      overlayXfadeActive = false;
+      if (typeof spec.onDone === "function") spec.onDone();
+    }
+    overlayXfadeRaf = requestAnimationFrame(step);
+  }
+
+  function muteCloudsForRadar() {
+    /* Keep slider value visible; disable it; hide rasters; stop cloud Play. */
+    captureCloudOpacityForRadar();
+    freezeCloudPlayVisual();
     setCloudSliderDisabled(true);
     setMapLibreCloudsHidden(true);
     try { applyCloudSolidMode(); } catch (eSol) {}
@@ -7748,13 +7938,8 @@
   }
 
   function unmuteCloudsAfterRadar() {
-    var restore = cloudOpacitySavedForRadar != null ? cloudOpacitySavedForRadar : (
-      cloudOpacityEl ? Number(cloudOpacityEl.value) : Math.round(cloudOpacity * 100)
-    );
-    if (!isFinite(restore) || restore < 0) restore = 90;
+    restoreCloudOpacityValue();
     cloudOpacitySavedForRadar = null;
-    cloudOpacity = Math.max(0, Math.min(1, restore / 100));
-    if (cloudOpacityEl) cloudOpacityEl.value = String(Math.round(restore));
     setCloudSliderDisabled(false);
     setMapLibreCloudsHidden(false);
     try { applyCloudOpacity(); } catch (eApp) {}
@@ -7771,14 +7956,18 @@
       syncOverlaySeg();
       return;
     }
+    /* Boot restore (force+silent) stays instant; user clicks crossfade. */
+    var instant = !!(opts.force && (opts.silent || opts.deferFetch)) || !!opts.instant || !map;
+    if (mode !== prev) cancelOverlayXfade();
     overlayMode = mode;
     timeTicksSig = "";
     syncOverlaySeg();
     saveSetting(OVERLAY_KEY, mode);
     saveSetting(RADAR_KEY, mode === "radar" ? "1" : "0");
     if (mode === "radar") {
-      /* Switching to Radar: stop cloud Play; mute clouds; do not zero slider */
-      muteCloudsForRadar();
+      captureCloudOpacityForRadar();
+      freezeCloudPlayVisual();
+      setCloudSliderDisabled(true);
       if (btnPlay) btnPlay.setAttribute("aria-label", "Play radar animation");
       if (!opts.silent) setStatus("Radar on — Play loops rain.");
       function kickRadarFetch() {
@@ -7788,16 +7977,85 @@
           if (!opts.silent && !ok) setStatus("Radar unavailable right now.");
         });
       }
-      /* opt52: on boot restore, let basemap paint before RainViewer manifest */
-      if (opts.deferFetch) afterMapBasicsReady(kickRadarFetch);
-      else kickRadarFetch();
+      if (instant) {
+        muteCloudsForRadar();
+        if (opts.deferFetch) afterMapBasicsReady(kickRadarFetch);
+        else kickRadarFetch();
+      } else {
+        var fadePlay = playOverlayIsVisible();
+        var cloudFromG = getLayerRasterOpacity(GIBS_LAYER);
+        var cloudFromI = getLayerRasterOpacity("iem-vis");
+        var radarFrom = getLayerRasterOpacity(RADAR_LAYER);
+        var playFrom = fadePlay ? getPlayOverlayFade() : 0;
+        if (map && map.getLayer(RADAR_LAYER)) {
+          try { map.setLayoutProperty(RADAR_LAYER, "visibility", "visible"); } catch (eVisR) {}
+        }
+        try {
+          if (map && map.getLayer(RADAR_LAYER)) {
+            map.setPaintProperty(RADAR_LAYER, "raster-fade-duration", OVERLAY_XFADE_MS);
+          }
+        } catch (eFdR) {}
+        runOverlayXfade({
+          cloudFromG: cloudFromG,
+          cloudFromI: cloudFromI,
+          cloudToG: 0,
+          cloudToI: 0,
+          radarFrom: radarFrom,
+          radarTo: RADAR_OPACITY,
+          playFrom: playFrom,
+          playTo: 0,
+          fadePlay: fadePlay,
+          ms: OVERLAY_XFADE_MS,
+          onDone: function () {
+            if (!radarOn()) return;
+            muteCloudsForRadar();
+          }
+        });
+        kickRadarFetch();
+      }
     } else {
-      /* Switching to Clouds: stop radar play/refresh; remove radar; restore clouds */
       stopRadarPlayOnly();
-      hideRadarLayer();
-      unmuteCloudsAfterRadar();
+      stopRadarRefresh();
+      radarFetchGen += 1; /* invalidate in-flight radar so it cannot re-add during fade-out */
       if (btnPlay) btnPlay.setAttribute("aria-label", "Play cloud animation");
       if (!opts.silent) setStatus("Clouds on.");
+      if (instant) {
+        hideRadarLayer();
+        unmuteCloudsAfterRadar();
+      } else {
+        var restore = restoreCloudOpacityValue();
+        var targetG = Math.max(0, Math.min(1, restore / 100));
+        try { if (typeof gibsEffectiveOpacity === "function") targetG = gibsEffectiveOpacity(); } catch (eTg) {}
+        var radarFromC = getLayerRasterOpacity(RADAR_LAYER);
+        var cloudFromGc = getLayerRasterOpacity(GIBS_LAYER);
+        var cloudFromIc = getLayerRasterOpacity("iem-vis");
+        var fadePlayC = playOverlayIsVisible();
+        var playFromC = fadePlayC ? getPlayOverlayFade() : 0;
+        setCloudSliderDisabled(false);
+        showCloudRastersForXfade(cloudFromGc);
+        try {
+          if (map && map.getLayer(RADAR_LAYER)) {
+            map.setPaintProperty(RADAR_LAYER, "raster-fade-duration", OVERLAY_XFADE_MS);
+          }
+        } catch (eFdC) {}
+        runOverlayXfade({
+          cloudFromG: cloudFromGc,
+          cloudFromI: cloudFromIc,
+          cloudToG: targetG,
+          cloudToI: 0,
+          radarFrom: radarFromC,
+          radarTo: 0,
+          playFrom: playFromC,
+          playTo: fadePlayC ? 1 : 0,
+          fadePlay: fadePlayC,
+          ms: OVERLAY_XFADE_MS,
+          onDone: function () {
+            if (radarOn()) return;
+            hideRadarLayer();
+            unmuteCloudsAfterRadar();
+          }
+        });
+      }
     }
     rebuildTimeTicks();
   }
@@ -9127,7 +9385,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt56").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt57").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
