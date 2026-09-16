@@ -1,0 +1,16 @@
+SUNNY opt58 — visible wind streaks; keep playhead across Clouds↔Radar
+
+1) Wind particles were too transparent on busy maps (head alpha ~0.35–0.55).
+   Raised head maxA to ~0.65–0.85 (min(0.85, 0.55 + speedKmh/100)), slightly
+   thicker (~1.0–1.8 CSS px) and longer (~12–32 px), still with gradient
+   falloff (not solid chalk). Empty wind field shows a brief status instead
+   of a silent blank; #wind-layer still turns on and animates when checked.
+
+2) Clouds↔Radar overlay toggle must not move the playhead. Capture wall-time
+   (GOES ISO ms or RainViewer frame time) before the mode flip, then map it
+   onto the other timeline (nearestCloudIndexByMs / nearestRadarIndexByMs).
+   Never jumpLatest on overlay toggle; do not reset scrubber to NOW or clear
+   the loop splitter. Playing may pause for overlay mutex but time stays put.
+
+Bare URL https://xeea000.github.io/whereisthesun/ (internal ?v=opt58 / CACHE only).
+No starcode.

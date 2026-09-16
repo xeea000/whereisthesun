@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  /* opt57: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
+  /* opt58: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
   try {
     if (typeof location !== "undefined" && typeof history !== "undefined" && history.replaceState) {
       var __u = new URL(location.href);
@@ -15,7 +15,7 @@
     }
   } catch (eBareUrl) {}
 
-  /* opt57: new SW claims the page → reload once so bare /whereisthesun/ gets the new shell */
+  /* opt58: new SW claims the page → reload once so bare /whereisthesun/ gets the new shell */
   try {
     if (typeof navigator !== "undefined" && navigator.serviceWorker) {
       var __sunnySwReloaded = false;
@@ -2736,7 +2736,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt57");
+      playFlowWorker = new Worker("flow-worker.js?v=opt58");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -3790,7 +3790,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt57";
+      link.href = "flow-worker.js?v=opt58";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -5083,7 +5083,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt57");
+      beachWorker = new Worker("beach-worker.js?v=opt58");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -7144,8 +7144,13 @@
     var run = function () {
       windMoveTimer = null;
       if (!windOn || tabHidden || mapGesturing) return;
-      fetchWindFieldForView().then(function () {
-        if (windOn && !tabHidden) startWindAnim();
+      fetchWindFieldForView().then(function (field) {
+        if (!windOn || tabHidden) return;
+        if (!field) {
+          try { setStatus("Wind field empty — try again in a moment."); } catch (eEmpty2) {}
+          return;
+        }
+        startWindAnim();
       });
     };
     if (immediate) run();
@@ -7343,8 +7348,8 @@
         respawnParticle(p);
         continue;
       }
-      /* opt55/56: Windy-like short thin streamlets ~10–28 CSS px */
-      lengthPx = Math.max(10, Math.min(28, 10 + speedKmh * 0.45)) * windDpr;
+      /* opt58: slightly longer/thicker streamlets ~12–32 CSS px (still subtle) */
+      lengthPx = Math.max(12, Math.min(32, 12 + speedKmh * 0.5)) * windDpr;
 
       /* opt56 authoritative: streak along actual screen displacement */
       delta = null;
@@ -7374,21 +7379,21 @@
       if (p.age < 0.18) lifeFade = p.age / 0.18;
       else if (p.age > p.life - 0.28) lifeFade = Math.max(0, (p.life - p.age) / 0.28);
 
-      /* subtle soft white/blue-white; head ~0.35–0.55, tail → 0 */
-      maxA = Math.min(0.55, 0.35 + speedKmh / 140) * lifeFade;
+      /* opt58: head ~0.65–0.85 so streaks read on busy maps; still gradient falloff */
+      maxA = Math.min(0.85, 0.55 + speedKmh / 100) * lifeFade;
       if (maxA < 0.02) continue;
 
-      lwCss = Math.max(0.8, Math.min(1.4, 0.85 + speedKmh / 90));
+      lwCss = Math.max(1.0, Math.min(1.8, 1.0 + speedKmh / 80));
       lw = lwCss * windDpr;
 
       try {
         grad = windCtx.createLinearGradient(tx, ty, hx, hy);
         grad.addColorStop(0, "rgba(235,245,255,0)");
-        grad.addColorStop(0.45, "rgba(235,245,255," + (maxA * 0.35).toFixed(3) + ")");
+        grad.addColorStop(0.45, "rgba(235,245,255," + (maxA * 0.4).toFixed(3) + ")");
         grad.addColorStop(1, "rgba(235,245,255," + maxA.toFixed(3) + ")");
         windCtx.strokeStyle = grad;
       } catch (eG) {
-        windCtx.strokeStyle = "rgba(235,245,255," + (maxA * 0.55).toFixed(3) + ")";
+        windCtx.strokeStyle = "rgba(235,245,255," + (maxA * 0.6).toFixed(3) + ")";
       }
       windCtx.lineWidth = lw;
       windCtx.beginPath();
@@ -7404,6 +7409,12 @@
     setWindUi(on);
     if (on) {
       try { setStatus("Wind on — Open-Meteo particles (subtle streaks; stronger = longer)."); } catch (eS) {}
+      fetchWindFieldForView().then(function (field) {
+        if (!windOn) return;
+        if (!field) {
+          try { setStatus("Wind field empty — try again in a moment."); } catch (eEmpty) {}
+        }
+      });
     }
   }
 
@@ -7544,6 +7555,21 @@
     var n = Number(i);
     if (!isFinite(n)) n = 0;
     return Math.max(0, Math.min(Math.floor(n), radarSliderMax()));
+  }
+
+  function nearestRadarIndexByMs(want) {
+    if (!radarPast || !radarPast.length || !isFinite(want)) {
+      return clampRadarIndex(radarIndex);
+    }
+    var best = 0, bestD = Infinity, i, ms, d;
+    for (i = 0; i < radarPast.length; i++) {
+      if (!radarPast[i] || radarPast[i].time == null) continue;
+      ms = Number(radarPast[i].time) * 1000;
+      if (!isFinite(ms)) continue;
+      d = Math.abs(ms - want);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
   }
 
   function formatRadarLabel(frame) {
@@ -7744,8 +7770,11 @@
       }
       radarPastAll = past;
       radarPast = radarPastForRange(past);
-      if (opts.jumpLatest || radarIndex > radarSliderMax()) {
+      /* opt58: keepMs (wall-time) wins — never snap to latest on overlay toggle */
+      if (opts.jumpLatest) {
         radarIndex = radarSliderMax();
+      } else if (opts.keepMs != null && isFinite(Number(opts.keepMs))) {
+        radarIndex = nearestRadarIndexByMs(Number(opts.keepMs));
       } else if (keepTime != null) {
         var k, match = -1, older = 0;
         for (k = 0; k < radarPast.length; k++) {
@@ -7756,6 +7785,17 @@
           if (radarPast[k] && radarPast[k].time <= keepTime) older = k;
         }
         radarIndex = match >= 0 ? match : older;
+      } else if (radarIndex > radarSliderMax()) {
+        radarIndex = radarSliderMax();
+      } else if (!radarPast.length) {
+        radarIndex = 0;
+      }
+      if (opts.keepLoopMs != null && isFinite(Number(opts.keepLoopMs)) && loopStartInited && radarPast.length) {
+        loopStartFrac = nearestRadarIndexByMs(Number(opts.keepLoopMs));
+        persistLoopStart();
+      }
+      if (radarPast.length && playheadFrac < loopStartFrac) {
+        /* playhead remapped in syncRadarTimelineUi from radarIndex */
       }
       var frame = radarPast[clampRadarIndex(radarIndex)] || pickRadarFrame(data);
       if (!frame || !frame.path) throw new Error("radar frame");
@@ -7956,6 +7996,11 @@
       syncOverlaySeg();
       return;
     }
+    /* opt58: capture wall-time BEFORE mode flip (GOES ISO vs RainViewer sec) */
+    var keepMs = NaN;
+    var keepLoopMs = NaN;
+    try { keepMs = currentPlayheadMs(); } catch (eKm) {}
+    try { keepLoopMs = loopStartInited ? loopStartMs() : NaN; } catch (eKl) {}
     /* Boot restore (force+silent) stays instant; user clicks crossfade. */
     var instant = !!(opts.force && (opts.silent || opts.deferFetch)) || !!opts.instant || !map;
     if (mode !== prev) cancelOverlayXfade();
@@ -7971,7 +8016,13 @@
       if (btnPlay) btnPlay.setAttribute("aria-label", "Play radar animation");
       if (!opts.silent) setStatus("Radar on — Play loops rain.");
       function kickRadarFetch() {
-        fetchAndApplyRadar({ quiet: !!opts.silent, jumpLatest: true }).then(function (ok) {
+        /* Never jumpLatest on overlay toggle — map keepMs onto radar timeline */
+        fetchAndApplyRadar({
+          quiet: !!opts.silent,
+          jumpLatest: false,
+          keepMs: keepMs,
+          keepLoopMs: keepLoopMs
+        }).then(function (ok) {
           if (!radarOn()) return;
           if (ok && !tabHidden) startRadarRefresh();
           if (!opts.silent && !ok) setStatus("Radar unavailable right now.");
@@ -8019,7 +8070,23 @@
       radarFetchGen += 1; /* invalidate in-flight radar so it cannot re-add during fade-out */
       if (btnPlay) btnPlay.setAttribute("aria-label", "Play cloud animation");
       if (!opts.silent) setStatus("Clouds on.");
+      function applyCloudPlayheadKeep() {
+        /* Map preserved wall-time onto GOES index space; leave loop splitter mapped */
+        if (isFinite(keepMs) && cloudTimes.length) {
+          playheadFrac = nearestCloudIndexByMs(keepMs);
+          cloudIndex = clampIndex(Math.round(playheadFrac));
+        }
+        if (isFinite(keepLoopMs) && cloudTimes.length && loopStartInited) {
+          loopStartFrac = nearestCloudIndexByMs(keepLoopMs);
+          persistLoopStart();
+        }
+        if (cloudTimes.length && playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
+        cloudIndex = clampIndex(Math.round(playheadFrac));
+        try { syncSliderUi(); } catch (eSu) {}
+        try { updatePlayheadLabel(); } catch (eUl) {}
+      }
       if (instant) {
+        applyCloudPlayheadKeep();
         hideRadarLayer();
         unmuteCloudsAfterRadar();
       } else {
@@ -8033,6 +8100,7 @@
         var playFromC = fadePlayC ? getPlayOverlayFade() : 0;
         setCloudSliderDisabled(false);
         showCloudRastersForXfade(cloudFromGc);
+        applyCloudPlayheadKeep();
         try {
           if (map && map.getLayer(RADAR_LAYER)) {
             map.setPaintProperty(RADAR_LAYER, "raster-fade-duration", OVERLAY_XFADE_MS);
@@ -9385,7 +9453,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt57").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt58").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });
