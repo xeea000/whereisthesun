@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  /* opt58: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
+  /* opt59: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
   try {
     if (typeof location !== "undefined" && typeof history !== "undefined" && history.replaceState) {
       var __u = new URL(location.href);
@@ -1112,6 +1112,12 @@
   var FLOW_BLOCK = 12; /* opt42: larger blocks = fewer SADs */
   var FLOW_SEARCH = 6; /* opt42: smaller search window */
   var FLOW_MAX_W = 160; /* opt42: always 160 on first pass */
+  /* opt59: Kol — "linear interpolation over wobble". Block-matching flow vectors were
+     noisy (ripples in all directions) and the warp painted at 160px (pixel mosaic).
+     Default Play = clean per-pixel linear crossfade at display resolution. Warp off. */
+  var PLAY_MOTION_WARP = false;
+  var PLAY_CANVAS_MAX_SIDE = 2560; /* display canvas cap (CSS px × DPR) */
+  var PLAY_CANVAS_MAX_PIXELS = 2560 * 1600;
   var BLEND_HINT_MS = 200; /* opt43: "Blending frames…" only if cached+motion >200ms */
   var playFlowCache = Object.create(null);
   var playFlowOrder = [];
@@ -1344,7 +1350,7 @@
   }
 
   function ensureFlowPairForIndices(fromIdx, toIdx) {
-    if (playUseOpenMeteo) return Promise.resolve(null);
+    if (playUseOpenMeteo || !PLAY_MOTION_WARP) return Promise.resolve(null);
     var a = playFrameMetaAt(fromIdx);
     var b = playFrameMetaAt(toIdx);
     if (!a || !b) return Promise.resolve(null);
@@ -1478,7 +1484,9 @@
     var z = map && typeof map.getZoom === "function" ? map.getZoom() : 0;
     if (layerId === "iem-vis") {
       /* IEM native ~1km: nearest when close for crisp VIS; linear while blending in */
-      return (z != null && z >= 7.5) ? "nearest" : "linear";
+      /* opt59: always linear — nearest made zoomed VIS look like a pixel mosaic */
+      void z;
+      return "linear";
     }
     /* GeoColor max WMTS Level7 — linear softens blocky upscale at z>7 */
     return "linear";
@@ -1631,14 +1639,15 @@
        opt38: narrow viewports (<700) use ~75% of desktop cap for faster mobile WMS.
        opt43: base caps tightened in wmsMaxSide / WMS_MAX_SIDE_*. */
     if (!playSizeCache) playSizeCache = computePlayImageSize();
-    var base = playSizeCache;
+    var base = clampWmsToNative(playSizeCache);
     var sp = getPlaySpeed();
     var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
     var cw = (el && el.clientWidth) || window.innerWidth || 800;
     var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
     var scale = 1;
     if (narrow) scale *= 0.75;
-    if (playMode && sp >= 2) scale *= 0.72;
+    /* opt59: removed Speed≥2 shrink (0.72) — lower-res at 2x+ and cache-key churn on Speed change */
+    void sp;
     if (scale >= 0.999) return base;
     var w = Math.round(base.w * scale);
     var h = Math.round(base.h * scale);
@@ -1653,6 +1662,29 @@
     w = Math.max(64, Math.min(base.w, w));
     h = Math.max(64, Math.min(base.h, h));
     return { w: w, h: h };
+  }
+
+  /* opt59: GIBS GOES GeoColor is GoogleMapsCompatible_Level7 (~1223 m/px in EPSG:3857).
+     Asking WMS for more pixels than that makes the SERVER nearest-upscale → blocky
+     mosaic baked into the JPEG. Cap at native; the display-res canvas upsamples with
+     high-quality linear smoothing instead (soft, never blocky). */
+  var GIBS_GEOCOLOR_NATIVE_M_PER_PX = 40075016.686 / (256 * 128);
+  var GIBS_NATIVE_OVERSAMPLE = 1.0;
+
+  function clampWmsToNative(sz) {
+    try {
+      var box = mapBbox3857();
+      var natW = (box.maxx - box.minx) / GIBS_GEOCOLOR_NATIVE_M_PER_PX * GIBS_NATIVE_OVERSAMPLE;
+      var natH = (box.maxy - box.miny) / GIBS_GEOCOLOR_NATIVE_M_PER_PX * GIBS_NATIVE_OVERSAMPLE;
+      var s = Math.min(1, natW / Math.max(1, sz.w), natH / Math.max(1, sz.h));
+      if (!(s < 0.999) || !isFinite(s)) return sz;
+      /* round to 16 so tiny zoom jitter doesn't churn cache keys */
+      var w = Math.max(64, Math.round(sz.w * s / 16) * 16);
+      var h = Math.max(64, Math.round(sz.h * s / 16) * 16);
+      return { w: Math.min(sz.w, w), h: Math.min(sz.h, h) };
+    } catch (eN) {
+      return sz;
+    }
   }
 
   function invalidatePlayImageSize() {
@@ -1992,6 +2024,9 @@
     }
     w = Math.max(64, Math.min(cap, w));
     h = Math.max(64, Math.min(cap, h));
+    var natHi = clampWmsToNative({ w: w, h: h }); /* opt59: never past native */
+    w = natHi.w;
+    h = natHi.h;
     var soft = playImageSize();
     if (w < soft.w) w = soft.w;
     if (h < soft.h) h = soft.h;
@@ -2165,52 +2200,44 @@
     }
   }
 
-  function paintHiResProgressive(i0, i1, t) {
-    /* Keep soft motion canvas; fade full-res over it when ready. Never hard-swap to incomplete. */
+  function paintHiResProgressive(i0, i1, t, softA, softB) {
+    /* opt59: full-res layer is itself a true linear A→B blend at display resolution.
+       Missing hi-res side falls back to its soft frame so the blend never pops to a
+       single static frame; layer fades in once (hidden→shown), not on every frame step. */
     if (tabHidden || radarOn() || playUseOpenMeteo || !playHiResWorthwhile()) {
       hideHiResCanvas();
       return;
     }
     var hiA = cachedHiResRec(i0);
     var hiB = (i1 !== i0) ? cachedHiResRec(i1) : null;
-    var canBlend = !!(hiA && hiB);
-    var canFloor = !!(hiA && (!hiB || t < 0.35));
-    var canCeil = !!(hiB && t > 0.65);
-    var imgA = null, imgB = null, useT = 0;
-    var pairKey = "";
-    if (canBlend) {
-      imgA = hiA.img;
-      imgB = hiB.img;
-      useT = t;
-      pairKey = hiA.key + "=>" + hiB.key;
-    } else if (canFloor) {
-      imgA = hiA.img;
-      useT = 0;
-      pairKey = hiA.key;
-    } else if (canCeil) {
-      imgA = hiB.img;
-      useT = 0;
-      pairKey = hiB.key;
-    } else {
-      /* Incomplete — keep soft visible; kick fetches; do not show partial hi-res */
-      kickLoadHiResIndex(i0);
-      kickLoadHiResIndex(i1);
+    kickLoadHiResIndex(i0);
+    if (i1 !== i0) kickLoadHiResIndex(i1);
+    if (!hiA && !hiB) {
+      /* Nothing full-res yet — keep soft visible; fetches kicked above */
       hideHiResCanvas();
       return;
     }
-    kickLoadHiResIndex(i0);
-    kickLoadHiResIndex(i1);
+    var imgA = hiA ? hiA.img : (softA && softA.img);
+    var imgB = (i1 !== i0) ? (hiB ? hiB.img : (softB && softB.img)) : null;
+    var useT = t;
+    if (!imgA || !imgA.naturalWidth) {
+      imgA = imgB;
+      imgB = null;
+      useT = 0;
+    }
+    if (!imgB || !imgB.naturalWidth) imgB = null;
     var canvas = hiResCanvasEl();
     if (!canvas) return;
-    var painted = paintAlphaAtT(canvas, imgA, imgB, useT);
+    var painted = paintAlphaAtT(canvas, imgA, imgB, imgB ? useT : 0);
     if (!painted) {
       hideHiResCanvas();
       return;
     }
     var baseOp = gibsEffectiveOpacity();
     canvas.classList.add("is-on");
-    if (playHiResFade.pairKey !== pairKey) {
-      playHiResFade.pairKey = pairKey;
+    if (!playHiResFade.active) {
+      var token = "f" + Math.random();
+      playHiResFade.pairKey = token;
       playHiResFade.opacity = 0;
       playHiResFade.t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
       playHiResFade.active = true;
@@ -2219,26 +2246,21 @@
         try { cancelAnimationFrame(playHiResRaf); } catch (eC) {}
         playHiResRaf = 0;
       }
-      function step(now) {
+      var step = function (now) {
         playHiResRaf = 0;
-        if (!playHiResFade.active || playHiResFade.pairKey !== pairKey) return;
-        var t0 = playHiResFade.t0;
-        var u = (now - t0) / HI_RES_FADE_MS;
+        if (!playHiResFade.active || playHiResFade.pairKey !== token) return;
+        var u = (now - playHiResFade.t0) / HI_RES_FADE_MS;
         if (u < 0) u = 0;
         if (u > 1) u = 1;
         playHiResFade.opacity = u;
         var c2 = hiResCanvasEl();
-        if (c2) c2.style.opacity = String(baseOp * u);
-        if (u < 1) {
-          playHiResRaf = requestAnimationFrame(step);
-        }
-      }
+        if (c2) c2.style.opacity = String(gibsEffectiveOpacity() * u);
+        if (u < 1) playHiResRaf = requestAnimationFrame(step);
+      };
       playHiResRaf = requestAnimationFrame(step);
     } else {
-      /* same pair — keep current fade level (or full) while playhead lerps */
       var op = playHiResFade.opacity;
-      if (op >= 1) canvas.style.opacity = String(baseOp);
-      else canvas.style.opacity = String(baseOp * op);
+      canvas.style.opacity = String(baseOp * (op >= 1 ? 1 : op));
     }
   }
 
@@ -2628,6 +2650,41 @@
     return FLOW_WAIT_MS;
   }
 
+  /* opt59: size Play canvases to the element's CSS box × DPR (sane cap) — never flow res */
+  function playDisplayCanvasSize(canvas) {
+    var el = (map && map.getContainer) ? map.getContainer() : document.getElementById("map");
+    var cw = (canvas && canvas.clientWidth) || (el && el.clientWidth) || window.innerWidth || 800;
+    var ch = (canvas && canvas.clientHeight) || (el && el.clientHeight) || window.innerHeight || 600;
+    var dpr = 1;
+    try { dpr = Math.min(2.5, Math.max(1, window.devicePixelRatio || 1)); } catch (eD) { dpr = 1; }
+    var w = Math.round(cw * dpr);
+    var h = Math.round(ch * dpr);
+    var s = 1;
+    if (Math.max(w, h) > PLAY_CANVAS_MAX_SIDE) s = PLAY_CANVAS_MAX_SIDE / Math.max(w, h);
+    if (w * h * s * s > PLAY_CANVAS_MAX_PIXELS) s = Math.sqrt(PLAY_CANVAS_MAX_PIXELS / (w * h));
+    w = Math.max(64, Math.round(w * s));
+    h = Math.max(48, Math.round(h * s));
+    return { w: w, h: h };
+  }
+
+  function fitDisplayCanvas(canvas) {
+    var d = playDisplayCanvasSize(canvas);
+    if (canvas.width !== d.w || canvas.height !== d.h) {
+      canvas.width = d.w;
+      canvas.height = d.h;
+    }
+    return d;
+  }
+
+  function smoothCtx(ctx) {
+    if (!ctx) return ctx;
+    try {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+    } catch (eS) {}
+    return ctx;
+  }
+
   function ensureMotionCanvas(layer) {
     if (!layer) return null;
     var c = layer.querySelector(".cloud-play-motion");
@@ -2667,11 +2724,14 @@
   /* opt51: write-path contexts prefer alpha; willReadFrequently ONLY where getImageData runs */
   function canvas2dWrite(c) {
     if (!c) return null;
+    var ctx = null;
     try {
-      return c.getContext("2d", { alpha: true });
+      ctx = c.getContext("2d", { alpha: true });
     } catch (eW) {
-      try { return c.getContext("2d"); } catch (e2) { return null; }
+      try { ctx = c.getContext("2d"); } catch (e2) { ctx = null; }
     }
+    /* opt59: canvas resize resets state — re-assert high-quality linear resampling */
+    return smoothCtx(ctx);
   }
 
   function canvas2dRead(c) {
@@ -2736,7 +2796,7 @@
     if (playFlowWorker) return playFlowWorker;
     if (typeof Worker === "undefined") return null;
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt58");
+      playFlowWorker = new Worker("flow-worker.js?v=opt59");
       playFlowWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = playFlowPending[msg.id];
@@ -2763,6 +2823,7 @@
   }
 
   function playFlowCacheGet(key) {
+    if (!PLAY_MOTION_WARP) return null;
     var rec = playFlowCache[key];
     if (!rec) return null;
     playFlowCacheTouch(key);
@@ -3137,6 +3198,7 @@
   }
 
   function ensureFlowForPair(frontImg, backImg, pairKey) {
+    if (!PLAY_MOTION_WARP) return Promise.resolve(null);
     var hit = playFlowCacheGet(pairKey);
     if (hit) return Promise.resolve(hit);
     return Promise.all([framePixelsForFlow(frontImg), framePixelsForFlow(backImg)]).then(function (pair) {
@@ -3181,20 +3243,10 @@
       resolve(false);
       return;
     }
-    var maxW = flowMaxWidth();
-    var nw = back.naturalWidth;
-    var nh = back.naturalHeight;
-    if (front && front.naturalWidth) {
-      nw = Math.max(nw, front.naturalWidth);
-      nh = Math.max(nh, front.naturalHeight);
-    }
-    var scale = Math.min(1, maxW / nw);
-    var w = Math.max(32, Math.round(nw * scale));
-    var h = Math.max(24, Math.round(nh * scale));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
+    /* opt59: display resolution (was flow-res 160px → mosaic) */
+    var dimAB = fitDisplayCanvas(canvas);
+    var w = dimAB.w;
+    var h = dimAB.h;
     var ctx = canvas2dWrite(canvas);
     if (!ctx) {
       if (!playAnimating) {
@@ -3401,13 +3453,8 @@
       else resolve(false);
       return;
     }
-    var maxW = flowMaxWidth();
-    var nw = img.naturalWidth, nh = img.naturalHeight;
-    var scale = Math.min(1, maxW / nw);
-    var w = Math.max(32, Math.round(nw * scale));
-    var h = Math.max(24, Math.round(nh * scale));
-    canvas.width = w;
-    canvas.height = h;
+    var dimS = fitDisplayCanvas(canvas); /* opt59: display res */
+    var w = dimS.w, h = dimS.h;
     var ctx = canvas2dWrite(canvas);
     if (!ctx) {
       resolve(false);
@@ -3449,6 +3496,16 @@
         return;
       }
       rafCrossfade(back, front, gen, resolve);
+      return;
+    }
+    if (!PLAY_MOTION_WARP) {
+      /* opt59: clean linear per-pixel crossfade on the persistent canvas (no warp) */
+      clearPlayFrameHints();
+      if (playAnimating) {
+        rafCanvasAlphaBlend(back, front, gen, resolve);
+      } else {
+        rafCrossfade(back, front, gen, resolve);
+      }
       return;
     }
     var pairKey = String(playLastFrameKey || front.src || "front") + "=>" + String(backKey || back.src || "back");
@@ -3713,7 +3770,7 @@
 
   function prefetchFlowAhead(fromIndex) {
     /* opt42/opt43/opt46: warm optical-flow for next pairs (triple-buffer mindset). */
-    if (tabHidden || !cloudTimes.length || playUseOpenMeteo) return;
+    if (tabHidden || !cloudTimes.length || playUseOpenMeteo || !PLAY_MOTION_WARP) return;
     if (typeof Worker === "undefined" && !FLOW_BLOCK) return;
     var lon = origin ? origin.lon : null;
     var keys = [];
@@ -3790,7 +3847,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt58";
+      link.href = "flow-worker.js?v=opt59";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -5083,7 +5140,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt58");
+      beachWorker = new Worker("beach-worker.js?v=opt59");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6781,6 +6838,13 @@
   var windMoveTimer = null;
   var windFetchPromise = null;
   var windDpr = 1;
+  /* opt59: screen-space particles; hold during gestures; stratified respawn */
+  var windMoving = false;
+  var windNeedsReseed = true;
+  var windSpawnCursor = 0;
+  var windGrid = null; /* {cols,rows,cw,ch,w,h} CSS px strata */
+  var windFieldWaiting = false;
+  var windCellCounts = null; /* per-frame stratum occupancy for even respawn */
 
   function windParticleCap() {
     try {
@@ -7062,9 +7126,11 @@
     for (ck in windCache) {
       if (!Object.prototype.hasOwnProperty.call(windCache, ck)) continue;
       var hit = windCache[ck];
+      /* opt59: reuse ONLY if that field actually covers this view (old code reused a
+         shifted field and clamped to its edge → particles bunched at one side) */
       if (hit && hit.key && hit.key.split("|")[0] === key.split("|")[0] &&
           (Date.now() - hit.t) < WIND_CACHE_TTL_MS &&
-          Math.abs(hit.west - (map.getBounds().getWest())) < hit.dLon * 1.5) {
+          windFieldCoversView(hit)) {
         windField = hit;
         return Promise.resolve(hit);
       }
@@ -7096,6 +7162,8 @@
       var v = new Float32Array(n);
       var speeds = new Float32Array(n);
       var pi;
+      var okMask = new Uint8Array(n);
+      var nOk = 0;
       for (pi = 0; pi < pts.length; pi++) {
         var parsed = parseWindRow(mapped[pi]);
         if (!parsed) continue;
@@ -7103,6 +7171,27 @@
         u[idx] = parsed.u;
         v[idx] = parsed.v;
         speeds[idx] = parsed.speedKmh;
+        okMask[idx] = 1;
+        nOk += 1;
+      }
+      /* opt59: failed/limited fetch → no data. Never cache an all-calm fake field. */
+      if (nOk === 0) {
+        try { setStatus("Wind data unavailable right now (Open-Meteo) — will retry."); } catch (eNo) {}
+        return windField;
+      }
+      /* partial batch failure: fill gaps from nearest valid samples (no fake calm holes) */
+      if (nOk < n) {
+        var gi, gj, best, bestD, dd, gc = grid.cols;
+        for (gi = 0; gi < n; gi++) {
+          if (okMask[gi]) continue;
+          best = -1; bestD = Infinity;
+          for (gj = 0; gj < n; gj++) {
+            if (!okMask[gj]) continue;
+            dd = Math.pow((gi % gc) - (gj % gc), 2) + Math.pow(Math.floor(gi / gc) - Math.floor(gj / gc), 2);
+            if (dd < bestD) { bestD = dd; best = gj; }
+          }
+          if (best >= 0) { u[gi] = u[best]; v[gi] = v[best]; speeds[gi] = speeds[best]; }
+        }
       }
       var field = {
         key: key,
@@ -7126,7 +7215,7 @@
         for (drop = 0; drop < keys.length - 8; drop++) delete windCache[keys[drop]];
       }
       windField = field;
-      if (!windParticles.length) seedWindParticles(true);
+      if (windFieldCoversView(field) && (windNeedsReseed || !windParticles.length)) seedWindParticles(true);
       return field;
     }).catch(function () {
       windFetchPromise = null;
@@ -7146,8 +7235,12 @@
       if (!windOn || tabHidden || mapGesturing) return;
       fetchWindFieldForView().then(function (field) {
         if (!windOn || tabHidden) return;
-        if (!field) {
-          try { setStatus("Wind field empty — try again in a moment."); } catch (eEmpty2) {}
+        if (!field || !windFieldCoversView(field)) {
+          if (!field) {
+            try { setStatus("Wind field empty — try again in a moment."); } catch (eEmpty2) {}
+          }
+          /* opt59: slow retry so a failed/limited fetch recovers without a map move */
+          if (!windMoveTimer) windMoveTimer = setTimeout(run, 20000);
           return;
         }
         startWindAnim();
@@ -7157,96 +7250,204 @@
     else windMoveTimer = setTimeout(run, WIND_MOVE_DEBOUNCE_MS);
   }
 
+  /* opt59: field extent in lon/lat; cell centers at west+(c+0.5)*dLon */
+  function windLonRel(lon, west) {
+    var r = (lon - west) % 360;
+    if (r < 0) r += 360;
+    return r;
+  }
+
+  function windFieldCoversView(f) {
+    if (!f || !map) return false;
+    try {
+      var b = map.getBounds();
+      var west = b.getWest();
+      var east = b.getEast();
+      if (east < west) east += 360;
+      var spanF = f.cols * f.dLon;
+      var tolLon = f.dLon * 0.35;
+      var tolLat = f.dLat * 0.35;
+      if (east - west > spanF + 2 * tolLon) return false;
+      var w0 = windLonRel(west, f.west);
+      if (w0 > 360 - tolLon) w0 -= 360;
+      if (w0 < -tolLon) return false;
+      if (w0 + (east - west) > spanF + tolLon) return false;
+      var fSouth = f.south;
+      var fNorth = f.south + f.rows * f.dLat;
+      if (b.getSouth() < fSouth - tolLat || b.getNorth() > fNorth + tolLat) return false;
+      return true;
+    } catch (eCv) {
+      return false;
+    }
+  }
+
   function sampleWindUV(lon, lat) {
+    /* Bilinear on cell centers; returns null outside the fetched field (no edge clamp) */
     var f = windField;
-    if (!f) return { u: 0, v: 0, speed: 0 };
-    var x = (lon - f.west) / f.dLon;
-    var y = (lat - f.south) / f.dLat;
-    /* unwrap lon if needed */
-    if (x < -0.5) x += 360 / f.dLon;
+    if (!f) return null;
+    var lr = windLonRel(lon, f.west);
+    var spanF = f.cols * f.dLon;
+    if (lr > spanF + f.dLon * 0.5 && lr > 360 - f.dLon * 0.5) lr -= 360;
+    var x = lr / f.dLon - 0.5;
+    var y = (lat - f.south) / f.dLat - 0.5;
+    if (x < -1 || y < -1 || x > f.cols || y > f.rows) return null;
+    /* half-cell rim inside the field extent: hold the edge sample (still real data) */
     if (x < 0) x = 0;
     if (y < 0) y = 0;
-    if (x > f.cols - 1.001) x = f.cols - 1.001;
-    if (y > f.rows - 1.001) y = f.rows - 1.001;
+    if (x > f.cols - 1) x = f.cols - 1;
+    if (y > f.rows - 1) y = f.rows - 1;
     var x0 = Math.floor(x);
     var y0 = Math.floor(y);
     var x1 = Math.min(f.cols - 1, x0 + 1);
     var y1 = Math.min(f.rows - 1, y0 + 1);
     var tx = x - x0;
     var ty = y - y0;
-    function at(c, r) {
-      return r * f.cols + c;
-    }
-    var i00 = at(x0, y0), i10 = at(x1, y0), i01 = at(x0, y1), i11 = at(x1, y1);
-    var u = (1 - tx) * (1 - ty) * f.u[i00] + tx * (1 - ty) * f.u[i10] +
-            (1 - tx) * ty * f.u[i01] + tx * ty * f.u[i11];
-    var v = (1 - tx) * (1 - ty) * f.v[i00] + tx * (1 - ty) * f.v[i10] +
-            (1 - tx) * ty * f.v[i01] + tx * ty * f.v[i11];
-    var sp = (1 - tx) * (1 - ty) * f.speeds[i00] + tx * (1 - ty) * f.speeds[i10] +
-             (1 - tx) * ty * f.speeds[i01] + tx * ty * f.speeds[i11];
+    var i00 = y0 * f.cols + x0, i10 = y0 * f.cols + x1, i01 = y1 * f.cols + x0, i11 = y1 * f.cols + x1;
+    var w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+    var u = w00 * f.u[i00] + w10 * f.u[i10] + w01 * f.u[i01] + w11 * f.u[i11];
+    var v = w00 * f.v[i00] + w10 * f.v[i10] + w01 * f.v[i01] + w11 * f.v[i11];
+    var sp = w00 * f.speeds[i00] + w10 * f.speeds[i10] + w01 * f.speeds[i01] + w11 * f.speeds[i11];
     return { u: u, v: v, speed: sp };
   }
 
-  function randomInViewLonLat() {
-    var b = map.getBounds();
-    var west = b.getWest();
-    var east = b.getEast();
-    if (east < west) east += 360;
-    var lon = west + Math.random() * (east - west);
-    if (lon > 180) lon -= 360;
-    var lat = b.getSouth() + Math.random() * (b.getNorth() - b.getSouth());
-    return { lon: lon, lat: lat };
+  function windViewCss() {
+    var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
+    return { w: (el && el.clientWidth) || 800, h: (el && el.clientHeight) || 600 };
+  }
+
+  function buildWindGrid(n) {
+    /* Stratified strata ≈ n cells over the viewport (aspect-aware) */
+    var v = windViewCss();
+    var cols = Math.max(1, Math.round(Math.sqrt(n * v.w / Math.max(1, v.h))));
+    var rows = Math.max(1, Math.round(n / cols));
+    windGrid = { cols: cols, rows: rows, cw: v.w / cols, ch: v.h / rows, w: v.w, h: v.h };
+    windSpawnCursor = Math.floor(Math.random() * cols * rows);
+    return windGrid;
+  }
+
+  function stratifiedSpawn(p, cellIdx) {
+    var g = windGrid;
+    if (!g) g = buildWindGrid(windParticleCap());
+    var n = g.cols * g.rows;
+    var ci;
+    if (cellIdx == null && windCellCounts && windCellCounts.length === n) {
+      /* least-populated stratum (random scan start) → density stays even even though
+         wind drains the upwind edge and piles into convergence zones */
+      var start = Math.floor(Math.random() * n);
+      var best = start, bestC = Infinity, k, idx;
+      for (k = 0; k < n; k++) {
+        idx = (start + k) % n;
+        if (windCellCounts[idx] < bestC) { bestC = windCellCounts[idx]; best = idx; if (bestC === 0) break; }
+      }
+      ci = best;
+      windCellCounts[ci] += 1;
+    } else if (cellIdx == null) {
+      /* golden-ratio stride over cells → even coverage over time, no clumping */
+      windSpawnCursor = (windSpawnCursor + Math.max(1, Math.round(n * 0.618034))) % n;
+      ci = windSpawnCursor;
+    } else {
+      ci = cellIdx % n;
+    }
+    var cx = ci % g.cols;
+    var cy = Math.floor(ci / g.cols);
+    p.x = (cx + Math.random()) * g.cw;
+    p.y = (cy + Math.random()) * g.ch;
+    p.age = 0;
+    p.life = 1.8 + Math.random() * 2.8;
   }
 
   function seedWindParticles(reset) {
     if (!map) return;
     var cap = windParticleCap();
+    if (reset || !windGrid) buildWindGrid(cap);
     if (reset) windParticles = [];
+    windCellCounts = null;
+    var n = windGrid.cols * windGrid.rows;
+    /* shuffled cell order so the initial field is evenly spread */
+    var order = [];
+    var i;
+    for (i = 0; i < n; i++) order.push(i);
+    for (i = n - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+    }
+    var k = 0;
     while (windParticles.length < cap) {
-      var p = randomInViewLonLat();
-      windParticles.push({
-        lon: p.lon,
-        lat: p.lat,
-        age: Math.random() * 2.5,
-        life: 1.8 + Math.random() * 2.8,
-        sx: null,
-        sy: null
-      });
+      var p = { x: 0, y: 0, age: 0, life: 1 };
+      stratifiedSpawn(p, order[k % n]);
+      k += 1;
+      p.age = Math.random() * p.life * 0.8; /* staggered lifetimes */
+      windParticles.push(p);
     }
     if (windParticles.length > cap) windParticles.length = cap;
+    windNeedsReseed = false;
   }
 
   function respawnParticle(p) {
-    var loc = randomInViewLonLat();
-    p.lon = loc.lon;
-    p.lat = loc.lat;
-    p.age = 0;
-    p.life = 1.8 + Math.random() * 2.8;
-    p.sx = null;
-    p.sy = null;
+    stratifiedSpawn(p, null);
   }
 
-  /* opt56: projected u/v screen direction — never hardcode east */
-  function windScreenDelta(lon, lat, u, v, lengthPx) {
+  /* opt56/opt59: projected u/v unit direction in CSS px (handles bearing/pitch) */
+  function windScreenDir(lon, lat, u, v) {
     var mag = Math.sqrt(u * u + v * v);
-    if (!(mag > 1e-6) || !map || !(lengthPx > 0)) return { dx: 0, dy: 0 };
+    if (!(mag > 1e-6) || !map) return null;
     var stepM = 400;
     var cosLat = Math.cos(lat * Math.PI / 180);
     if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
     var dLon = (u / mag * stepM) / (111320 * cosLat);
     var dLat = (v / mag * stepM) / 111320;
-    var p0, p1, dx, dy, len;
+    var p0, p1;
     try {
       p0 = map.project([lon, lat]);
       p1 = map.project([lon + dLon, lat + dLat]);
     } catch (ePr) {
-      return { dx: 0, dy: 0 };
+      return null;
     }
-    dx = (p1.x - p0.x) * windDpr;
-    dy = (p1.y - p0.y) * windDpr;
-    len = Math.sqrt(dx * dx + dy * dy);
-    if (!(len > 1e-3)) return { dx: 0, dy: 0 };
-    return { dx: (dx / len) * lengthPx, dy: (dy / len) * lengthPx };
+    var dx = p1.x - p0.x;
+    var dy = p1.y - p0.y;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (!(len > 1e-6)) return null;
+    return { x: dx / len, y: dy / len };
+  }
+
+  function windScreenDelta(lon, lat, u, v, lengthPx) {
+    var d = windScreenDir(lon, lat, u, v);
+    if (!d || !(lengthPx > 0)) return { dx: 0, dy: 0 };
+    return { dx: d.x * lengthPx, dy: d.y * lengthPx };
+  }
+
+  function windOnGestureStart() {
+    /* opt59: never carry particles through a zoom/pan — fade out, then clear */
+    if (!windOn) return;
+    windMoving = true;
+    windNeedsReseed = true;
+    if (windLayerEl) {
+      try {
+        windLayerEl.style.transition = "opacity 140ms linear";
+        windLayerEl.style.opacity = "0";
+      } catch (eOp) {}
+    }
+  }
+
+  function windOnGestureEnd() {
+    if (!windOn) return;
+    windMoving = false;
+    windParticles = [];
+    windNeedsReseed = true;
+    if (windCtx && windCanvas) {
+      try { windCtx.clearRect(0, 0, windCanvas.width, windCanvas.height); } catch (eCl) {}
+    }
+    if (windLayerEl) {
+      try {
+        windLayerEl.style.transition = "opacity 260ms linear";
+        windLayerEl.style.opacity = "1";
+      } catch (eOp2) {}
+    }
+    if (windField && windFieldCoversView(windField)) {
+      seedWindParticles(true);
+    }
+    /* refetch (debounced) — draws resume from the new field if the old one didn't cover */
+    scheduleWindFieldRefresh(false);
   }
 
   function startWindAnim() {
@@ -7254,7 +7455,6 @@
     if (windRaf) return;
     windLastTs = 0;
     windAccumMs = 0;
-    seedWindParticles(false);
     function frame(ts) {
       windRaf = 0;
       if (!windOn || tabHidden) return;
@@ -7289,21 +7489,34 @@
     var w = windCanvas.width;
     var h = windCanvas.height;
     windCtx.clearRect(0, 0, w, h);
-
-    if (!windField) return;
+    /* opt59: hold during gestures; never draw from a field that doesn't cover the view */
+    if (windMoving || mapGesturing) return;
+    try { if (map.isMoving() || map.isZooming()) return; } catch (eMv) {}
+    if (!windField || !windFieldCoversView(windField)) {
+      windFieldWaiting = true;
+      return;
+    }
+    windFieldWaiting = false;
+    var view = windViewCss();
+    if (windNeedsReseed || !windGrid || Math.abs(windGrid.w - view.w) > 1 || Math.abs(windGrid.h - view.h) > 1) {
+      seedWindParticles(true);
+    }
     var cap = windParticleCap();
-    if (windParticles.length < cap * 0.7) seedWindParticles(false);
+    if (windParticles.length < cap) seedWindParticles(false);
 
-    var b = map.getBounds();
-    var west = b.getWest();
-    var east = b.getEast();
-    var south = b.getSouth();
-    var north = b.getNorth();
-    var wrap = east < west;
-    var i, p, uv, pt, speedKmh, stepScale, lengthPx, delta, sx, sy;
-    var tx, ty, hx, hy, lwCss, lw, maxA, lifeFade, grad;
-    var METERS_PER_DEG_LAT = 111320;
-    var disp, ddx, ddy;
+    /* stratum occupancy (before this frame's moves) */
+    var g = windGrid;
+    var nCells = g.cols * g.rows;
+    if (!windCellCounts || windCellCounts.length !== nCells) windCellCounts = new Int16Array(nCells);
+    else windCellCounts.fill(0);
+    var ci0, cxi, cyi;
+    for (ci0 = 0; ci0 < windParticles.length; ci0++) {
+      cxi = Math.floor(windParticles[ci0].x / g.cw);
+      cyi = Math.floor(windParticles[ci0].y / g.ch);
+      if (cxi >= 0 && cyi >= 0 && cxi < g.cols && cyi < g.rows) windCellCounts[cyi * g.cols + cxi] += 1;
+    }
+    var dpr = windDpr;
+    var i, p, ll, uv, dir, speedKmh, pxPerSec, lengthPx, hx, hy, tx, ty, lwCss, maxA, lifeFade, grad;
 
     windCtx.lineCap = "round";
     windCtx.lineJoin = "round";
@@ -7312,68 +7525,35 @@
     for (i = 0; i < windParticles.length; i++) {
       p = windParticles[i];
       p.age += dt;
-      if (p.age > p.life) {
-        respawnParticle(p);
-      }
-      uv = sampleWindUV(p.lon, p.lat);
-      speedKmh = uv.speed;
-      stepScale = Math.max(0.2, Math.min(3.8, speedKmh / 16));
-      var cosLat = Math.cos(p.lat * Math.PI / 180);
-      if (Math.abs(cosLat) < 0.15) cosLat = cosLat < 0 ? -0.15 : 0.15;
-      var vis = 34 * stepScale;
-      p.lon += (uv.u * dt * vis) / (METERS_PER_DEG_LAT * cosLat);
-      p.lat += (uv.v * dt * vis) / METERS_PER_DEG_LAT;
-      if (p.lon > 180) p.lon -= 360;
-      if (p.lon < -180) p.lon += 360;
-      if (p.lat < south - 0.5 || p.lat > north + 0.5) {
-        respawnParticle(p);
-        continue;
-      }
-      var inLon = wrap
-        ? (p.lon >= west || p.lon <= east)
-        : (p.lon >= west && p.lon <= east);
-      if (!inLon) {
-        respawnParticle(p);
-        continue;
-      }
+      if (p.age > p.life) respawnParticle(p);
       try {
-        pt = map.project([p.lon, p.lat]);
-      } catch (ePr) {
+        ll = map.unproject([p.x, p.y]);
+      } catch (eUp) {
         respawnParticle(p);
         continue;
       }
-      sx = pt.x * windDpr;
-      sy = pt.y * windDpr;
-      if (sx < -80 || sy < -80 || sx > w + 80 || sy > h + 80) {
+      uv = sampleWindUV(ll.lng, ll.lat);
+      if (!uv) {
         respawnParticle(p);
         continue;
       }
-      /* opt58: slightly longer/thicker streamlets ~12–32 CSS px (still subtle) */
-      lengthPx = Math.max(12, Math.min(32, 12 + speedKmh * 0.5)) * windDpr;
-
-      /* opt56 authoritative: streak along actual screen displacement */
-      delta = null;
-      if (p.sx != null && p.sy != null && isFinite(p.sx) && isFinite(p.sy)) {
-        ddx = sx - p.sx;
-        ddy = sy - p.sy;
-        disp = Math.sqrt(ddx * ddx + ddy * ddy);
-        if (disp >= 0.5) {
-          delta = { dx: (ddx / disp) * lengthPx, dy: (ddy / disp) * lengthPx };
-        }
+      dir = windScreenDir(ll.lng, ll.lat, uv.u, uv.v);
+      if (!dir) continue;
+      speedKmh = uv.speed;
+      /* Screen-space advection: same on-screen pace at every zoom (≈10–90 CSS px/s) */
+      pxPerSec = Math.max(10, Math.min(90, 8 + speedKmh * 1.6));
+      p.x += dir.x * pxPerSec * dt;
+      p.y += dir.y * pxPerSec * dt;
+      if (p.x < -20 || p.y < -20 || p.x > view.w + 20 || p.y > view.h + 20) {
+        respawnParticle(p);
+        continue;
       }
-      if (!delta) {
-        delta = windScreenDelta(p.lon, p.lat, uv.u, uv.v, lengthPx);
-      }
-      p.sx = sx;
-      p.sy = sy;
-
-      if (!(Math.abs(delta.dx) + Math.abs(delta.dy) > 1e-3)) continue;
-
-      /* head at particle; tail behind along -delta */
-      hx = sx;
-      hy = sy;
-      tx = sx - delta.dx;
-      ty = sy - delta.dy;
+      /* opt58: streamlets ~12–32 CSS px; opt56: streak along travel direction */
+      lengthPx = Math.max(12, Math.min(32, 12 + speedKmh * 0.5)) * dpr;
+      hx = p.x * dpr;
+      hy = p.y * dpr;
+      tx = hx - dir.x * lengthPx;
+      ty = hy - dir.y * lengthPx;
 
       lifeFade = 1;
       if (p.age < 0.18) lifeFade = p.age / 0.18;
@@ -7384,7 +7564,6 @@
       if (maxA < 0.02) continue;
 
       lwCss = Math.max(1.0, Math.min(1.8, 1.0 + speedKmh / 80));
-      lw = lwCss * windDpr;
 
       try {
         grad = windCtx.createLinearGradient(tx, ty, hx, hy);
@@ -7395,13 +7574,26 @@
       } catch (eG) {
         windCtx.strokeStyle = "rgba(235,245,255," + (maxA * 0.6).toFixed(3) + ")";
       }
-      windCtx.lineWidth = lw;
+      windCtx.lineWidth = lwCss * dpr;
       windCtx.beginPath();
       windCtx.moveTo(tx, ty);
       windCtx.lineTo(hx, hy);
       windCtx.stroke();
     }
   }
+
+  /* debug/verify hook (read-only) */
+  window.__sunnyWind = function () {
+    return {
+      on: windOn,
+      moving: windMoving,
+      waiting: windFieldWaiting,
+      covers: !!(windField && windFieldCoversView(windField)),
+      n: windParticles.length,
+      pts: windParticles.map(function (q) { return [Math.round(q.x), Math.round(q.y)]; }),
+      view: windViewCss()
+    };
+  };
 
   function onWindToggleChange() {
     var on = !!(toggleWind && toggleWind.checked);
@@ -8171,24 +8363,10 @@
   }
 
   function fitMotionCanvas(canvas, imgA, imgB) {
-    var maxW = flowMaxWidth();
-    var nw = 64, nh = 48;
-    if (imgA && imgA.naturalWidth) {
-      nw = imgA.naturalWidth;
-      nh = imgA.naturalHeight;
-    }
-    if (imgB && imgB.naturalWidth) {
-      nw = Math.max(nw, imgB.naturalWidth);
-      nh = Math.max(nh, imgB.naturalHeight);
-    }
-    var scale = Math.min(1, maxW / nw);
-    var w = Math.max(32, Math.round(nw * scale));
-    var h = Math.max(24, Math.round(nh * scale));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    return { w: w, h: h };
+    /* opt59: always display resolution (CSS × DPR, capped) with linear resampling.
+       Old path capped at FLOW_MAX_W (160px) and CSS-upscaled → pixel mosaic. */
+    void imgA; void imgB;
+    return fitDisplayCanvas(canvas);
   }
 
   function paintAlphaAtT(canvas, imgA, imgB, t) {
@@ -8259,7 +8437,8 @@
     var painted = false;
     if (recA && recB) {
       var pairKey = recA.key + "=>" + recB.key;
-      var flow = playFlowCacheGet(pairKey);
+      /* opt59: warp only if explicitly re-enabled; default = linear per-pixel blend (t = frac) */
+      var flow = PLAY_MOTION_WARP ? playFlowCacheGet(pairKey) : null;
       if (flow && flow.flow && flow.pixA && flow.pixB) {
         painted = paintMotionAtT(canvas, flow, t);
         if (painted) {
@@ -8272,7 +8451,9 @@
       }
       if (!painted) {
         painted = paintAlphaAtT(canvas, recA.img, recB.img, t);
-        try { ensureFlowForPair(recA.img, recB.img, pairKey); } catch (eF) {}
+        if (PLAY_MOTION_WARP) {
+          try { ensureFlowForPair(recA.img, recB.img, pairKey); } catch (eF) {}
+        }
       }
     } else if (recA) {
       painted = paintAlphaAtT(canvas, recA.img, null, 0);
@@ -8283,7 +8464,7 @@
       releasePlayStaticHold();
       var recFront = (t > 0.5 && recB) ? recB : recA;
       if (recFront) playLastFrameKey = recFront.key;
-      try { paintHiResProgressive(i0, i1, t); } catch (eHi) {}
+      try { paintHiResProgressive(i0, i1, t, recA, recB); } catch (eHi) {}
     } else {
       try { hideHiResCanvas(); } catch (eHide) {}
     }
@@ -8856,11 +9037,13 @@
 
   map.on("movestart", function () {
     mapGesturing = true;
+    try { windOnGestureStart(); } catch (eWg) {}
     cancelIdleGoesWarm();
     if (playMode) beginPlayMapLock();
   });
   map.on("zoomstart", function () {
     mapGesturing = true;
+    try { windOnGestureStart(); } catch (eWz) {}
     cancelIdleGoesWarm();
     if (playMode) beginPlayMapLock();
   });
@@ -8893,6 +9076,7 @@
     schedulePlayImageSizeRefresh();
     if (windOn) {
       syncWindCanvasSize();
+      windNeedsReseed = true;
       scheduleWindFieldRefresh(false);
     }
   });
@@ -8900,6 +9084,7 @@
 
   map.on("moveend", function () {
     mapGesturing = false;
+    try { windOnGestureEnd(); } catch (eWe) {}
     if (playMode) {
       endPlayMapLock();
     } else {
@@ -9453,7 +9638,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt58").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt59").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

@@ -1,0 +1,37 @@
+SUNNY opt59 — linear cloud blend, full-res clouds, stable wind
+
+1) Cloud Play = clean linear per-pixel crossfade (t = continuous playheadFrac).
+   Optical-flow warp disabled (PLAY_MOTION_WARP=false): 12px block-matching
+   vectors were noisy → wobble/ripples in all directions. No flow worker work,
+   no flow prefetch. Persistent canvas, continuous playhead, loop splitter,
+   start-now and honest Pause unchanged.
+
+2) No pixel mosaic.
+   - Root cause: every Play canvas (soft, full-res overlay, alpha fallback) was
+     sized to FLOW_MAX_W = 160px and CSS-upscaled (e.g. 160×113 on a 1280×900
+     map). Canvases now render at CSS size × DPR (cap 2560 side / ~4.1 MP) with
+     imageSmoothingEnabled + imageSmoothingQuality='high'.
+   - GIBS WMS was asked for more pixels than GeoColor's native Level-7
+     (~1.22 km/px) at z>7 → server nearest-upscaled blocks baked into the JPEG.
+     WMS size now capped at native; the canvas upsamples linearly (soft, not blocky).
+   - Full-res overlay is itself a linear A→B blend (falls back per side to the
+     soft frame), fades in once instead of re-fading every frame step.
+   - Removed Speed≥2 WMS shrink (lower res + cache-key churn on Speed change).
+   - IEM VIS raster-resampling always linear (was nearest at z≥7.5).
+
+3) Wind: no clustering, stable on zoom.
+   - Particles live in screen space; advected by the projected wind direction at
+     ~10–90 CSS px/s (speed-scaled) → same on-screen pace at any zoom.
+   - movestart/zoomstart: layer fades out, no drawing mid-gesture; moveend:
+     particles cleared and reseeded stratified (shuffled jittered grid).
+   - Respawn into the least-populated screen stratum → even density even in
+     convergent flow.
+   - Sample only when the fetched field covers the view (no edge clamping, no
+     reuse of a shifted cached field; cell-centre bilinear fixed half-cell bias).
+     Otherwise hold drawing until the refetch lands.
+   - Failed/limited Open-Meteo fetch no longer cached as an all-calm field;
+     partial gaps filled from nearest valid sample; 20s retry.
+   - Streak-along-travel, opt58 visibility, gradient, ~28fps cap, checkbox kept.
+
+Bare URL https://xeea000.github.io/whereisthesun/ (internal ?v=opt59 / CACHE only).
+No starcode.
