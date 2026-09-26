@@ -7515,6 +7515,21 @@
       cyi = Math.floor(windParticles[ci0].y / g.ch);
       if (cxi >= 0 && cyi >= 0 && cxi < g.cols && cyi < g.rows) windCellCounts[cyi * g.cols + cxi] += 1;
     }
+    /* anti-clustering: in strata well above the mean (convergence zones), let some
+       mature particles fade out early so they respawn into the sparsest strata */
+    var meanPer = windParticles.length / Math.max(1, nCells);
+    var crowd = Math.max(2, Math.ceil(meanPer * 1.6));
+    for (ci0 = 0; ci0 < windParticles.length; ci0++) {
+      var pc = windParticles[ci0];
+      if (pc.age < 0.6 || pc.life - pc.age < 0.3) continue;
+      cxi = Math.floor(pc.x / g.cw);
+      cyi = Math.floor(pc.y / g.ch);
+      if (cxi < 0 || cyi < 0 || cxi >= g.cols || cyi >= g.rows) continue;
+      if (windCellCounts[cyi * g.cols + cxi] > crowd && Math.random() < 0.25) {
+        pc.life = pc.age + 0.28; /* normal 0.28s tail fade, then stratified respawn */
+        windCellCounts[cyi * g.cols + cxi] -= 1;
+      }
+    }
     var dpr = windDpr;
     var i, p, ll, uv, dir, speedKmh, pxPerSec, lengthPx, hx, hy, tx, ty, lwCss, maxA, lifeFade, grad;
 
