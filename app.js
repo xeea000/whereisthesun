@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  /* opt59: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
+  /* opt60: keep the address bar on the bare app URL — ?v=optNN is cache-bust only */
   try {
     if (typeof location !== "undefined" && typeof history !== "undefined" && history.replaceState) {
       var __u = new URL(location.href);
@@ -81,6 +81,26 @@
   var toggleMap = document.getElementById("toggle-map");
   var toggleIntl = document.getElementById("toggle-intl");
   var toggleWind = document.getElementById("toggle-wind");
+  var windVisInput = document.getElementById("wind-vis");
+  var WIND_VIS_KEY = "sunny-wind-vis";
+  var WIND_VIS_DEFAULT = 60; /* opt60: a bit more visible than opt59 by default */
+  var windVisK = WIND_VIS_DEFAULT / 100;
+  (function initWindVis() {
+    var v = WIND_VIS_DEFAULT;
+    try {
+      var sv = localStorage.getItem(WIND_VIS_KEY);
+      if (sv != null && sv !== "" && isFinite(Number(sv))) v = Math.max(0, Math.min(100, Number(sv)));
+    } catch (eW) {}
+    windVisK = v / 100;
+    if (windVisInput) {
+      windVisInput.value = String(v);
+      windVisInput.addEventListener("input", function () {
+        var n = Math.max(0, Math.min(100, Number(windVisInput.value) || 0));
+        windVisK = n / 100;
+        try { localStorage.setItem(WIND_VIS_KEY, String(n)); } catch (eS) {}
+      });
+    }
+  })();
   var overlaySeg = document.getElementById("overlay-seg");
   var rangeSeg = document.getElementById("range-seg");
 
@@ -1011,8 +1031,10 @@
    * opt21: cover crossfade (outgoing full; incoming 0→op) + Loop checkbox.
    * opt23: on pan/zoom while Play, hide HTML WMS immediately and show MapLibre
    *   rasters (map-locked); debounce WMS reload on gesture end.
-   * opt41/opt42: Play prefers optical-flow motion lerp (warp A/B + pixel blend) via
-   *   flow-worker; falls back to opt39 rafCrossfade on timeout/failure.
+   * opt60: ONE shared frame-tween engine (frame-tween.js + motion-worker.js) for
+   *   clouds AND radar: bidirectional semi-Lagrangian advection on the GPU along a
+   *   smooth per-interval field (700 hPa wind prior + regularized coarse LK).
+   * opt41/opt42 (removed in opt60): block-match flow-worker warp.
    * opt42: real wait budget (600–900ms), prefetch flow, faster block-match.
    * opt43: never block critical path on cold flow (~50ms grace → opacity);
    *   honest download vs blend status; lighter Play WMS pixel budget.
@@ -1104,30 +1126,21 @@
   var playLoadGen = 0;
   var playFadeRaf = 0;
   var playMoveTimer = null;
-  /* opt41/opt42/opt43/opt44: optical-flow motion lerp */
-  var FLOW_GRACE_MS = 50; /* scrub/one-shot: brief grace then opacity OK */
-  var FLOW_WAIT_MS = 70; /* opt47: short grace then canvas alpha-blend (not freeze) */
-  var FLOW_CACHE_CAP = 150; /* opt44: survive full loop; raised with cloudTimes */
-  var FLOW_CACHE_CAP_MAX = 200;
-  var FLOW_BLOCK = 12; /* opt42: larger blocks = fewer SADs */
-  var FLOW_SEARCH = 6; /* opt42: smaller search window */
-  var FLOW_MAX_W = 160; /* opt42: always 160 on first pass */
-  /* opt59: Kol — "linear interpolation over wobble". Block-matching flow vectors were
-     noisy (ripples in all directions) and the warp painted at 160px (pixel mosaic).
-     Default Play = clean per-pixel linear crossfade at display resolution. Warp off. */
-  var PLAY_MOTION_WARP = false;
+  /* opt60: ONE shared frame-tween engine (frame-tween.js → window.SunnyTween) drives
+     every animated raster layer (visible clouds + radar). Per-layer code is only a small
+     source adapter; interpolation = bidirectional semi-Lagrangian advection along a smooth,
+     per-interval-constant motion field (wind prior + regularized coarse LK), GPU warp,
+     linear-blend fallback. Old block-match flow + separate hi-res canvas removed. */
+  var TWEEN_MOTION = true;
+  var tweenEstimator = null; /* shared motion estimator (one worker) for all layers */
+  var cloudTween = null;
+  var cloudHiFade = { view: "", t0: 0 };
+  var cloudHiFadeRaf = 0;
   var PLAY_CANVAS_MAX_SIDE = 2560; /* display canvas cap (CSS px × DPR) */
   var PLAY_CANVAS_MAX_PIXELS = 2560 * 1600;
   var BLEND_HINT_MS = 200; /* opt43: "Blending frames…" only if cached+motion >200ms */
-  var playFlowCache = Object.create(null);
-  var playFlowOrder = [];
-  var playFlowWorker = null;
-  var playFlowSeq = 0;
-  var playFlowPending = Object.create(null);
   var playMotionActive = false;
   var playCanvasSession = false; /* opt46: motion canvas stays up across segments */
-  var playLastFlowRec = null; /* opt46: last good flow for light reuse */
-  var playMotionLogLeft = 3; /* console.info once per successful lerp, first few only */
   var playLastFrameKey = null;
   var playCorsOk = null; /* null=untested, true/false */
   var playUseOpenMeteo = false;
@@ -1325,21 +1338,6 @@
     }
   }
 
-  function playFlowPairKeyForIndices(fromIdx, toIdx) {
-    var a = playFrameMetaAt(fromIdx);
-    var b = playFrameMetaAt(toIdx);
-    if (!a || !b) return null;
-    return a.key + "=>" + b.key;
-  }
-
-  function playFlowIsCachedForPair(fromIdx, toIdx) {
-    if (playUseOpenMeteo) return true;
-    var key = playFlowPairKeyForIndices(fromIdx, toIdx);
-    if (!key) return false;
-    var rec = playFlowCacheGet(key);
-    return !!(rec && rec.flow && rec.pixA && rec.pixB);
-  }
-
   function countCachedAround(fromIdx, count) {
     var n = 0;
     var i;
@@ -1347,20 +1345,6 @@
       if (playFrameIsCached(clampIndex(fromIdx + i))) n += 1;
     }
     return n;
-  }
-
-  function ensureFlowPairForIndices(fromIdx, toIdx) {
-    if (playUseOpenMeteo || !PLAY_MOTION_WARP) return Promise.resolve(null);
-    var a = playFrameMetaAt(fromIdx);
-    var b = playFrameMetaAt(toIdx);
-    if (!a || !b) return Promise.resolve(null);
-    var recA = playLruGet(a.key);
-    var recB = playLruGet(b.key);
-    if (!recA || !recA.img || !recA.img.naturalWidth || !recB || !recB.img || !recB.img.naturalWidth) {
-      return Promise.resolve(null);
-    }
-    var pairKey = a.key + "=>" + b.key;
-    return ensureFlowForPair(recA.img, recB.img, pairKey);
   }
 
   function warmNearbyFrames(fromIdx, count) {
@@ -1715,7 +1699,6 @@
     /* opt44: fit full current timeline + prefetch headroom, bounded ~200 */
     var n = (cloudTimes && cloudTimes.length) ? cloudTimes.length : 0;
     PLAY_LRU_CAP = Math.min(PLAY_LRU_CAP_MAX, Math.max(160, n + PLAY_PREFETCH + 8));
-    FLOW_CACHE_CAP = Math.min(FLOW_CACHE_CAP_MAX, Math.max(150, Math.max(0, n - 1) + 8));
   }
 
   function playKeyIso(key) {
@@ -1739,13 +1722,6 @@
     if (s.length < suf.length || s.slice(s.length - suf.length) !== suf) return false;
     var iso = playKeyIso(s);
     return !!iso && cloudTimes.indexOf(iso) >= 0;
-  }
-
-  function playFlowKeyIsPinned(pairKey) {
-    if (!playMode || !pairKey) return false;
-    var parts = String(pairKey).split("=>");
-    if (parts.length < 2) return playKeyIsPinned(pairKey);
-    return playKeyIsPinned(parts[0]) && playKeyIsPinned(parts[1]);
   }
 
   function playLruTouch(key) {
@@ -1979,10 +1955,9 @@
     playHiResPending = Object.create(null);
     playHiResInFlight = 0;
     playHiResFade = { pairKey: "", opacity: 0, t0: 0, active: false };
-    playFlowCache = Object.create(null);
-    playFlowOrder = [];
+    cloudHiFade = { view: "", t0: 0 };
     playLastFrameKey = null;
-    try { hideHiResCanvas(); } catch (eHr) {}
+    try { if (cloudTween) cloudTween.resetLocks(); } catch (eHr) {}
   }
 
   function gibsWmsUrl(iso, lon) {
@@ -2168,102 +2143,6 @@
     } catch (eKick) {}
   }
 
-  function ensureHiResCanvas(layer) {
-    if (!layer) return null;
-    var c = layer.querySelector(".cloud-play-hires");
-    if (!c) {
-      c = document.createElement("canvas");
-      c.className = "cloud-play-hires";
-      c.setAttribute("aria-hidden", "true");
-      layer.appendChild(c);
-    }
-    return c;
-  }
-
-  function hiResCanvasEl() {
-    var layer = ensurePlayLayer();
-    return layer ? ensureHiResCanvas(layer) : null;
-  }
-
-  function hideHiResCanvas() {
-    var c = document.querySelector("#cloud-play-layer .cloud-play-hires");
-    if (c) {
-      c.classList.remove("is-on");
-      try { c.style.opacity = "0"; } catch (eH) {}
-    }
-    playHiResFade.active = false;
-    playHiResFade.opacity = 0;
-    playHiResFade.pairKey = "";
-    if (playHiResRaf) {
-      try { cancelAnimationFrame(playHiResRaf); } catch (eC) {}
-      playHiResRaf = 0;
-    }
-  }
-
-  function paintHiResProgressive(i0, i1, t, softA, softB) {
-    /* opt59: full-res layer is itself a true linear A→B blend at display resolution.
-       Missing hi-res side falls back to its soft frame so the blend never pops to a
-       single static frame; layer fades in once (hidden→shown), not on every frame step. */
-    if (tabHidden || radarOn() || playUseOpenMeteo || !playHiResWorthwhile()) {
-      hideHiResCanvas();
-      return;
-    }
-    var hiA = cachedHiResRec(i0);
-    var hiB = (i1 !== i0) ? cachedHiResRec(i1) : null;
-    kickLoadHiResIndex(i0);
-    if (i1 !== i0) kickLoadHiResIndex(i1);
-    if (!hiA && !hiB) {
-      /* Nothing full-res yet — keep soft visible; fetches kicked above */
-      hideHiResCanvas();
-      return;
-    }
-    var imgA = hiA ? hiA.img : (softA && softA.img);
-    var imgB = (i1 !== i0) ? (hiB ? hiB.img : (softB && softB.img)) : null;
-    var useT = t;
-    if (!imgA || !imgA.naturalWidth) {
-      imgA = imgB;
-      imgB = null;
-      useT = 0;
-    }
-    if (!imgB || !imgB.naturalWidth) imgB = null;
-    var canvas = hiResCanvasEl();
-    if (!canvas) return;
-    var painted = paintAlphaAtT(canvas, imgA, imgB, imgB ? useT : 0);
-    if (!painted) {
-      hideHiResCanvas();
-      return;
-    }
-    var baseOp = gibsEffectiveOpacity();
-    canvas.classList.add("is-on");
-    if (!playHiResFade.active) {
-      var token = "f" + Math.random();
-      playHiResFade.pairKey = token;
-      playHiResFade.opacity = 0;
-      playHiResFade.t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-      playHiResFade.active = true;
-      canvas.style.opacity = "0";
-      if (playHiResRaf) {
-        try { cancelAnimationFrame(playHiResRaf); } catch (eC) {}
-        playHiResRaf = 0;
-      }
-      var step = function (now) {
-        playHiResRaf = 0;
-        if (!playHiResFade.active || playHiResFade.pairKey !== token) return;
-        var u = (now - playHiResFade.t0) / HI_RES_FADE_MS;
-        if (u < 0) u = 0;
-        if (u > 1) u = 1;
-        playHiResFade.opacity = u;
-        var c2 = hiResCanvasEl();
-        if (c2) c2.style.opacity = String(gibsEffectiveOpacity() * u);
-        if (u < 1) playHiResRaf = requestAnimationFrame(step);
-      };
-      playHiResRaf = requestAnimationFrame(step);
-    } else {
-      var op = playHiResFade.opacity;
-      canvas.style.opacity = String(baseOp * (op >= 1 ? 1 : op));
-    }
-  }
-
   function ensurePlayLayer() {
     var layer = document.getElementById("cloud-play-layer");
     if (!layer || !map) return null;
@@ -2281,7 +2160,6 @@
       }
     } catch (ePl) {}
     ensureMotionCanvas(layer);
-    ensureHiResCanvas(layer);
     return layer;
   }
 
@@ -2588,12 +2466,21 @@
         if (ok) playLruSet(key, rec);
         resolve(rec);
       }
+      var retried = false;
       img.onload = function () { finish(true); };
-      img.onerror = function () { finish(false); };
-      /* Prefer plain load for <img> display; crossOrigin only if caller asks (canvas). */
-      if (preferCors) {
-        try { img.crossOrigin = "anonymous"; } catch (e1) {}
-      }
+      img.onerror = function () {
+        /* opt60: frames always load CORS (GIBS sends ACAO:*) so the GPU engine can use
+           them. One CORS retry with a cache-busting param in case an earlier non-CORS
+           response for the same URL was cached without the ACAO header. Never plain
+           (a tainted frame would force the whole engine to its 2D fallback). */
+        if (!retried && !settled) {
+          retried = true;
+          img.src = url + (url.indexOf("?") >= 0 ? "&" : "?") + "_cors=1";
+          return;
+        }
+        finish(false);
+      };
+      try { img.crossOrigin = "anonymous"; } catch (e1) {}
       img.src = url;
       setTimeout(function () {
         if (!settled) finish(img.naturalWidth > 0);
@@ -2635,56 +2522,7 @@
   }
 
   /* --- opt41/opt42 motion lerp (optical flow warp + pixel blend) --- */
-  function flowMaxWidth() {
-    /* opt42: always 160 on first pass — faster decode + worker, fits budget */
-    return FLOW_MAX_W;
-  }
-
-  function flowGraceMs() {
-    /* Scrub/one-shot: short grace then opacity OK. */
-    return FLOW_GRACE_MS;
-  }
-
-  function flowWaitMs() {
-    /* opt47: brief wait for cached/in-flight flow; then canvas alpha-blend. */
-    return FLOW_WAIT_MS;
-  }
-
   /* opt59: size Play canvases to the element's CSS box × DPR (sane cap) — never flow res */
-  function playDisplayCanvasSize(canvas) {
-    var el = (map && map.getContainer) ? map.getContainer() : document.getElementById("map");
-    var cw = (canvas && canvas.clientWidth) || (el && el.clientWidth) || window.innerWidth || 800;
-    var ch = (canvas && canvas.clientHeight) || (el && el.clientHeight) || window.innerHeight || 600;
-    var dpr = 1;
-    try { dpr = Math.min(2.5, Math.max(1, window.devicePixelRatio || 1)); } catch (eD) { dpr = 1; }
-    var w = Math.round(cw * dpr);
-    var h = Math.round(ch * dpr);
-    var s = 1;
-    if (Math.max(w, h) > PLAY_CANVAS_MAX_SIDE) s = PLAY_CANVAS_MAX_SIDE / Math.max(w, h);
-    if (w * h * s * s > PLAY_CANVAS_MAX_PIXELS) s = Math.sqrt(PLAY_CANVAS_MAX_PIXELS / (w * h));
-    w = Math.max(64, Math.round(w * s));
-    h = Math.max(48, Math.round(h * s));
-    return { w: w, h: h };
-  }
-
-  function fitDisplayCanvas(canvas) {
-    var d = playDisplayCanvasSize(canvas);
-    if (canvas.width !== d.w || canvas.height !== d.h) {
-      canvas.width = d.w;
-      canvas.height = d.h;
-    }
-    return d;
-  }
-
-  function smoothCtx(ctx) {
-    if (!ctx) return ctx;
-    try {
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-    } catch (eS) {}
-    return ctx;
-  }
-
   function ensureMotionCanvas(layer) {
     if (!layer) return null;
     var c = layer.querySelector(".cloud-play-motion");
@@ -2717,7 +2555,6 @@
     }
     setPlayMotionAttr(false);
     playCanvasSession = false;
-    try { hideHiResCanvas(); } catch (eHr) {}
   }
 
 
@@ -2730,17 +2567,10 @@
     } catch (eW) {
       try { ctx = c.getContext("2d"); } catch (e2) { ctx = null; }
     }
-    /* opt59: canvas resize resets state — re-assert high-quality linear resampling */
-    return smoothCtx(ctx);
-  }
-
-  function canvas2dRead(c) {
-    if (!c) return null;
-    try {
-      return c.getContext("2d", { alpha: true, willReadFrequently: true });
-    } catch (eR) {
-      try { return c.getContext("2d", { willReadFrequently: true }); } catch (e2) { return null; }
+    if (ctx) {
+      try { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; } catch (eS) {}
     }
+    return ctx;
   }
 
   function showMotionCanvas(op) {
@@ -2792,805 +2622,279 @@
     hideMotionCanvas();
   }
 
-  function getFlowWorker() {
-    if (playFlowWorker) return playFlowWorker;
-    if (typeof Worker === "undefined") return null;
+
+  /* ---- opt60: shared engine glue ---- */
+  function tweenApi() {
+    return (typeof window !== "undefined" && window.SunnyTween) ? window.SunnyTween : null;
+  }
+
+  function sharedTweenEstimator() {
+    var T = tweenApi();
+    if (!T) return null;
+    if (!tweenEstimator) {
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt60", cap: 96, estWidth: 256 });
+    }
+    return tweenEstimator;
+  }
+
+  function nowMs() {
+    return (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+  }
+
+  /* Cloud source adapter — the ONLY cloud-specific part of animation. */
+  var cloudTweenSource = {
+    channel: "cloud",
+    cols: 4,
+    rows: 3,
+    maxMagUv: 0.12,
+    count: function () { return cloudTimes.length; },
+    images: function (i) {
+      var rec = cachedPlayRec(i);
+      var hi = null;
+      try { hi = cachedHiResRec(i); } catch (eH) { hi = null; }
+      var fade = 0;
+      if (hi) {
+        var view = playCurrentViewSuffix();
+        if (cloudHiFade.view !== view) { cloudHiFade.view = view; cloudHiFade.t0 = nowMs(); }
+        fade = Math.max(0, Math.min(1, (nowMs() - cloudHiFade.t0) / HI_RES_FADE_MS));
+      }
+      return { base: rec ? rec.img : null, hi: hi ? hi.img : null, hiFade: fade, key: rec ? rec.key : null };
+    },
+    kick: function (i) {
+      kickLoadCloudIndex(i);
+      try { kickLoadHiResIndex(i); } catch (eK) {}
+    },
+    pairKey: function (i0, i1) {
+      var a = cachedPlayRec(i0), b = cachedPlayRec(i1);
+      return (a && b) ? (a.key + "=>" + b.key) : null;
+    },
+    prior: function (i0, i1) {
+      var ta = Date.parse(cloudTimes[clampIndex(i0)]), tb = Date.parse(cloudTimes[clampIndex(i1)]);
+      return steeringPriorUv(ta, tb);
+    }
+  };
+
+  function cloudTweenLayer() {
+    var T = tweenApi();
+    if (!T) return null;
+    var c = motionCanvasEl();
+    if (!c) return null;
+    if (cloudTween && cloudTween.renderer.canvas() !== c && c.isConnected) {
+      /* canvas replaced (e.g. layer rebuilt) — rebuild renderer on the new element */
+      cloudTween = null;
+    }
+    if (!cloudTween) {
+      cloudTween = T.createAnimatedRasterLayer({
+        canvas: c,
+        motion: TWEEN_MOTION,
+        estimator: sharedTweenEstimator(),
+        source: cloudTweenSource,
+        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS }
+      });
+      exposeTweenDebug();
+    }
+    return cloudTween;
+  }
+
+  function exposeTweenDebug() {
     try {
-      playFlowWorker = new Worker("flow-worker.js?v=opt59");
-      playFlowWorker.onmessage = function (ev) {
-        var msg = ev.data || {};
-        var pending = playFlowPending[msg.id];
-        if (!pending) return;
-        delete playFlowPending[msg.id];
-        if (msg.ok) pending.resolve(msg);
-        else pending.reject(new Error(msg.error || "flow"));
-      };
-      playFlowWorker.onerror = function () {
-        try { playFlowWorker.terminate(); } catch (eT) {}
-        playFlowWorker = null;
-      };
-      return playFlowWorker;
-    } catch (eW) {
-      playFlowWorker = null;
-      return null;
-    }
-  }
-
-  function playFlowCacheTouch(key) {
-    var i = playFlowOrder.indexOf(key);
-    if (i >= 0) playFlowOrder.splice(i, 1);
-    playFlowOrder.push(key);
-  }
-
-  function playFlowCacheGet(key) {
-    if (!PLAY_MOTION_WARP) return null;
-    var rec = playFlowCache[key];
-    if (!rec) return null;
-    playFlowCacheTouch(key);
-    return rec;
-  }
-
-  function playFlowCacheEvictOne() {
-    var i, key;
-    if (playMode) {
-      for (i = 0; i < playFlowOrder.length; i++) {
-        key = playFlowOrder[i];
-        if (!playFlowKeyIsPinned(key)) {
-          playFlowOrder.splice(i, 1);
-          if (key && playFlowCache[key]) delete playFlowCache[key];
-          return true;
-        }
-      }
-    }
-    key = playFlowOrder.shift();
-    if (key && playFlowCache[key]) delete playFlowCache[key];
-    return !!key;
-  }
-
-  function playFlowCacheSet(key, rec) {
-    if (!rec) return;
-    if (playFlowCache[key]) {
-      playFlowCache[key] = rec;
-      playFlowCacheTouch(key);
-      return;
-    }
-    while (playFlowOrder.length >= FLOW_CACHE_CAP) {
-      if (!playFlowCacheEvictOne()) break;
-    }
-    playFlowCache[key] = rec;
-    playFlowOrder.push(key);
-  }
-
-  function downsampleFrame(img, maxW) {
-    var nw = img.naturalWidth || img.width || 0;
-    var nh = img.naturalHeight || img.height || 0;
-    if (!nw || !nh) return null;
-    var scale = Math.min(1, maxW / nw);
-    var w = Math.max(32, Math.round(nw * scale));
-    var h = Math.max(24, Math.round(nh * scale));
-    /* keep aspect */
-    if (w > maxW) {
-      h = Math.round(h * (maxW / w));
-      w = maxW;
-    }
-    var c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    var ctx = canvas2dRead(c);
-    if (!ctx) return null;
-    try {
-      ctx.drawImage(img, 0, 0, w, h);
-      var id = ctx.getImageData(0, 0, w, h);
-      return { w: w, h: h, data: id.data };
-    } catch (eTaint) {
-      return null;
-    }
-  }
-
-  function loadCorsImage(url) {
-    return new Promise(function (resolve) {
-      if (!url) {
-        resolve(null);
-        return;
-      }
-      var img = new Image();
-      var settled = false;
-      function done(ok) {
-        if (settled) return;
-        settled = true;
-        resolve(ok ? img : null);
-      }
-      try { img.crossOrigin = "anonymous"; } catch (eC) {}
-      img.onload = function () { done(img.naturalWidth > 0); };
-      img.onerror = function () { done(false); };
-      img.src = url;
-      setTimeout(function () { done(img.naturalWidth > 0); }, 8000);
-    });
-  }
-
-  function bitmapToPixels(bmp, maxW) {
-    if (!bmp) return null;
-    var nw = bmp.width || 0;
-    var nh = bmp.height || 0;
-    if (!nw || !nh) return null;
-    var scale = Math.min(1, maxW / nw);
-    var w = Math.max(32, Math.round(nw * scale));
-    var h = Math.max(24, Math.round(nh * scale));
-    if (w > maxW) {
-      h = Math.round(h * (maxW / w));
-      w = maxW;
-    }
-    var c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    var ctx = canvas2dRead(c);
-    if (!ctx) return null;
-    try {
-      ctx.drawImage(bmp, 0, 0, w, h);
-      var id = ctx.getImageData(0, 0, w, h);
-      return { w: w, h: h, data: id.data };
-    } catch (eT) {
-      return null;
-    }
-  }
-
-  function blobToFlowPixels(blob, maxW) {
-    if (!blob) return Promise.resolve(null);
-    if (typeof createImageBitmap === "function") {
-      return createImageBitmap(blob).then(function (bmp) {
-        var pix = bitmapToPixels(bmp, maxW);
-        try { bmp.close(); } catch (eC) {}
-        return pix;
-      }).catch(function () {
-        return null;
-      });
-    }
-    return new Promise(function (resolve) {
-      var obj = URL.createObjectURL(blob);
-      var img = new Image();
-      img.onload = function () {
-        var pix = downsampleFrame(img, maxW);
-        try { URL.revokeObjectURL(obj); } catch (eR) {}
-        resolve(pix);
-      };
-      img.onerror = function () {
-        try { URL.revokeObjectURL(obj); } catch (eR2) {}
-        resolve(null);
-      };
-      try { img.crossOrigin = "anonymous"; } catch (eX) {}
-      img.src = obj;
-    });
-  }
-
-  function fetchPixelsForFlow(url) {
-    /* HTTP cache hit for already-shown WMS; createImageBitmap stays untainted.
-       opt42: on CORS/network fail, retry default cache then cors <img> — do not silent-fail forever. */
-    if (!url || url.indexOf("blob:") === 0 || url.indexOf("data:") === 0) {
-      return Promise.resolve(null);
-    }
-    var maxW = flowMaxWidth();
-    function tryFetch(cacheMode) {
-      return fetch(url, { mode: "cors", credentials: "omit", cache: cacheMode }).then(function (res) {
-        if (!res || !res.ok) throw new Error("fetch");
-        return res.blob();
-      }).then(function (blob) {
-        return blobToFlowPixels(blob, maxW);
-      });
-    }
-    return tryFetch("force-cache").then(function (pix) {
-      if (pix) return pix;
-      return tryFetch("default");
-    }).then(function (pix) {
-      if (pix) return pix;
-      return loadCorsImage(url).then(function (corsImg) {
-        return corsImg ? downsampleFrame(corsImg, maxW) : null;
-      });
-    }).catch(function () {
-      return loadCorsImage(url).then(function (corsImg) {
-        return corsImg ? downsampleFrame(corsImg, maxW) : null;
-      });
-    });
-  }
-
-  function framePixelsForFlow(displayImg) {
-    var maxW = flowMaxWidth();
-    /* Untainted draw if possible (CORS img / data URL); else fetch same URL from cache. */
-    var direct = downsampleFrame(displayImg, maxW);
-    if (direct) return Promise.resolve(direct);
-    var url = displayImg && displayImg.src;
-    return fetchPixelsForFlow(url).then(function (pix) {
-      if (pix) return pix;
-      return loadCorsImage(url).then(function (corsImg) {
-        return corsImg ? downsampleFrame(corsImg, maxW) : null;
-      });
-    });
-  }
-
-  function computeBlockFlowMain(pixA, pixB) {
-    /* Sync fallback if Worker unavailable — same algorithm as worker. */
-    var w = pixA.w;
-    var h = pixA.h;
-    var block = FLOW_BLOCK;
-    var search = FLOW_SEARCH;
-    var rgbaA = pixA.data;
-    var rgbaB = pixB.data;
-    var n = w * h;
-    var grayA = new Uint8Array(n);
-    var grayB = new Uint8Array(n);
-    var i, j = 0;
-    for (i = 0; i < n; i++, j += 4) {
-      grayA[i] = (rgbaA[j] * 77 + rgbaA[j + 1] * 150 + rgbaA[j + 2] * 29) >> 8;
-      grayB[i] = (rgbaB[j] * 77 + rgbaB[j + 1] * 150 + rgbaB[j + 2] * 29) >> 8;
-    }
-    var bw = Math.max(1, Math.floor(w / block));
-    var bh = Math.max(1, Math.floor(h / block));
-    var out = new Int16Array(bw * bh * 2);
-    var yb, xb, bi, x0, y0, best, bestDx, bestDy, dy, dx, sad, yy, xx, ia, ib;
-    for (yb = 0; yb < bh; yb++) {
-      for (xb = 0; xb < bw; xb++) {
-        bi = (yb * bw + xb) * 2;
-        x0 = xb * block;
-        y0 = yb * block;
-        best = 1e15;
-        bestDx = 0;
-        bestDy = 0;
-        for (dy = -search; dy <= search; dy++) {
-          for (dx = -search; dx <= search; dx++) {
-            sad = 0;
-            for (yy = 0; yy < block; yy++) {
-              var ay = y0 + yy;
-              var by = ay + dy;
-              if (ay < 0 || ay >= h || by < 0 || by >= h) {
-                sad += 255 * block;
-                continue;
-              }
-              var aRow = ay * w + x0;
-              var bRow = by * w + x0 + dx;
-              for (xx = 0; xx < block; xx++) {
-                var ax = x0 + xx;
-                var bx = ax + dx;
-                if (ax < 0 || ax >= w || bx < 0 || bx >= w) sad += 255;
-                else {
-                  ia = grayA[aRow + xx];
-                  ib = grayB[bRow + xx];
-                  sad += ia > ib ? ia - ib : ib - ia;
-                }
-                if (sad >= best) break;
-              }
-              if (sad >= best) break;
-            }
-            if (sad < best) {
-              best = sad;
-              bestDx = dx;
-              bestDy = dy;
-            }
-          }
-        }
-        out[bi] = bestDx;
-        out[bi + 1] = bestDy;
-      }
-    }
-    return { flow: out, bw: bw, bh: bh, block: block, w: w, h: h };
-  }
-
-  function requestFlow(pixA, pixB) {
-    var w = getFlowWorker();
-    if (!w) {
-      return Promise.resolve(computeBlockFlowMain(pixA, pixB));
-    }
-    var id = ++playFlowSeq;
-    return new Promise(function (resolve, reject) {
-      playFlowPending[id] = { resolve: resolve, reject: reject };
-      try {
-        w.postMessage(
-          {
-            type: "flow",
-            id: id,
-            w: pixA.w,
-            h: pixA.h,
-            a: pixA.data.buffer.slice(pixA.data.byteOffset, pixA.data.byteOffset + pixA.data.byteLength),
-            b: pixB.data.buffer.slice(pixB.data.byteOffset, pixB.data.byteOffset + pixB.data.byteLength),
-            block: FLOW_BLOCK,
-            search: FLOW_SEARCH
-          },
-          /* note: sliced copies — no transfer of live ImageData buffers */
-        );
-      } catch (ePost) {
-        delete playFlowPending[id];
-        try {
-          resolve(computeBlockFlowMain(pixA, pixB));
-        } catch (eMain) {
-          reject(eMain);
-        }
-      }
-    }).then(function (msg) {
-      if (msg && msg.flow) {
-        return { flow: msg.flow, bw: msg.bw, bh: msg.bh, block: msg.block, w: msg.w, h: msg.h };
-      }
-      return computeBlockFlowMain(pixA, pixB);
-    });
-  }
-
-  function sampleFlow(flowRec, x, y) {
-    /* Bilinear sample of block flow → pixel displacement in flow-res coords */
-    var bw = flowRec.bw;
-    var bh = flowRec.bh;
-    var block = flowRec.block;
-    var fx = x / block;
-    var fy = y / block;
-    var x0 = Math.floor(fx);
-    var y0 = Math.floor(fy);
-    var x1 = Math.min(bw - 1, x0 + 1);
-    var y1 = Math.min(bh - 1, y0 + 1);
-    x0 = Math.max(0, Math.min(bw - 1, x0));
-    y0 = Math.max(0, Math.min(bh - 1, y0));
-    var tx = fx - Math.floor(fx);
-    var ty = fy - Math.floor(fy);
-    if (tx < 0) tx = 0;
-    if (ty < 0) ty = 0;
-    var f = flowRec.flow;
-    function vec(ix, iy) {
-      var i = (iy * bw + ix) * 2;
-      return [f[i], f[i + 1]];
-    }
-    var a = vec(x0, y0);
-    var b = vec(x1, y0);
-    var c = vec(x0, y1);
-    var d = vec(x1, y1);
-    var dx = a[0] * (1 - tx) * (1 - ty) + b[0] * tx * (1 - ty) + c[0] * (1 - tx) * ty + d[0] * tx * ty;
-    var dy = a[1] * (1 - tx) * (1 - ty) + b[1] * tx * (1 - ty) + c[1] * (1 - tx) * ty + d[1] * tx * ty;
-    return [dx, dy];
-  }
-
-  function sampleRGBA(data, w, h, x, y) {
-    /* Bilinear RGBA sample; clamp to edges */
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    if (x > w - 1) x = w - 1;
-    if (y > h - 1) y = h - 1;
-    var x0 = Math.floor(x);
-    var y0 = Math.floor(y);
-    var x1 = Math.min(w - 1, x0 + 1);
-    var y1 = Math.min(h - 1, y0 + 1);
-    var tx = x - x0;
-    var ty = y - y0;
-    var i00 = (y0 * w + x0) * 4;
-    var i10 = (y0 * w + x1) * 4;
-    var i01 = (y1 * w + x0) * 4;
-    var i11 = (y1 * w + x1) * 4;
-    var out = [0, 0, 0, 0];
-    var c;
-    for (c = 0; c < 4; c++) {
-      out[c] =
-        data[i00 + c] * (1 - tx) * (1 - ty) +
-        data[i10 + c] * tx * (1 - ty) +
-        data[i01 + c] * (1 - tx) * ty +
-        data[i11 + c] * tx * ty;
-    }
-    return out;
-  }
-
-  function renderMotionFrame(ctx, pixA, pixB, flowRec, t, outW, outH) {
-    var img = ctx.createImageData(outW, outH);
-    var dst = img.data;
-    var sx = pixA.w / outW;
-    var sy = pixA.h / outH;
-    var y, x, i = 0;
-    var fxScale = 1; /* flow in low-res pixels */
-    for (y = 0; y < outH; y++) {
-      for (x = 0; x < outW; x++) {
-        var lx = (x + 0.5) * sx - 0.5;
-        var ly = (y + 0.5) * sy - 0.5;
-        var fxy = sampleFlow(flowRec, lx, ly);
-        var fdx = fxy[0] * fxScale;
-        var fdy = fxy[1] * fxScale;
-        /* warp A by t·flow, warp B by (t−1)·flow */
-        var a = sampleRGBA(pixA.data, pixA.w, pixA.h, lx - t * fdx, ly - t * fdy);
-        var b = sampleRGBA(pixB.data, pixB.w, pixB.h, lx - (t - 1) * fdx, ly - (t - 1) * fdy);
-        dst[i] = a[0] * (1 - t) + b[0] * t;
-        dst[i + 1] = a[1] * (1 - t) + b[1] * t;
-        dst[i + 2] = a[2] * (1 - t) + b[2] * t;
-        dst[i + 3] = 255;
-        i += 4;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-  }
-
-  function ensureFlowForPair(frontImg, backImg, pairKey) {
-    if (!PLAY_MOTION_WARP) return Promise.resolve(null);
-    var hit = playFlowCacheGet(pairKey);
-    if (hit) return Promise.resolve(hit);
-    return Promise.all([framePixelsForFlow(frontImg), framePixelsForFlow(backImg)]).then(function (pair) {
-      var pixA = pair[0];
-      var pixB = pair[1];
-      if (!pixA || !pixB || pixA.w !== pixB.w || pixA.h !== pixB.h) return null;
-      return requestFlow(pixA, pixB).then(function (flowRec) {
-        if (!flowRec || !flowRec.flow) return null;
-        var rec = {
-          flow: flowRec.flow,
-          bw: flowRec.bw,
-          bh: flowRec.bh,
-          block: flowRec.block,
-          w: flowRec.w,
-          h: flowRec.h,
-          pixA: pixA,
-          pixB: pixB
+      window.__sunnyTween = function () {
+        return {
+          clouds: cloudTween ? JSON.parse(JSON.stringify(cloudTween.stats)) : null,
+          radar: radarTween ? JSON.parse(JSON.stringify(radarTween.stats)) : null,
+          steer: steerState.last ? { u: steerState.last.u, v: steerState.last.v, at: steerState.key, err: steerState.err } : { err: steerState.err }
         };
-        playFlowCacheSet(pairKey, rec);
-        return rec;
-      });
-    }).catch(function () {
-      return null;
+      };
+    } catch (eD) {}
+  }
+
+  function hidePlayBuffersUnderCanvas(img) {
+    var a = playBufEl("a"), b = playBufEl("b");
+    [a, b].forEach(function (el) {
+      if (!el) return;
+      el.style.opacity = "0";
+      clearPlayBufFilter(el);
+      el.classList.remove("is-front");
+      el.classList.remove("is-incoming");
     });
+    if (img) img.classList.add("is-front");
   }
 
-  function rafCanvasAlphaBlend(back, front, gen, resolve) {
-    /* opt47: while Play animating + flow cold — draw A then B with rising
-       alpha on the persistent motion canvas. Not HTML opacity slideshow,
-       not resolve(false) freeze. Motion lerp still preferred when flow ready. */
+  /* One-shot A→B blend (segment-driven path / non-continuous) through the SAME engine
+     renderer as continuous Play — no separate per-layer canvas blend code. */
+  function rafEngineBlend(back, front, gen, resolve) {
     var targetOp = gibsEffectiveOpacity();
-    var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    var dur = playFadeMs();
-    var canvas = showMotionCanvas(targetOp);
-    if (!canvas) {
-      if (!playAnimating) rafCrossfade(back, front, gen, resolve);
+    var layer = cloudTweenLayer();
+    var canvas = layer ? showMotionCanvas(targetOp) : null;
+    if (!layer || !canvas || !back || !back.naturalWidth) {
+      if (!playAnimating) { hideMotionCanvas(); rafCrossfade(back, front, gen, resolve); }
       else resolve(false);
-      return;
-    }
-    if (!back || !back.naturalWidth) {
-      clearPlayFrameHints();
-      resolve(false);
-      return;
-    }
-    /* opt59: display resolution (was flow-res 160px → mosaic) */
-    var dimAB = fitDisplayCanvas(canvas);
-    var w = dimAB.w;
-    var h = dimAB.h;
-    var ctx = canvas2dWrite(canvas);
-    if (!ctx) {
-      if (!playAnimating) {
-        hideMotionCanvas();
-        rafCrossfade(back, front, gen, resolve);
-      } else resolve(false);
       return;
     }
     playMotionActive = true;
     playCanvasSession = true;
-    if (front) {
-      front.style.opacity = "0";
-      clearPlayBufFilter(front);
-      front.classList.remove("is-front");
-      front.classList.remove("is-incoming");
-    }
-    back.style.opacity = "0";
-    clearPlayBufFilter(back);
-    back.classList.remove("is-front");
-    back.classList.add("is-incoming");
-
+    hidePlayBuffersUnderCanvas(null);
+    var start = nowMs();
+    var dur = playFadeMs();
     function step(now) {
       playFadeRaf = 0;
       if (gen !== playLoadGen) {
         playMotionActive = false;
         clearBlendingHint();
         if (!playAnimating) hideMotionCanvas();
-        try { back.classList.remove("is-incoming"); } catch (eI) {}
         resolve(false);
         return;
       }
       var t = Math.min(1, (now - start) / dur);
-      var e = playEase(t);
-      try {
-        ctx.globalAlpha = 1;
-        ctx.clearRect(0, 0, w, h);
-        if (front && front.naturalWidth) {
-          ctx.drawImage(front, 0, 0, w, h);
-        }
-        ctx.globalAlpha = e;
-        ctx.drawImage(back, 0, 0, w, h);
-        ctx.globalAlpha = 1;
-      } catch (eRen) {
+      var ok = layer.paintImages(front && front.naturalWidth ? front : back, front && front.naturalWidth ? back : null, playEase(t));
+      if (!ok && !playAnimating) {
         playMotionActive = false;
-        clearBlendingHint();
-        if (!playAnimating) {
-          hideMotionCanvas();
-          rafCrossfade(back, front, gen, resolve);
-        } else {
-          /* Still try to park B so playhead can advance */
-          try {
-            ctx.globalAlpha = 1;
-            ctx.drawImage(back, 0, 0, w, h);
-          } catch (ePark) {}
-          back.classList.remove("is-incoming");
-          back.classList.add("is-front");
-          releasePlayStaticHold();
-          resolve(true);
-        }
-        return;
-      }
-      if (t < 1) {
-        playFadeRaf = requestAnimationFrame(step);
-      } else {
-        playMotionActive = false;
-        clearBlendingHint();
-        try {
-          ctx.globalAlpha = 1;
-          ctx.drawImage(back, 0, 0, w, h);
-        } catch (eEnd) {}
-        back.classList.remove("is-incoming");
-        back.classList.add("is-front");
-        back.style.opacity = "0";
-        if (front) {
-          front.style.opacity = "0";
-          front.classList.remove("is-front");
-          front.classList.remove("is-incoming");
-        }
-        if (!playAnimating) {
-          back.style.opacity = String(targetOp);
-          clearPlayBufFilter(back);
-          if (front) {
-            front.style.opacity = "0";
-            clearPlayBufFilter(front);
-          }
-          hideMotionCanvas();
-        }
-        releasePlayStaticHold();
-        resolve(true);
-      }
-    }
-    playFadeRaf = requestAnimationFrame(step);
-  }
-
-  function rafMotionLerp(back, front, flowRec, gen, resolve) {
-    var targetOp = gibsEffectiveOpacity();
-    var start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
-    var dur = playFadeMs();
-    var canvas = showMotionCanvas(targetOp);
-    if (!canvas) {
-      /* No canvas — only allow opacity outside continuous Play */
-      if (!playAnimating) rafCrossfade(back, front, gen, resolve);
-      else resolve(false);
-      return;
-    }
-    /* Render at flow resolution (fast); CSS scales canvas to cover */
-    var outW = flowRec.w;
-    var outH = flowRec.h;
-    if (canvas.width !== outW || canvas.height !== outH) {
-      canvas.width = outW;
-      canvas.height = outH;
-    }
-    var ctx = canvas2dWrite(canvas);
-    if (!ctx) {
-      if (!playAnimating) {
         hideMotionCanvas();
         rafCrossfade(back, front, gen, resolve);
-      } else resolve(false);
-      return;
-    }
-    playMotionActive = true;
-    playCanvasSession = true;
-    playLastFlowRec = flowRec;
-    if (playMotionLogLeft > 0) {
-      playMotionLogLeft -= 1;
-      try { console.info("SUNNY motion lerp"); } catch (eLog) {}
-    }
-    /* Keep imgs hidden under persistent canvas for the whole Play session */
-    if (front) {
-      front.style.opacity = "0";
-      clearPlayBufFilter(front);
-      front.classList.remove("is-front");
-      front.classList.remove("is-incoming");
-    }
-    back.style.opacity = "0";
-    clearPlayBufFilter(back);
-    back.classList.remove("is-front");
-    back.classList.add("is-incoming");
-
-    function step(now) {
-      playFadeRaf = 0;
-      if (gen !== playLoadGen) {
-        playMotionActive = false;
-        clearBlendingHint();
-        /* Keep canvas up if still in Play session — next segment will resume */
-        if (!playAnimating) hideMotionCanvas();
-        try { back.classList.remove("is-incoming"); } catch (eI) {}
-        resolve(false);
-        return;
-      }
-      var t = Math.min(1, (now - start) / dur);
-      var e = playEase(t);
-      try {
-        renderMotionFrame(ctx, flowRec.pixA, flowRec.pixB, flowRec, e, outW, outH);
-      } catch (eRen) {
-        playMotionActive = false;
-        clearBlendingHint();
-        if (!playAnimating) {
-          hideMotionCanvas();
-          rafCrossfade(back, front, gen, resolve);
-        } else {
-          /* opt47: motion render failed — canvas alpha-blend, keep advancing */
-          rafCanvasAlphaBlend(back, front, gen, resolve);
-        }
         return;
       }
       if (t < 1) {
         playFadeRaf = requestAnimationFrame(step);
-      } else {
-        playMotionActive = false;
-        clearBlendingHint();
-        /* opt46: leave final B on canvas — do NOT hideMotionCanvas / snap imgs */
-        back.classList.remove("is-incoming");
-        back.classList.add("is-front");
-        back.style.opacity = "0";
-        if (front) {
-          front.style.opacity = "0";
-          front.classList.remove("is-front");
-          front.classList.remove("is-incoming");
-        }
-        if (!playAnimating) {
-          /* One-shot (scrub settle): park on img then hide canvas */
-          back.style.opacity = String(targetOp);
-          clearPlayBufFilter(back);
-          if (front) {
-            front.style.opacity = "0";
-            clearPlayBufFilter(front);
-          }
-          hideMotionCanvas();
-        }
-        releasePlayStaticHold();
-        resolve(true);
+        return;
       }
+      playMotionActive = false;
+      clearBlendingHint();
+      back.classList.add("is-front");
+      if (front) front.classList.remove("is-front");
+      if (!playAnimating) {
+        back.style.opacity = String(targetOp);
+        hideMotionCanvas();
+      }
+      releasePlayStaticHold();
+      resolve(true);
     }
     playFadeRaf = requestAnimationFrame(step);
   }
 
   function paintStaticToMotionCanvas(img, gen, resolve) {
-    /* opt46: bootstrap / no-pair — put one frame on persistent canvas (no dissolve). */
-    var targetOp = gibsEffectiveOpacity();
-    var canvas = showMotionCanvas(targetOp);
-    if (!canvas || !img || !img.naturalWidth) {
-      if (!playAnimating) rafCrossfade(img, null, gen, resolve);
+    /* bootstrap / no-pair — one frame onto the engine canvas (no dissolve) */
+    var layer = cloudTweenLayer();
+    var canvas = layer ? showMotionCanvas(gibsEffectiveOpacity()) : null;
+    if (!layer || !canvas || !img || !img.naturalWidth || !layer.paintImages(img, null, 0)) {
+      if (!playAnimating) { hideMotionCanvas(); rafCrossfade(img, null, gen, resolve); }
       else resolve(false);
       return;
     }
-    var dimS = fitDisplayCanvas(canvas); /* opt59: display res */
-    var w = dimS.w, h = dimS.h;
-    var ctx = canvas2dWrite(canvas);
-    if (!ctx) {
-      resolve(false);
-      return;
-    }
-    try {
-      ctx.drawImage(img, 0, 0, w, h);
-    } catch (eD) {
-      resolve(false);
-      return;
-    }
-    /* Hide imgs under canvas */
-    var a = playBufEl("a"), b = playBufEl("b");
-    if (a) { a.style.opacity = "0"; a.classList.remove("is-front"); }
-    if (b) { b.style.opacity = "0"; b.classList.remove("is-front"); }
-    if (img) {
-      img.classList.add("is-front");
-      img.style.opacity = "0";
-    }
+    hidePlayBuffersUnderCanvas(img);
     releasePlayStaticHold();
     clearPlayFrameHints();
     resolve(true);
   }
 
   function beginPlayTransition(back, front, gen, backKey, resolve) {
-    /* opt47: while playAnimating — prefer motion lerp on persistent canvas.
-       Short FLOW_WAIT_MS grace; if flow cold: canvas alpha-blend (A→B on
-       same canvas). Never HTML opacity slideshow; never freeze on resolve(false). */
+    /* opt60: while animating → shared engine canvas; scrub one-shots → img opacity */
+    clearPlayFrameHints();
     if (!back || !back.naturalWidth) {
-      clearPlayFrameHints();
       resolve(false);
       return;
     }
     if (!front || !front.naturalWidth) {
-      /* First cover / no previous — paint B onto canvas (or opacity if not animating) */
-      clearPlayFrameHints();
-      if (playAnimating) {
-        paintStaticToMotionCanvas(back, gen, resolve);
-        return;
-      }
-      rafCrossfade(back, front, gen, resolve);
+      if (playAnimating) paintStaticToMotionCanvas(back, gen, resolve);
+      else rafCrossfade(back, front, gen, resolve);
       return;
     }
-    if (!PLAY_MOTION_WARP) {
-      /* opt59: clean linear per-pixel crossfade on the persistent canvas (no warp) */
-      clearPlayFrameHints();
-      if (playAnimating) {
-        rafCanvasAlphaBlend(back, front, gen, resolve);
-      } else {
-        rafCrossfade(back, front, gen, resolve);
-      }
-      return;
-    }
-    var pairKey = String(playLastFrameKey || front.src || "front") + "=>" + String(backKey || back.src || "back");
-    var settled = false;
-    var fromCachedDownload = !!playFrameFromCache;
-    function finishFlow(rec) {
-      if (settled) return;
-      settled = true;
-      if (gen !== playLoadGen) {
-        clearPlayFrameHints();
-        resolve(false);
-        return;
-      }
-      showDownloadingHint(false);
-      if (rec && rec.flow && rec.pixA && rec.pixB) {
-        scheduleBlendingHint(fromCachedDownload);
-        rafMotionLerp(back, front, rec, gen, resolve);
-        return;
-      }
-      if (playAnimating) {
-        /* No flow after short grace: try light reuse, else canvas alpha-blend */
-        var reuse = playLastFlowRec;
-        if (reuse && reuse.flow && reuse.pixA && reuse.pixB &&
-            reuse.w && back.naturalWidth) {
-          try {
-            Promise.all([framePixelsForFlow(front), framePixelsForFlow(back)]).then(function (pair) {
-              if (gen !== playLoadGen) { resolve(false); return; }
-              var pixA = pair[0], pixB = pair[1];
-              if (pixA && pixB && pixA.w === reuse.w && pixA.h === reuse.h) {
-                var light = {
-                  flow: reuse.flow,
-                  bw: reuse.bw,
-                  bh: reuse.bh,
-                  block: reuse.block,
-                  w: reuse.w,
-                  h: reuse.h,
-                  pixA: pixA,
-                  pixB: pixB
-                };
-                scheduleBlendingHint(fromCachedDownload);
-                rafMotionLerp(back, front, light, gen, resolve);
-              } else {
-                clearBlendingHint();
-                scheduleBlendingHint(fromCachedDownload);
-                rafCanvasAlphaBlend(back, front, gen, resolve);
-              }
-            }).catch(function () {
-              clearBlendingHint();
-              scheduleBlendingHint(fromCachedDownload);
-              rafCanvasAlphaBlend(back, front, gen, resolve);
-            });
-            return;
-          } catch (eRu) {}
+    if (playAnimating) rafEngineBlend(back, front, gen, resolve);
+    else rafCrossfade(back, front, gen, resolve);
+  }
+
+  /* ---- steering-level wind prior (Open-Meteo 700 hPa, free/no key) ----
+     Clouds/echoes are advected roughly with the mid-level flow; this gives the motion
+     estimator a physically sensible starting vector and a fallback field. */
+  var steerState = { key: "", data: null, t: 0, pending: null, err: "", last: null };
+  var STEER_TTL_MS = 30 * 60 * 1000;
+  var STEER_FAIL_TTL_MS = 10 * 60 * 1000;
+
+  function steerViewKey() {
+    if (!map) return "";
+    var c = map.getCenter();
+    return (Math.round(c.lat * 2) / 2).toFixed(1) + "," + (Math.round(c.lng * 2) / 2).toFixed(1);
+  }
+
+  function fetchSteering(key) {
+    if (steerState.pending) return steerState.pending;
+    var b = map.getBounds();
+    var cLat = (b.getNorth() + b.getSouth()) / 2, cLon = (b.getEast() + b.getWest()) / 2;
+    var dLat = Math.min(2, (b.getNorth() - b.getSouth()) / 4), dLon = Math.min(2, (b.getEast() - b.getWest()) / 4);
+    var pts = [[cLat, cLon], [cLat + dLat, cLon], [cLat - dLat, cLon], [cLat, cLon + dLon], [cLat, cLon - dLon]];
+    var url = METEO_URL + "?latitude=" + pts.map(function (p) { return p[0].toFixed(3); }).join(",") +
+      "&longitude=" + pts.map(function (p) { return p[1].toFixed(3); }).join(",") +
+      "&hourly=wind_speed_700hPa,wind_direction_700hPa&past_days=1&forecast_days=1&wind_speed_unit=ms&timezone=GMT";
+    steerState.pending = fetch(url).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function (data) {
+      var arr = Array.isArray(data) ? data : [data];
+      var times = arr[0] && arr[0].hourly && arr[0].hourly.time;
+      if (!times || !times.length) throw new Error("no hourly");
+      var out = [];
+      for (var k = 0; k < times.length; k++) {
+        var su = 0, sv = 0, n = 0;
+        for (var j = 0; j < arr.length; j++) {
+          var h = arr[j] && arr[j].hourly;
+          if (!h) continue;
+          var sp = h.wind_speed_700hPa && h.wind_speed_700hPa[k];
+          var dr = h.wind_direction_700hPa && h.wind_direction_700hPa[k];
+          if (sp == null || dr == null || !isFinite(sp) || !isFinite(dr)) continue;
+          var rad = dr * Math.PI / 180; /* meteorological "from" */
+          su += -sp * Math.sin(rad);
+          sv += -sp * Math.cos(rad);
+          n++;
         }
-        clearBlendingHint();
-        scheduleBlendingHint(fromCachedDownload);
-        rafCanvasAlphaBlend(back, front, gen, resolve);
-        return;
+        if (n) out.push({ ms: Date.parse(times[k] + "Z"), u: su / n, v: sv / n });
       }
-      /* Scrub / one-shot: opacity OK */
-      clearBlendingHint();
-      rafCrossfade(back, front, gen, resolve);
-    }
-    var cached = playFlowCacheGet(pairKey);
-    if (cached && cached.pixA && cached.pixB) {
-      finishFlow(cached);
-      return;
-    }
-    var grace = playAnimating ? flowWaitMs() : flowGraceMs();
-    var timedOut = false;
-    var timer = setTimeout(function () {
-      timedOut = true;
-      finishFlow(null);
-    }, grace);
-    ensureFlowForPair(front, back, pairKey).then(function (rec) {
-      clearTimeout(timer);
-      if (timedOut) {
-        /* Late flow still cached inside ensureFlowForPair for later pairs */
-        return;
-      }
-      finishFlow(rec);
-    }).catch(function () {
-      clearTimeout(timer);
-      if (!timedOut) finishFlow(null);
+      if (!out.length) throw new Error("empty");
+      steerState.key = key;
+      steerState.data = { lat: cLat, hours: out };
+      steerState.t = Date.now();
+      steerState.err = "";
+      steerState.pending = null;
+      try { if (cloudTween) cloudTween.resetLocks(); if (radarTween) radarTween.resetLocks(); } catch (eR) {}
+      return steerState.data;
+    }).catch(function (e) {
+      steerState.key = key;
+      steerState.data = null;
+      steerState.t = Date.now();
+      steerState.err = String(e && e.message || e);
+      steerState.pending = null;
+      return null;
     });
+    return steerState.pending;
+  }
+
+  function steerWindAt(ms) {
+    var hrs = steerState.data && steerState.data.hours;
+    if (!hrs || !hrs.length) return null;
+    if (ms <= hrs[0].ms) return hrs[0];
+    for (var i = 1; i < hrs.length; i++) {
+      if (hrs[i].ms >= ms) {
+        var a = hrs[i - 1], b = hrs[i], f = (ms - a.ms) / Math.max(1, b.ms - a.ms);
+        return { u: a.u + (b.u - a.u) * f, v: a.v + (b.v - a.v) * f };
+      }
+    }
+    return hrs[hrs.length - 1];
+  }
+
+  /* A→B displacement in UV of the current view (x right, y down) or null */
+  function steeringPriorUv(msA, msB) {
+    if (!map || !isFinite(msA) || !isFinite(msB) || msB === msA) return null;
+    var key = steerViewKey();
+    var fresh = steerState.key === key && (Date.now() - steerState.t) < (steerState.data ? STEER_TTL_MS : STEER_FAIL_TTL_MS);
+    if (!fresh) { fetchSteering(key); if (steerState.key !== key) return null; }
+    var w = steerWindAt((msA + msB) / 2);
+    if (!w) return null;
+    steerState.last = w;
+    var box = mapBbox3857();
+    var cosPhi = Math.max(0.2, Math.cos((steerState.data.lat || 0) * Math.PI / 180));
+    var dt = (msB - msA) / 1000;
+    return {
+      dx: (w.u * dt / cosPhi) / Math.max(1, box.maxx - box.minx),
+      dy: -(w.v * dt / cosPhi) / Math.max(1, box.maxy - box.miny)
+    };
   }
 
   function rafCrossfade(back, front, gen, resolve) {
@@ -3768,32 +3072,6 @@
     return idx;
   }
 
-  function prefetchFlowAhead(fromIndex) {
-    /* opt42/opt43/opt46: warm optical-flow for next pairs (triple-buffer mindset). */
-    if (tabHidden || !cloudTimes.length || playUseOpenMeteo || !PLAY_MOTION_WARP) return;
-    if (typeof Worker === "undefined" && !FLOW_BLOCK) return;
-    var lon = origin ? origin.lon : null;
-    var keys = [];
-    var imgs = [];
-    var i;
-    /* Look further ahead so i+2 flow is ready while lerping i→i+1 */
-    for (i = 0; i <= 5; i++) {
-      var idx = playIndexAtOffset(fromIndex, i);
-      var iso = cloudTimes[idx];
-      if (!iso) break;
-      var meta = gibsWmsFrameMeta(iso, lon);
-      var rec = playLruGet(meta.key);
-      if (!rec || !rec.img || !rec.img.naturalWidth) break;
-      keys.push(meta.key);
-      imgs.push(rec.img);
-    }
-    for (i = 0; i < keys.length - 1; i++) {
-      var pairKey = keys[i] + "=>" + keys[i + 1];
-      if (playFlowCacheGet(pairKey)) continue;
-      try { ensureFlowForPair(imgs[i], imgs[i + 1], pairKey); } catch (eFlow) {}
-    }
-  }
-
   function prefetchPlayIndices(fromIndex) {
     if (tabHidden || !cloudTimes.length || playUseOpenMeteo) return;
     var lon = origin ? origin.lon : null;
@@ -3847,7 +3125,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "flow-worker.js?v=opt59";
+      link.href = "motion-worker.js?v=opt60";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -5140,7 +4418,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt59");
+      beachWorker = new Worker("beach-worker.js?v=opt60");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -7563,8 +6841,8 @@
         respawnParticle(p);
         continue;
       }
-      /* opt58: streamlets ~12–32 CSS px; opt56: streak along travel direction */
-      lengthPx = Math.max(12, Math.min(32, 12 + speedKmh * 0.5)) * dpr;
+      /* opt60: visibility slider k∈[0,1] scales length/width/alpha; streak along travel */
+      lengthPx = (10 + 26 * windVisK + Math.min(16, speedKmh * 0.4)) * dpr;
       hx = p.x * dpr;
       hy = p.y * dpr;
       tx = hx - dir.x * lengthPx;
@@ -7574,11 +6852,20 @@
       if (p.age < 0.18) lifeFade = p.age / 0.18;
       else if (p.age > p.life - 0.28) lifeFade = Math.max(0, (p.life - p.age) / 0.28);
 
-      /* opt58: head ~0.65–0.85 so streaks read on busy maps; still gradient falloff */
-      maxA = Math.min(0.85, 0.55 + speedKmh / 100) * lifeFade;
+      /* opt60: subtle (k=0) … thick bright near-opaque (k=1); gradient falloff kept */
+      maxA = Math.min(1, 0.35 + 0.65 * windVisK + speedKmh / 200) * lifeFade;
       if (maxA < 0.02) continue;
 
-      lwCss = Math.max(1.0, Math.min(1.8, 1.0 + speedKmh / 80));
+      lwCss = 0.7 + 2.5 * windVisK * windVisK + Math.min(0.8, speedKmh / 60) * (0.4 + 0.6 * windVisK);
+      if (windVisK > 0.5) {
+        /* dark halo under the streak so it pops on bright clouds / light basemaps */
+        windCtx.strokeStyle = "rgba(0,20,40," + (0.35 * (windVisK - 0.5) * 2 * lifeFade).toFixed(3) + ")";
+        windCtx.lineWidth = (lwCss + 1.5) * dpr;
+        windCtx.beginPath();
+        windCtx.moveTo(tx, ty);
+        windCtx.lineTo(hx, hy);
+        windCtx.stroke();
+      }
 
       try {
         grad = windCtx.createLinearGradient(tx, ty, hx, hy);
@@ -7601,6 +6888,7 @@
   window.__sunnyWind = function () {
     return {
       on: windOn,
+      vis: windVisK,
       moving: windMoving,
       waiting: windFieldWaiting,
       covers: !!(windField && windFieldCoversView(windField)),
@@ -7913,6 +7201,7 @@
   }
 
   function hideRadarLayer() {
+    try { hideRadarCanvas(false); } catch (eHrc) {}
     stopRadarRefresh();
     radarFetchGen += 1;
     radarHost = null;
@@ -7945,6 +7234,213 @@
     var fade = opts.blend ? playFadeMs() : 0;
     ensureRadarLayer(radarTileUrl(radarHost, frame.path), { fadeMs: fade });
     syncRadarTimelineUi();
+    return true;
+  }
+
+  /* ---- opt60: radar plugs into the SAME frame-tween engine (small adapter only) ----
+     RainViewer tiles for the current view are composited per frame onto a canvas
+     (CORS: tilecache sends ACAO:*), then the shared engine tweens them exactly like
+     clouds. MapLibre radar layer stays the static/gesture/fallback path. */
+  var radarTween = null;
+  var radarComp = Object.create(null); /* key → {key, canvas, done, pending} */
+  var radarCompOrder = [];
+  var RADAR_COMP_CAP = 40;
+  var RADAR_COMP_MAX_SIDE = 2048;
+  var radarCanvasOn = false;
+
+  function radarPlayLayerEl() {
+    var host = map && map.getContainer && map.getContainer();
+    if (!host) return null;
+    var el = document.getElementById("radar-play-layer");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "radar-play-layer";
+      el.setAttribute("aria-hidden", "true");
+      el.style.cssText = "position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;display:none;";
+      var c = document.createElement("canvas");
+      c.className = "radar-play-canvas";
+      c.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+      el.appendChild(c);
+    }
+    if (el.parentNode !== host) host.appendChild(el);
+    return el;
+  }
+
+  function radarPlayCanvasEl() {
+    var el = radarPlayLayerEl();
+    return el ? el.querySelector(".radar-play-canvas") : null;
+  }
+
+  function radarTileZ() {
+    /* 256-px tiles: MapLibre zoom z (512-px) ≈ tile zoom z+1; RainViewer native max 7 */
+    var z = Math.round((map ? map.getZoom() : 3) + 1);
+    return Math.max(0, Math.min(7, z));
+  }
+
+  function radarCompKey(i) {
+    var fr = radarPast[clampRadarIndex(i)];
+    if (!fr || !fr.path || !radarHost) return null;
+    var box = roundPlayBbox(mapBbox3857());
+    return fr.path + "|" + radarTileZ() + "|" + box.minx + "," + box.miny + "," + box.maxx + "," + box.maxy;
+  }
+
+  function radarCompTouch(key) {
+    var k = radarCompOrder.indexOf(key);
+    if (k >= 0) radarCompOrder.splice(k, 1);
+    radarCompOrder.push(key);
+    while (radarCompOrder.length > RADAR_COMP_CAP) {
+      var drop = radarCompOrder.shift();
+      delete radarComp[drop];
+    }
+  }
+
+  function radarComposite(i, build) {
+    var key = radarCompKey(i);
+    if (!key) return null;
+    var rec = radarComp[key];
+    if (rec) { radarCompTouch(key); return rec; }
+    if (!build) return null;
+    var fr = radarPast[clampRadarIndex(i)];
+    var z = radarTileZ();
+    var box = mapBbox3857();
+    var W = 20037508.342789244 * 2;
+    var n = Math.pow(2, z);
+    var tileM = W / n;
+    var pxM = tileM / 256;
+    var cw = Math.max(1, Math.round((box.maxx - box.minx) / pxM));
+    var ch = Math.max(1, Math.round((box.maxy - box.miny) / pxM));
+    var sc = Math.min(1, RADAR_COMP_MAX_SIDE / Math.max(cw, ch));
+    cw = Math.max(16, Math.round(cw * sc));
+    ch = Math.max(16, Math.round(ch * sc));
+    var tx0 = Math.floor((box.minx + W / 2) / tileM), tx1 = Math.floor((box.maxx + W / 2) / tileM);
+    var ty0 = Math.floor((W / 2 - box.maxy) / tileM), ty1 = Math.floor((W / 2 - box.miny) / tileM);
+    ty0 = Math.max(0, ty0); ty1 = Math.min(n - 1, ty1);
+    if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 64) return null;
+    var canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    var ctx = canvas2dWrite(canvas);
+    rec = { key: key, canvas: canvas, done: false, failed: 0, total: 0, loaded: 0 };
+    radarComp[key] = rec;
+    radarCompTouch(key);
+    if (!ctx) { rec.done = true; return rec; }
+    var tpl = radarTileUrl(radarHost, fr.path);
+    var list = [];
+    for (var ty = ty0; ty <= ty1; ty++) {
+      for (var tx = tx0; tx <= tx1; tx++) list.push([tx, ty]);
+    }
+    rec.total = list.length;
+    function settle() {
+      if (rec.loaded + rec.failed >= rec.total) {
+        rec.done = true;
+        try { if (radarCanvasOn || playAnimating) paintContinuousRadar(); } catch (eP) {}
+      }
+    }
+    list.forEach(function (t) {
+      var img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = function () {
+        var wx = ((t[0] % n) + n) % n;
+        var dx = (t[0] * tileM - W / 2 - box.minx) / pxM * sc;
+        var dy = (W / 2 - t[1] * tileM - box.maxy) / -pxM * sc;
+        var ds = 256 * sc;
+        try { ctx.drawImage(img, dx, dy, ds, ds); } catch (eD) {}
+        rec.loaded++;
+        settle();
+      };
+      img.onerror = function () { rec.failed++; settle(); };
+      var x = ((t[0] % n) + n) % n;
+      img.src = tpl.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(t[1]));
+    });
+    if (!list.length) rec.done = true;
+    return rec;
+  }
+
+  function warmRadarComposites() {
+    for (var i = 0; i < radarPast.length; i++) radarComposite(i, true);
+  }
+
+  var radarTweenSource = {
+    channel: "radar",
+    cols: 4,
+    rows: 3,
+    maxMagUv: 0.12,
+    count: function () { return radarPast.length; },
+    images: function (i) {
+      var rec = radarComposite(i, false);
+      return { base: rec && rec.done && rec.loaded > 0 ? rec.canvas : null, hi: null, hiFade: 0 };
+    },
+    kick: function (i) { radarComposite(i, true); },
+    pairKey: function (i0, i1) {
+      var a = radarCompKey(i0), b = radarCompKey(i1);
+      return (a && b) ? a + "=>" + b : null;
+    },
+    prior: function (i0, i1) {
+      var a = radarPast[clampRadarIndex(i0)], b = radarPast[clampRadarIndex(i1)];
+      if (!a || !b) return null;
+      return steeringPriorUv(Number(a.time) * 1000, Number(b.time) * 1000);
+    }
+  };
+
+  function radarTweenLayer() {
+    var T = tweenApi();
+    if (!T) return null;
+    var c = radarPlayCanvasEl();
+    if (!c) return null;
+    if (radarTween && radarTween.renderer.canvas() !== c && c.isConnected) radarTween = null;
+    if (!radarTween) {
+      radarTween = T.createAnimatedRasterLayer({
+        canvas: c,
+        motion: TWEEN_MOTION,
+        estimator: sharedTweenEstimator(),
+        source: radarTweenSource,
+        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS }
+      });
+      exposeTweenDebug();
+    }
+    return radarTween;
+  }
+
+  function showRadarCanvas() {
+    var el = radarPlayLayerEl();
+    if (!el) return;
+    el.style.opacity = String(RADAR_OPACITY);
+    if (el.style.display !== "block") el.style.display = "block";
+    if (!radarCanvasOn) {
+      radarCanvasOn = true;
+      try { if (map.getLayer(RADAR_LAYER)) map.setLayoutProperty(RADAR_LAYER, "visibility", "none"); } catch (eV) {}
+    }
+  }
+
+  function hideRadarCanvas(restore) {
+    var el = document.getElementById("radar-play-layer");
+    if (el) el.style.display = "none";
+    if (!radarCanvasOn) return;
+    radarCanvasOn = false;
+    if (restore && radarOn() && radarPast.length && radarHost) {
+      try { applyRadarFrameAt(clampRadarIndex(Math.floor(playheadFrac + 1e-9)), { blend: false }); } catch (eA) {}
+      try { if (map.getLayer(RADAR_LAYER)) map.setLayoutProperty(RADAR_LAYER, "visibility", "visible"); } catch (eV) {}
+    }
+  }
+
+  /* continuous radar playhead → shared engine; false = caller falls back to MapLibre step */
+  function paintContinuousRadar() {
+    if (!radarOn() || !radarPast.length || !radarHost || tabHidden || mapGesturing || overlayXfadeActive) {
+      if (radarCanvasOn && (mapGesturing || !radarOn())) hideRadarCanvas(radarOn());
+      return false;
+    }
+    if (!radarCanvasOn && !playAnimating) return false;
+    var layer = radarTweenLayer();
+    if (!layer) return false;
+    var max = radarSliderMax();
+    var i0 = clampRadarIndex(Math.floor(playheadFrac + 1e-9));
+    var r0 = radarComposite(i0, true);
+    if (!r0 || !r0.done || !r0.loaded) {
+      return radarCanvasOn; /* hold last painted frame while the floor composite loads */
+    }
+    if (!radarCanvasOn) showRadarCanvas(); /* size the canvas before the first render */
+    var ok = layer.paintAt(playheadFrac, max);
+    if (!ok) { hideRadarCanvas(true); return false; }
     return true;
   }
 
@@ -8211,6 +7707,7 @@
     /* Boot restore (force+silent) stays instant; user clicks crossfade. */
     var instant = !!(opts.force && (opts.silent || opts.deferFetch)) || !!opts.instant || !map;
     if (mode !== prev) cancelOverlayXfade();
+    if (mode !== "radar") { try { hideRadarCanvas(true); } catch (eRcm) {} }
     overlayMode = mode;
     timeTicksSig = "";
     syncOverlaySeg();
@@ -8377,49 +7874,6 @@
     }
   }
 
-  function fitMotionCanvas(canvas, imgA, imgB) {
-    /* opt59: always display resolution (CSS × DPR, capped) with linear resampling.
-       Old path capped at FLOW_MAX_W (160px) and CSS-upscaled → pixel mosaic. */
-    void imgA; void imgB;
-    return fitDisplayCanvas(canvas);
-  }
-
-  function paintAlphaAtT(canvas, imgA, imgB, t) {
-    var dim = fitMotionCanvas(canvas, imgA, imgB);
-    var ctx = canvas2dWrite(canvas);
-    if (!ctx) return false;
-    try {
-      ctx.globalAlpha = 1;
-      ctx.clearRect(0, 0, dim.w, dim.h);
-      if (imgA && imgA.naturalWidth) ctx.drawImage(imgA, 0, 0, dim.w, dim.h);
-      if (imgB && imgB.naturalWidth && t > 0) {
-        ctx.globalAlpha = t;
-        ctx.drawImage(imgB, 0, 0, dim.w, dim.h);
-        ctx.globalAlpha = 1;
-      }
-    } catch (eP) {
-      return false;
-    }
-    return true;
-  }
-
-  function paintMotionAtT(canvas, flowRec, t) {
-    var outW = flowRec.w;
-    var outH = flowRec.h;
-    if (canvas.width !== outW || canvas.height !== outH) {
-      canvas.width = outW;
-      canvas.height = outH;
-    }
-    var ctx = canvas2dWrite(canvas);
-    if (!ctx) return false;
-    try {
-      renderMotionFrame(ctx, flowRec.pixA, flowRec.pixB, flowRec, t, outW, outH);
-    } catch (eM) {
-      return false;
-    }
-    return true;
-  }
-
   function paintContinuousClouds() {
     if (tabHidden || radarOn()) return;
     if (playUseOpenMeteo) {
@@ -8430,58 +7884,29 @@
       }
       return;
     }
-    var max = sliderMax();
-    var i0 = clampIndex(Math.floor(playheadFrac));
-    var i1 = clampIndex(Math.ceil(playheadFrac));
-    if (i1 <= i0) i1 = clampIndex(i0 + 1);
-    var t = playheadFrac - i0;
-    if (t < 0) t = 0;
-    if (t > 1) t = 1;
-    if (i0 >= max) {
-      i0 = max;
-      i1 = max;
-      t = 1;
-    }
-    var recA = cachedPlayRec(i0);
-    var recB = (i1 !== i0) ? cachedPlayRec(i1) : null;
+    /* opt60: continuous playhead → shared engine (GPU advection tween, linear fallback) */
+    var layer = cloudTweenLayer();
+    if (!layer) return;
     var canvas = showMotionCanvas(gibsEffectiveOpacity());
     if (!canvas) return;
     hidePlayImgsForCanvas();
     playMotionActive = true;
     playCanvasSession = true;
-    var painted = false;
-    if (recA && recB) {
-      var pairKey = recA.key + "=>" + recB.key;
-      /* opt59: warp only if explicitly re-enabled; default = linear per-pixel blend (t = frac) */
-      var flow = PLAY_MOTION_WARP ? playFlowCacheGet(pairKey) : null;
-      if (flow && flow.flow && flow.pixA && flow.pixB) {
-        painted = paintMotionAtT(canvas, flow, t);
-        if (painted) {
-          playLastFlowRec = flow;
-          if (playMotionLogLeft > 0) {
-            playMotionLogLeft -= 1;
-            try { console.info("SUNNY motion lerp"); } catch (eLog) {}
-          }
-        }
-      }
-      if (!painted) {
-        painted = paintAlphaAtT(canvas, recA.img, recB.img, t);
-        if (PLAY_MOTION_WARP) {
-          try { ensureFlowForPair(recA.img, recB.img, pairKey); } catch (eF) {}
-        }
-      }
-    } else if (recA) {
-      painted = paintAlphaAtT(canvas, recA.img, null, 0);
-    } else if (recB) {
-      painted = paintAlphaAtT(canvas, recB.img, null, 0);
-    }
+    var max = sliderMax();
+    var painted = layer.paintAt(playheadFrac, max);
     if (painted) {
       releasePlayStaticHold();
-      var recFront = (t > 0.5 && recB) ? recB : recA;
-      if (recFront) playLastFrameKey = recFront.key;
-      try { paintHiResProgressive(i0, i1, t, recA, recB); } catch (eHi) {}
-    } else {
-      try { hideHiResCanvas(); } catch (eHide) {}
+      var i0 = Math.max(0, Math.min(max, Math.floor(playheadFrac)));
+      var t = playheadFrac - i0;
+      var recF = cachedPlayRec(t > 0.5 && i0 < max ? i0 + 1 : i0) || cachedPlayRec(i0);
+      if (recF) playLastFrameKey = recF.key;
+      /* paused/held: finish the full-res fade-in without a playhead tick */
+      if (!playAnimating && !cloudHiFadeRaf && cloudHiFade.t0 && nowMs() - cloudHiFade.t0 < HI_RES_FADE_MS + 50) {
+        cloudHiFadeRaf = requestAnimationFrame(function () {
+          cloudHiFadeRaf = 0;
+          if (playCanvasSession && !playAnimating) paintContinuousClouds();
+        });
+      }
     }
   }
 
@@ -8510,9 +7935,6 @@
     if (i0 === playPrefetchAt) return;
     playPrefetchAt = i0;
     try { prefetchPlayIndices(i0); } catch (eP) {}
-    try { prefetchFlowAhead(i0); } catch (eF) {}
-    try { ensureFlowPairForIndices(i0, i1); } catch (eE) {}
-    try { ensureFlowPairForIndices(i1, i2); } catch (eE2) {}
   }
 
   function updatePlayheadLabel() {
@@ -8572,7 +7994,8 @@
     playheadFrac = clampFrac(playheadFrac);
     if (radarOn()) {
       var ri = clampRadarIndex(Math.floor(playheadFrac + 1e-9));
-      if (ri !== radarIndex) applyRadarFrameAt(ri, { blend: true });
+      if (paintContinuousRadar()) radarIndex = ri;
+      else if (ri !== radarIndex) applyRadarFrameAt(ri, { blend: true });
       else radarIndex = ri;
     } else {
       cloudIndex = clampIndex(Math.floor(playheadFrac + 1e-9));
@@ -8644,6 +8067,7 @@
     radarPlayBusy = false;
     playAnimating = false;
     cancelPlayRaf();
+    try { hideRadarCanvas(true); } catch (eHrc) {}
     setRadarFadeDuration(0);
     if (playTimer) { clearTimeout(playTimer); playTimer = null; }
     setPlayButtonPlaying(false);
@@ -8707,6 +8131,7 @@
     setRadarFadeDuration(playFadeMs());
     radarPlaySession += 1;
     applyRadarFrameAt(radarIndex, { blend: true });
+    try { warmRadarComposites(); } catch (eWrc) {}
     syncSliderUi();
     playRafLastMs = 0;
     playRafId = requestAnimationFrame(playClockTick);
@@ -9034,7 +8459,6 @@
         });
         Promise.race([warmRace, warmCap]).then(function () {
           if (playSession !== session || !playAnimating) return;
-          try { ensureFlowPairForIndices(startIdx, clampIndex(startIdx + 1)); } catch (eEf0) {}
           kickContinuousPrefetch();
         }).catch(function () {});
       } catch (eBoot) {}
@@ -9052,12 +8476,14 @@
 
   map.on("movestart", function () {
     mapGesturing = true;
+    try { if (radarCanvasOn) hideRadarCanvas(true); } catch (eRc) {}
     try { windOnGestureStart(); } catch (eWg) {}
     cancelIdleGoesWarm();
     if (playMode) beginPlayMapLock();
   });
   map.on("zoomstart", function () {
     mapGesturing = true;
+    try { if (radarCanvasOn) hideRadarCanvas(true); } catch (eRz) {}
     try { windOnGestureStart(); } catch (eWz) {}
     cancelIdleGoesWarm();
     if (playMode) beginPlayMapLock();
@@ -9653,7 +9079,7 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt59").then(startSunny).catch(function () {
+    loadScript("vendor/maplibre-gl.js?v=opt60").then(startSunny).catch(function () {
       var st = document.getElementById("status");
       if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
     });

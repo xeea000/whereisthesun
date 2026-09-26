@@ -557,7 +557,8 @@ html, body {
 }
 
 #time-slider,
-#cloud-opacity {
+#cloud-opacity,
+#wind-vis {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -574,14 +575,16 @@ html, body {
 }
 
 #time-slider::-webkit-slider-runnable-track,
-#cloud-opacity::-webkit-slider-runnable-track {
+#cloud-opacity::-webkit-slider-runnable-track,
+#wind-vis::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
   background: rgba(255,255,255,0.18);
 }
 
 #time-slider::-webkit-slider-thumb,
-#cloud-opacity::-webkit-slider-thumb {
+#cloud-opacity::-webkit-slider-thumb,
+#wind-vis::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 16px;
   height: 16px;
@@ -663,6 +666,25 @@ html, body {
   min-width: 140px;
   max-width: 220px;
   color: var(--text);
+}
+
+.ov.wind-vis-opt {
+  flex: 0 1 120px;
+  min-width: 96px;
+  max-width: 150px;
+  gap: 6px;
+  color: var(--text);
+}
+
+.ov.wind-vis-opt .wind-vis-lab {
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.ov.wind-vis-opt #wind-vis {
+  flex: 1 1 auto;
+  min-width: 60px;
 }
 
 .ov.check {

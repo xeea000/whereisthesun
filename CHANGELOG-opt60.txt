@@ -1,0 +1,41 @@
+SUNNY opt60 — one shared frame-tween engine, truthful (advected) tweening, wind visibility slider
+
+1) ONE engine for every animated raster layer
+   - frame-tween.js (window.SunnyTween):
+       createRenderer(canvas)          WebGL1 fragment shader: 2 frame textures + low-res flow grid
+                                       (uniform array, tent-bilinear); 2D linear-blend fallback
+                                       (auto-downgrade on no-WebGL / lost context / tainted image)
+       createMotionEstimator()         one shared worker (motion-worker.js) for all layers
+       createAnimatedRasterLayer()     playheadFrac → (i0,i1,t) → images + flow → render
+   - Layers plug in with a tiny source adapter {channel, count, images(i), kick(i), pairKey, prior}.
+       clouds: cloudTweenSource (existing GIBS LRU/warmer, full-res LRU as a 2nd pass with fade-in)
+       radar:  radarTweenSource (RainViewer z≤7 tiles composited per view onto a canvas, LRU 40)
+   - Removed: flow-worker block-match flow, flow cache, CPU warp (rafMotionLerp/renderMotionFrame/
+     paintMotionAtT), separate hi-res canvas + its fade RAF, per-layer canvas alpha-blend code.
+     Segment one-shots (rafEngineBlend) and bootstrap frames go through the same renderer.
+   - Kept: continuous playheadFrac clock, LRU cache + timeline warmer, persistent canvas,
+     overlay crossfade, loop splitter, range switch, honest Pause (radar canvas hands back to the
+     MapLibre layer at the floor frame on Pause / gesture / overlay switch).
+
+2) Truthful tweening (no oscillation)
+   - Bidirectional semi-Lagrangian advection per pixel:
+       out(p,t) = (1−t)·A(p − t·V) + t·B(p + (1−t)·V)
+     (Anagnostou & Krajewski 1999 advection correction; pySTEPS BSD-3 as algorithm reference).
+     t=0 / t=1 are exactly frames A / B; V only shapes the in-between.
+   - V = smooth displacement field over the frame interval (4×3 grid, bilinear on GPU):
+       prior: Open-Meteo 700 hPa wind (free, no key), 5-point average around the view, hourly,
+              interpolated to the interval midpoint, cached 30 min per 0.5° view cell;
+       refine: pyramidal Lucas-Kanade (ported from jpettitt/weather-radar-card, MIT) started at the
+              prior, confidence-regularized toward it, per-cell refinement with clamped deviation,
+              two 3×3 smoothing passes. No confident estimate → wind-only field → else linear.
+   - Temporal consistency: V is frozen per interval at its first rendered frame (neighbour
+     intervals blended 2:1:1 so velocity changes smoothly between intervals). If nothing is ready
+     at interval start, that interval is a plain linear blend (never switches mid-interval).
+   - All Play frames now load CORS (GIBS/RainViewer send ACAO:*), incl. the <img> buffers, so GPU
+     textures and estimation never taint.
+
+3) Wind line visibility slider ("Lines", next to Wind), 0..100, localStorage "sunny-wind-vis",
+   default 60 (a bit more visible than opt59). k=0 subtle thin short; k=1 thick (≈4 px), bright,
+   near-opaque, long, with a dark halo under each streak.
+
+Versions: ?v=opt60, CACHE sunny-v-opt60 (frame-tween.js precached; motion-worker.js lazy).
