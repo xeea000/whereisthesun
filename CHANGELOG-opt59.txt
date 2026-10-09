@@ -25,7 +25,8 @@ SUNNY opt59 — linear cloud blend, full-res clouds, stable wind
    - movestart/zoomstart: layer fades out, no drawing mid-gesture; moveend:
      particles cleared and reseeded stratified (shuffled jittered grid).
    - Respawn into the least-populated screen stratum → even density even in
-     convergent flow.
+     convergent flow; strata >1.6× mean gently recycle mature particles early
+     (normal tail fade) so convergence zones don't pile up.
    - Sample only when the fetched field covers the view (no edge clamping, no
      reuse of a shifted cached field; cell-centre bilinear fixed half-cell bias).
      Otherwise hold drawing until the refetch lands.
