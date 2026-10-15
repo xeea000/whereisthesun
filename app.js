@@ -613,8 +613,8 @@
 
   function gibsTiles(iso, lon) {
     var layer = goesLayer(lon == null ? -79 : lon);
-    return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer +
-      "/default/" + iso + "/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png";
+    var u = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer + "/default/" + iso + "/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png";
+    return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u; /* opt63: cloud-only tiles */
   }
 
   function utcDate(offsetDays) {
@@ -655,7 +655,8 @@
 
   function iemVisTiles(lon) {
     var layer = (lon != null && lon <= -105) ? "goes-west-vis-1km" : "goes-east-vis-1km";
-    return "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/" + layer + "/{z}/{x}/{y}.png";
+    var u = "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/" + layer + "/{z}/{x}/{y}.png";
+    return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u; /* opt63: cloud-only */
   }
 
   function formatFrameLabel(iso) {
@@ -1490,17 +1491,16 @@
   }
 
   function cloudRasterPaint(opacity, layerId) {
-    /* Approximate former CSS screen+filter look via MapLibre raster paint */
-    var solid = cloudOpacity >= 0.82;
+    /* opt63: tiles are already cloud-only (cloud-key.js); neutral paint so static matches Play */
     var fadeDur = (layerId === "iem-vis") ? 320 : HI_RES_FADE_MS; /* opt50: GIBS fade-in over pop */
     return {
       "raster-opacity": opacity == null ? 0 : opacity,
       "raster-resampling": cloudResamplingForLayer(layerId || GIBS_LAYER),
       "raster-fade-duration": fadeDur,
-      "raster-brightness-min": solid ? 0 : 0.02,
-      "raster-brightness-max": solid ? 1 : 0.92,
-      "raster-contrast": solid ? 0.08 : 0.18,
-      "raster-saturation": solid ? 0 : -0.15
+      "raster-brightness-min": 0,
+      "raster-brightness-max": 1,
+      "raster-contrast": 0,
+      "raster-saturation": 0
     };
   }
 
@@ -1525,14 +1525,7 @@
   }
 
   function applyCloudSolidMode() {
-    /* Play overlay: screen blend cannot fully obscure; at high opacity use normal.
-       Static clouds use main-map raster paint (brightness/contrast) instead of CSS screen. */
-    var solid = cloudOpacity >= 0.82;
-    var pl = document.getElementById("cloud-play-layer");
-    if (pl) {
-      if (solid) pl.classList.add("clouds-solid");
-      else pl.classList.remove("clouds-solid");
-    }
+    /* opt63: one cloud-only look for Play and static (cloud-key.js); no blend-mode switch */
     if (map && map.getLayer(GIBS_LAYER) && !playMode) {
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
     }
@@ -2203,6 +2196,7 @@
   }
 
   function showPlayOverlay() {
+    if (window.SunnyHandoff) window.SunnyHandoff.cancel();
     var layer = ensurePlayLayer();
     if (!layer) return;
     layer.hidden = false;
@@ -2632,7 +2626,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt62", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt63", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -2689,7 +2683,7 @@
         motion: TWEEN_MOTION,
         estimator: sharedTweenEstimator(),
         source: cloudTweenSource,
-        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS }
+        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS, cloudKey: true }
       });
       exposeTweenDebug();
     }
@@ -3125,7 +3119,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt62";
+      link.href = "motion-worker.js?v=opt63";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -3305,15 +3299,14 @@
     playLoadGen += 1;
     cancelPlayFade();
     softShowPlayOverlayAfterGesture();
-    hidePlayOverlay();
     /* opt35: never leave MapLibre clouds muted or overlay map-locked after Play */
     setMapLibreCloudsHidden(false);
     /* opt28: Pause mid-timeline keeps that frame; NOW only if playhead is at end */
-    if (cloudTimes.length) {
-      var isoExit = goesIsoForStaticRestore();
-      var url = gibsTiles(isoExit, origin ? origin.lon : null);
-      presentStaticGibs(url);
-    }
+    if (cloudTimes.length) presentStaticGibs(gibsTiles(goesIsoForStaticRestore(), origin ? origin.lon : null));
+    /* opt63: keep the Play picture up until the static tiles have all loaded, then crossfade */
+    if (window.SunnyHandoff && map) {
+      window.SunnyHandoff.hold({ map: map, srcId: GIBS_SRC, layerId: GIBS_LAYER, overlay: document.getElementById("cloud-play-layer"), targetOp: gibsEffectiveOpacity, done: hidePlayOverlay });
+    } else hidePlayOverlay();
     restackCloudRasters();
     if (overlayVisible()) {
       restackOverlay();
@@ -4418,7 +4411,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt62");
+      beachWorker = new Worker("beach-worker.js?v=opt63");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -7394,7 +7387,7 @@
         motion: TWEEN_MOTION,
         estimator: sharedTweenEstimator(),
         source: radarTweenSource,
-        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS }
+        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS, cloudKey: true }
       });
       exposeTweenDebug();
     }
@@ -8083,7 +8076,7 @@
     setPlayButtonPlaying(false);
     syncPlayheadThumb();
     try { cancelPlayFadeRafOnly(); } catch (eCf) {}
-    try { settleMotionToFront(); } catch (eSm) {}
+    if (!playCanvasSession) { try { settleMotionToFront(); } catch (eSm) {} } /* opt63: keep keyed canvas */
     if (playMode) exitPlayMode();
     else {
       forceClearPlayGesture("stop");
@@ -9083,6 +9076,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt62").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt63").then(startSunny).catch(onMapToolkitFail);
   }
 })();

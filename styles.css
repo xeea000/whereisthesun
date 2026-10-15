@@ -70,18 +70,15 @@ html, body {
   height: 100%;
   z-index: 2;
   pointer-events: none;
-  mix-blend-mode: screen;
-  /* opt21: transparent — black mid-fade looked like basemap dip under screen blend */
+  /* opt63: frames are cloud-only (cloud-key.js + Play shader), so plain blending like static */
+  mix-blend-mode: normal;
   background: transparent;
-  filter: contrast(1.15) brightness(1.05);
   --cloud-play-op: 0.90;
   /* opt51: limit reflow; no paint contain — preserves mix-blend-mode with map */
   contain: layout style;
 }
-#cloud-play-layer.clouds-solid {
-  mix-blend-mode: normal;
-  background: transparent;
-  filter: contrast(1.08) brightness(1.02);
+#cloud-play-layer[data-motion] .cloud-play-buf {
+  visibility: hidden;
 }
 #map > #cloud-play-layer {
   position: absolute;

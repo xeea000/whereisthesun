@@ -33,6 +33,7 @@
     "uniform sampler2D uA; uniform sampler2D uB;",
     "uniform float uT; uniform float uAlpha; uniform float uHasB;",
     "uniform vec2 uGrid; uniform vec2 uFlow[" + MAX_FLOW_CELLS + "]; uniform float uUseFlow;",
+    "uniform float uKey; uniform vec2 uKeyLoHi;", /* opt63: cloud-only key, same rule as cloud-key.js */
     "vec2 flowAt(vec2 uv){",
     "  vec2 g = uv * uGrid - 0.5; vec2 acc = vec2(0.0); float ws = 0.0;",
     "  for (int i = 0; i < " + MAX_FLOW_CELLS + "; i++) {",
@@ -52,6 +53,9 @@
     "  if (wa + wb < 1e-4) { c = mix(texture2D(uA, vUv), texture2D(uB, vUv), uT * uHasB); }",
     "  else { c = (a * wa + b * wb) / (wa + wb); }",
     "  if (uHasB < 0.5) c = texture2D(uA, vUv);",
+    "  if (uKey > 0.5 && c.a > 0.0) { vec3 rgb = c.rgb / c.a;",
+    "    float k = smoothstep(uKeyLoHi.x, uKeyLoHi.y, min(rgb.r, min(rgb.g, rgb.b)));",
+    "    c = vec4(rgb * k, k) * c.a; }",
     "  gl_FragColor = c * uAlpha; }"
   ].join("\n");
 
@@ -98,9 +102,8 @@
         var ap = gl.getAttribLocation(prog, "aPos");
         gl.enableVertexAttribArray(ap);
         gl.vertexAttribPointer(ap, 2, gl.FLOAT, false, 0, 0);
-        ["uA", "uB", "uT", "uAlpha", "uHasB", "uGrid", "uFlow", "uUseFlow"].forEach(function (n) {
-          loc[n] = gl.getUniformLocation(prog, n);
-        });
+        var names = ["uA", "uB", "uT", "uAlpha", "uHasB", "uGrid", "uFlow", "uUseFlow", "uKey", "uKeyLoHi"];
+        for (var ni = 0; ni < names.length; ni++) loc[names[ni]] = gl.getUniformLocation(prog, names[ni]);
         gl.uniform1i(loc.uA, 0);
         gl.uniform1i(loc.uB, 1);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -186,6 +189,9 @@
             gl.uniform2f(loc.uGrid, 1, 1);
           }
           gl.uniform1f(loc.uT, t);
+          var ck = opts.cloudKey ? root.SunnyCloudKey : null;
+          gl.uniform1f(loc.uKey, ck ? 1 : 0);
+          gl.uniform2f(loc.uKeyLoHi, ck ? ck.LO : 0, ck ? ck.HI : 1);
           var drew = 0;
           for (var i = 0; i < passes.length; i++) {
             var p = passes[i];
