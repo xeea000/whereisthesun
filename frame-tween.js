@@ -169,6 +169,17 @@
       api.mode = ctx2d ? "2d" : "none";
     }
 
+    function keyCanvas2d(ctx, d) {
+      var ck = root.SunnyCloudKey;
+      try {
+        var img = ctx.getImageData(0, 0, d.w, d.h);
+        if (!ck) throw new Error("no cloud key");
+        ck.keyPixels(img.data);
+        ctx.putImageData(img, 0, 0);
+      } catch (eKey) {
+        ctx.clearRect(0, 0, d.w, d.h); /* tainted or no key: show nothing, never the dark backdrop */
+      }
+    }
     function render(passes, t, flow) {
       if (lost) downgrade("context lost");
       var d = fit();
@@ -237,6 +248,7 @@
           drew2++;
         }
         ctx2d.globalAlpha = 1;
+        if (drew2 > 0 && opts.cloudKey) keyCanvas2d(ctx2d, d); /* opt64: cloud-only in 2D too */
         return drew2 > 0;
       } catch (e5) {
         return false;
@@ -433,6 +445,13 @@
       return f;
     }
 
+    function nearestLoaded(c, max) {
+      for (var r = 1; r <= max; r++) {
+        if (c - r >= 0 && src.images(c - r) && src.images(c - r).base) return c - r;
+        if (c + r <= max && src.images(c + r) && src.images(c + r).base) return c + r;
+      }
+      return -1;
+    }
     function paintAt(frac, maxIndex) {
       var n = src.count();
       if (!n) return false;
@@ -447,7 +466,9 @@
       if (i1 + 1 <= max) requestFlow(i1, i1 + 1);
       if (i1 + 2 <= max) requestFlow(i1 + 1, i1 + 2);
       var baseA = A && A.base, baseB = B && B.base;
-      if (!baseA && baseB) { baseA = baseB; baseB = null; t = 0; }
+      if (!baseA && baseB) { baseA = baseB; baseB = null; t = 0; i0 = i1; }
+      if (!baseA) i0 = nearestLoaded(Math.round(frac), max); /* opt64: never keep a stale frame */
+      if (!baseA && i0 >= 0) { A = src.images(i0); baseA = A && A.base; B = null; baseB = null; i1 = i0; t = 0; }
       if (!baseA) return false;
       if (!baseB) t = 0;
       var pairNow = i0 + ">" + i1;
@@ -469,6 +490,7 @@
       var ok = renderer.render(passes, t, flow);
       if (ok) {
         stats.frames++;
+        stats.shownFrac = i0 + t; /* opt64: what is on screen, for checks */
         if (flow) stats.flowFrames++;
         stats.lastSource = flow ? (flow.source || "flow") : "linear";
         if (flow) {

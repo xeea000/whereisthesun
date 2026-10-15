@@ -270,7 +270,6 @@
   var overlayReady = false;
   var hoverThrottle = 0;
 
-
   var bootCenter = [-79.38, 43.65];
   var bootZoom = 3;
   try {
@@ -1373,7 +1372,6 @@
     });
   }
 
-
   function playEase(t) {
     /* opt45: linear while animating so segment joins stay velocity-continuous */
     if (playAnimating) return t;
@@ -1530,8 +1528,6 @@
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
     }
   }
-
-
 
   function gibsHostLayerKey(url) {
     try {
@@ -2551,7 +2547,6 @@
     playCanvasSession = false;
   }
 
-
   /* opt51: write-path contexts prefer alpha; willReadFrequently ONLY where getImageData runs */
   function canvas2dWrite(c) {
     if (!c) return null;
@@ -2616,7 +2611,6 @@
     hideMotionCanvas();
   }
 
-
   /* ---- opt60: shared engine glue ---- */
   function tweenApi() {
     return (typeof window !== "undefined" && window.SunnyTween) ? window.SunnyTween : null;
@@ -2626,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt63", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt64", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3119,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt63";
+      link.href = "motion-worker.js?v=opt64";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -3518,10 +3512,10 @@
         return shown;
       });
     } else if (playMode && scrubbing && !playUseOpenMeteo) {
-      /* opt44: scrub through Play WMS LRU — cache hit is instant (no download hint) */
+      /* opt64: scrub draws the keyed canvas at the playhead; nearest loaded frame while loading */
       try { softShowPlayOverlayAfterGesture(); } catch (eScrShow) {}
-      setMapLibreCloudsHidden(true);
-      p = presentPlayFrame(iso);
+      paintContinuousClouds();
+      p = Promise.resolve(true);
     } else {
       /* paused: never snap to latest unless the playhead is at NOW */
       var isoStatic = (atNow ? goesLatestIsoSync() : iso);
@@ -3762,7 +3756,6 @@
     return setStaticGibsTiles(url);
   }
 /* === END CLOUD PATCH SNIPPET === */
-
 
   function overlayVisible() {
     return !!(toggleMap && toggleMap.checked);
@@ -4395,7 +4388,6 @@
     return pickRegionsForBbox(lat - degLat, lat + degLat, lon - degLon, lon + degLon, padCells);
   }
 
-
   /* --- beach worker + binary shards (opt5/8) ---
    * opt8 C: lazy Worker — do NOT new Worker at startup; create on first
    * region/decode need via getBeachWorker(); main-thread fallback always kept.
@@ -4411,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt63");
+      beachWorker = new Worker("beach-worker.js?v=opt64");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -5872,7 +5864,6 @@
     if (!allMode) btnAll.classList.remove("is-busy");
   }
 
-
   function loadViewBeaches() {
     if (!allMode) return;
     var gen = ++viewGen;
@@ -6085,9 +6076,6 @@
         setStatus(beachDb ? "Couldn't load nearby beaches. Clouds are still up — try Locate me again." : "Couldn't load the beach list. Try a refresh.");
       });
   }
-
-
-
 
   /* === BEGIN WIND LINES (opt53–opt56) — Open-Meteo Windy-style particles === */
   var WIND_CACHE_TTL_MS = 8 * 60 * 1000;
@@ -8728,8 +8716,15 @@
       setPlayButtonPlaying(false);
       try { setRadarFadeDuration(0); } catch (eRf) {}
       try { cancelPlayFadeRafOnly(); } catch (ePf) {}
-      try { settleMotionToFront(); } catch (eSm) {}
     }
+    /* opt64: scrub always draws the keyed canvas at the playhead (paused too); repaint each frame */
+    if (!radarOn() && !playUseOpenMeteo && cloudTimes.length && !playMode) enterPlayMode();
+    requestAnimationFrame(scrubPaintTick);
+  }
+  function scrubPaintTick() {
+    if (!scrubbing) return;
+    if (playMode && !radarOn()) paintContinuousClouds();
+    requestAnimationFrame(scrubPaintTick);
   }
 
   function applyScrubFrame() {
@@ -8771,6 +8766,8 @@
     cancelIdleGoesWarm();
     if (was) {
       startPlay({ resume: true });
+    } else if (playMode && !radarOn()) {
+      exitPlayMode(); /* opt64: same no-pop handoff as Pause */
     } else if (radarOn() && !tabHidden && radarIndex >= radarSliderMax()) {
       startRadarRefresh();
     } else {
@@ -9076,6 +9073,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt63").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt64").then(startSunny).catch(onMapToolkitFail);
   }
 })();

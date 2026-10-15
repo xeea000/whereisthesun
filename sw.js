@@ -1,19 +1,19 @@
 /* SUNNY service worker — network-first shell so deploys stick; beach data network-first. */
-var CACHE = "sunny-v-opt63";
+var CACHE = "sunny-v-opt64";
 /* opt60: network-first shell; bare URL always latest. Precache shell only. */
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt63",
-  "cloud-key.js?v=opt63",
-  "play-handoff.js?v=opt63",
-  "frame-tween.js?v=opt63",
-  "app.js?v=opt63",
-  "update-banner.js?v=opt63",
-  "settings-panel.js?v=opt63",
-  "settings-panel.css?v=opt63",
-  "vendor/maplibre-gl.js?v=opt63",
-  "vendor/maplibre-gl.slim.css?v=opt63",
+  "styles.css?v=opt64",
+  "cloud-key.js?v=opt64",
+  "play-handoff.js?v=opt64",
+  "frame-tween.js?v=opt64",
+  "app.js?v=opt64",
+  "update-banner.js?v=opt64",
+  "settings-panel.js?v=opt64",
+  "settings-panel.css?v=opt64",
+  "vendor/maplibre-gl.js?v=opt64",
+  "vendor/maplibre-gl.slim.css?v=opt64",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png"
