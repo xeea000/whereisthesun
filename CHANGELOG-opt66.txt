@@ -1,0 +1,5 @@
+opt66 - fast first radar Play, no tile pop-in
+- Play draws only whole-view radar frames on the canvas; it never steps the map tile layer.
+- Play starts at once from frames already loaded; the nearest frame is held until the next one arrives.
+- radar-warm.js loads frames nearest the playhead first, 4 at a time, and shows a small "Loading radar N of M" note.
+- Loaded frames stay cached for later loops. Radar source unchanged (GeoMet).

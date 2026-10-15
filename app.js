@@ -2620,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt65", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt66", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3113,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt65";
+      link.href = "motion-worker.js?v=opt66";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4403,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt65");
+      beachWorker = new Worker("beach-worker.js?v=opt66");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6920,11 +6920,9 @@
   var radarIndex = 0;
   var radarPlaySession = 0;
   var radarPlayBusy = false;
-
   function radarOn() {
     return overlayMode === "radar";
   }
-
   function syncOverlaySeg() {
     if (!overlaySeg) return;
     var btns = overlaySeg.querySelectorAll("[data-overlay]");
@@ -6938,7 +6936,6 @@
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
   }
-
   function setCloudSliderDisabled(disabled) {
     if (!cloudOpacityEl) return;
     cloudOpacityEl.disabled = !!disabled;
@@ -6957,11 +6954,9 @@
       }
     } catch (eLab) {}
   }
-
   function radarTileUrl(host, path) {
     return window.SunnyRadar.tileUrl(host, path); /* opt65: ECCC GeoMet North American composite */
   }
-
   function pickRadarFrame(data) {
     var past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past : [];
     var nowcast = (data && data.radar && Array.isArray(data.radar.nowcast)) ? data.radar.nowcast : [];
@@ -6969,11 +6964,9 @@
     if (nowcast.length) return nowcast[nowcast.length - 1];
     return null;
   }
-
   function radarSliderMax() {
     return Math.max(0, radarPast.length - 1);
   }
-
   function radarPastForRange(all) {
     if (!all || !all.length) return [];
     var last = all[all.length - 1];
@@ -6984,7 +6977,6 @@
       return fr && fr.time != null && Number(fr.time) * 1000 >= startMs - 1500;
     });
   }
-
   function applyRadarPastKeep(keepMs) {
     /* Only remap loopStartFrac onto radar indices while Radar overlay is active */
     var keepLoopMs = (loopStartInited && typeof radarOn === "function" && radarOn())
@@ -7023,13 +7015,11 @@
       if (playheadFrac < loopStartFrac) playheadFrac = loopStartFrac;
     }
   }
-
   function clampRadarIndex(i) {
     var n = Number(i);
     if (!isFinite(n)) n = 0;
     return Math.max(0, Math.min(Math.floor(n), radarSliderMax()));
   }
-
   function nearestRadarIndexByMs(want) {
     if (!radarPast || !radarPast.length || !isFinite(want)) {
       return clampRadarIndex(radarIndex);
@@ -7044,13 +7034,11 @@
     }
     return best;
   }
-
   function formatRadarLabel(frame) {
     if (!frame || !frame.time) return "Radar";
     var d = new Date(Number(frame.time) * 1000);
     return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   }
-
   function syncRadarTimelineUi() {
     if (!slider || !radarPast.length) return;
     radarIndex = clampRadarIndex(radarIndex);
@@ -7063,18 +7051,15 @@
     }
     rebuildTimeTicks();
   }
-
   function stopRadarRefresh() {
     if (radarRefreshTimer) {
       clearInterval(radarRefreshTimer);
       radarRefreshTimer = null;
     }
   }
-
   function radarParkedOffNow() {
     return !!(radarPast.length && radarIndex < radarSliderMax());
   }
-
   function startRadarRefresh() {
     stopRadarRefresh();
     if (!radarOn() || tabHidden) return;
@@ -7105,7 +7090,6 @@
     if (!isFinite(n) || n < 0) n = 0;
     try { map.setPaintProperty(RADAR_LAYER, "raster-fade-duration", n); } catch (eFd) {}
   }
-
   function ensureRadarLayer(url, opts) {
     opts = opts || {};
     if (!map || !url) return;
@@ -7178,7 +7162,6 @@
     restackCloudRasters();
     restackRadar();
   }
-
   function hideRadarLayer() {
     try { hideRadarCanvas(false); } catch (eHrc) {}
     stopRadarRefresh();
@@ -7202,7 +7185,6 @@
       if (map.getSource("radar-b")) map.removeSource("radar-b");
     } catch (eSb2) {}
   }
-
   function applyRadarFrameAt(i, opts) {
     opts = opts || {};
     if (!radarOn() || !radarPast.length || !radarHost) return false;
@@ -7226,7 +7208,6 @@
   var RADAR_COMP_CAP = 40;
   var RADAR_COMP_MAX_SIDE = 2048;
   var radarCanvasOn = false;
-
   function radarPlayLayerEl() {
     var host = map && map.getContainer && map.getContainer();
     if (!host) return null;
@@ -7244,7 +7225,6 @@
     if (el.parentNode !== host) host.appendChild(el);
     return el;
   }
-
   function radarPlayCanvasEl() {
     var el = radarPlayLayerEl();
     return el ? el.querySelector(".radar-play-canvas") : null;
@@ -7323,8 +7303,31 @@
     return rec;
   }
 
+  function radarCompPeek(i) {
+    return radarComposite(i, false);
+  }
+  function radarCompBuild(i) {
+    return radarComposite(i, true);
+  }
+  function radarAnyLoaded() {
+    for (var i = 0; i < radarPast.length; i++) {
+      var r = radarComposite(i, false);
+      if (r && r.done && r.loaded) return true;
+    }
+    return false;
+  }
+  function radarWarmActive() {
+    return radarOn() && playAnimating;
+  }
+  function radarPlayheadIndex() {
+    return clampRadarIndex(Math.floor(playheadFrac + 1e-9));
+  }
+  function radarCount() {
+    return radarPast.length;
+  }
   function warmRadarComposites() {
-    for (var i = 0; i < radarPast.length; i++) radarComposite(i, true);
+    /* opt66: nearest the playhead first, a few in parallel (radar-warm.js) */
+    window.SunnyRadarWarm.start({ count: radarCount, center: radarPlayheadIndex, peek: radarCompPeek, build: radarCompBuild, active: radarWarmActive });
   }
 
   var radarTweenSource = {
@@ -7400,15 +7403,13 @@
     var layer = radarTweenLayer();
     if (!layer) return false;
     var max = radarSliderMax();
-    var i0 = clampRadarIndex(Math.floor(playheadFrac + 1e-9));
-    var r0 = radarComposite(i0, true);
-    if (!r0 || !r0.done || !r0.loaded) {
-      return radarCanvasOn; /* hold last painted frame while the floor composite loads */
-    }
+    /* opt66: paint from whole-view frames only (nearest loaded one while others load); until the
+       first frame is in, the current radar image stays on the map untouched — never tile steps */
+    if (!radarCanvasOn && !radarAnyLoaded()) return false;
     if (!radarCanvasOn) showRadarCanvas(); /* size the canvas before the first render */
-    var ok = layer.paintAt(playheadFrac, max);
-    if (!ok) { hideRadarCanvas(true); return false; }
-    return true;
+    if (layer.paintAt(playheadFrac, max)) return true;
+    if (radarCanvasOn) hideRadarCanvas(false);
+    return false;
   }
 
   function setRadarFrame(i) {
@@ -7960,9 +7961,8 @@
     playheadFrac = clampFrac(playheadFrac);
     if (radarOn()) {
       var ri = clampRadarIndex(Math.floor(playheadFrac + 1e-9));
-      if (paintContinuousRadar()) radarIndex = ri;
-      else if (ri !== radarIndex) applyRadarFrameAt(ri, { blend: true });
-      else radarIndex = ri;
+      paintContinuousRadar(); /* opt66: no MapLibre tile stepping during Play */
+      radarIndex = ri;
     } else {
       cloudIndex = clampIndex(Math.floor(playheadFrac + 1e-9));
       paintContinuousClouds();
@@ -8096,7 +8096,6 @@
     setPlayButtonPlaying(true);
     setRadarFadeDuration(playFadeMs());
     radarPlaySession += 1;
-    applyRadarFrameAt(radarIndex, { blend: true });
     try { warmRadarComposites(); } catch (eWrc) {}
     syncSliderUi();
     playRafLastMs = 0;
@@ -9058,6 +9057,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt65").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt66").then(startSunny).catch(onMapToolkitFail);
   }
 })();

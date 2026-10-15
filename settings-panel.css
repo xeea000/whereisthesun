@@ -119,3 +119,19 @@ body.settings-open .update-banner { display: none; }
   .settings-pop { left: 10px; right: 10px; width: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 62px); }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 116px); max-width: calc(100vw - 24px); }
 }
+/* opt66: small note while radar Play frames load (radar-warm.js) */
+.radar-loading-note {
+  position: fixed;
+  z-index: 30;
+  top: calc(max(10px, env(safe-area-inset-top)) + 54px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(18, 20, 23, 0.7);
+  backdrop-filter: blur(10px);
+  color: var(--muted);
+  font: 500 0.78rem/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  pointer-events: none;
+}
+.radar-loading-note[hidden] { display: none; }
