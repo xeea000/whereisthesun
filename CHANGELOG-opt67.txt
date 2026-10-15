@@ -1,0 +1,12 @@
+opt67 - Windy-style affordances, NEXRAD-only radar
+- Radar is now United States NEXRAD only (IEM n0q composite, 5-minute frames, last 3 hours). Canadian radar removed.
+- Everything outside NEXRAD range (Canada, Mexico, oceans, gaps) gets a faint hatch drawn in the browser
+  from 230 km circles around each CONUS NEXRAD site (radar-mask.js, data/nexrad-sites.json).
+- Radar Play keeps opt66 loading: whole-view frames only, nearest first, "Loading radar N of M" note.
+- Wind particles now run on the GPU (wind-gl.js, adapted from mapbox/webgl-wind, ISC): thousands of
+  particles with fading trails, even spread, fade out on zoom/pan and reseed after. Lines slider and Wind
+  checkbox unchanged. 2D canvas lines stay as the fallback when WebGL is unavailable.
+- Tap anywhere on the map for a point forecast card (point-forecast.js, Open-Meteo): temperature, cloud,
+  wind, rain chance, and a 24-hour strip with temperature line, cloud band, rain bars.
+- Compact radar colour legend under the zoom buttons while Radar is on (radar-legend.js).
+- Attribution: NOAA NEXRAD via Iowa Environmental Mesonet.

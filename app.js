@@ -351,7 +351,7 @@
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
-    new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · ECCC GeoMet radar · free tiles' }),
+    new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · NOAA NEXRAD radar (IEM) · free tiles' }),
     "bottom-right"
   );
 
@@ -2620,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt66", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt67", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3113,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt66";
+      link.href = "motion-worker.js?v=opt67";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4403,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt66");
+      beachWorker = new Worker("beach-worker.js?v=opt67");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6104,7 +6104,6 @@
   var windGrid = null; /* {cols,rows,cw,ch,w,h} CSS px strata */
   var windFieldWaiting = false;
   var windCellCounts = null; /* per-frame stratum occupancy for even respawn */
-
   function windParticleCap() {
     try {
       var w = window.innerWidth || 800;
@@ -6116,7 +6115,6 @@
       return 220;
     }
   }
-
   function ensureWindLayer() {
     var layer = document.getElementById("wind-layer");
     if (!layer || !map) return null;
@@ -6148,7 +6146,6 @@
     }
     return layer;
   }
-
   function syncWindCanvasSize() {
     if (!windCanvas || !map) return;
     var el = map.getContainer ? map.getContainer() : document.getElementById("map");
@@ -6166,7 +6163,6 @@
       windCanvas.style.height = h + "px";
     }
   }
-
   function setWindUi(on) {
     windOn = !!on;
     if (toggleWind) toggleWind.checked = windOn;
@@ -6190,7 +6186,6 @@
       }
     }
   }
-
   function windViewKey() {
     if (!map) return "";
     try {
@@ -6207,7 +6202,6 @@
       return String(Date.now());
     }
   }
-
   function buildWindSamplePoints() {
     var b = map.getBounds();
     var west = b.getWest();
@@ -6240,7 +6234,6 @@
       pts: pts
     };
   }
-
   /* opt56: prefer true east/north u,v; fall back to meteorological FROM */
   function parseWindRow(row) {
     var cur = row && row.current ? row.current : row;
@@ -6271,7 +6264,6 @@
     if (!isFinite(speedKmh) || !isFinite(u) || !isFinite(v)) return null;
     return { speedKmh: speedKmh, u: u, v: v };
   }
-
   /* opt56: array-of-objects OR parallel-array single object */
   function normalizeWindApiRows(data) {
     if (data == null) return [];
@@ -6305,7 +6297,6 @@
     }
     return [data];
   }
-
   function windLonLatDist2(aLat, aLon, bLat, bLon) {
     var dLat = aLat - bLat;
     var dLon = aLon - bLon;
@@ -6313,7 +6304,6 @@
     if (dLon < -180) dLon += 360;
     return dLat * dLat + dLon * dLon;
   }
-
   /* Map each API sample onto the request grid (lat/lon match when present). */
   function assignWindRowsToGrid(pts, rows) {
     var n = pts.length;
@@ -6322,7 +6312,6 @@
     var i, j, best, bestD, d, row, rLat, rLon, hasLL;
     for (i = 0; i < rows.length; i++) used[i] = false;
     for (i = 0; i < n; i++) assigned[i] = null;
-
     for (i = 0; i < n; i++) {
       best = -1;
       bestD = Infinity;
@@ -6357,7 +6346,6 @@
     }
     return assigned;
   }
-
   function fetchWindBatch(points) {
     if (!points.length) return Promise.resolve([]);
     var lats = points.map(function (p) { return p.lat.toFixed(3); }).join(",");
@@ -6371,7 +6359,6 @@
       return normalizeWindApiRows(data);
     });
   }
-
   function fetchWindFieldForView() {
     if (!map || !windOn) return Promise.resolve(null);
     var key = windViewKey();
@@ -6482,7 +6469,6 @@
     });
     return windFetchPromise;
   }
-
   function scheduleWindFieldRefresh(immediate) {
     if (!windOn) return;
     if (windMoveTimer) {
@@ -6508,14 +6494,12 @@
     if (immediate) run();
     else windMoveTimer = setTimeout(run, WIND_MOVE_DEBOUNCE_MS);
   }
-
   /* opt59: field extent in lon/lat; cell centers at west+(c+0.5)*dLon */
   function windLonRel(lon, west) {
     var r = (lon - west) % 360;
     if (r < 0) r += 360;
     return r;
   }
-
   function windFieldCoversView(f) {
     if (!f || !map) return false;
     try {
@@ -6539,7 +6523,6 @@
       return false;
     }
   }
-
   function sampleWindUV(lon, lat) {
     /* Bilinear on cell centers; returns null outside the fetched field (no edge clamp) */
     var f = windField;
@@ -6568,12 +6551,10 @@
     var sp = w00 * f.speeds[i00] + w10 * f.speeds[i10] + w01 * f.speeds[i01] + w11 * f.speeds[i11];
     return { u: u, v: v, speed: sp };
   }
-
   function windViewCss() {
     var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
     return { w: (el && el.clientWidth) || 800, h: (el && el.clientHeight) || 600 };
   }
-
   function buildWindGrid(n) {
     /* Stratified strata ≈ n cells over the viewport (aspect-aware) */
     var v = windViewCss();
@@ -6583,7 +6564,6 @@
     windSpawnCursor = Math.floor(Math.random() * cols * rows);
     return windGrid;
   }
-
   function stratifiedSpawn(p, cellIdx) {
     var g = windGrid;
     if (!g) g = buildWindGrid(windParticleCap());
@@ -6614,7 +6594,6 @@
     p.age = 0;
     p.life = 1.8 + Math.random() * 2.8;
   }
-
   function seedWindParticles(reset) {
     if (!map) return;
     var cap = windParticleCap();
@@ -6641,11 +6620,9 @@
     if (windParticles.length > cap) windParticles.length = cap;
     windNeedsReseed = false;
   }
-
   function respawnParticle(p) {
     stratifiedSpawn(p, null);
   }
-
   /* opt56/opt59: projected u/v unit direction in CSS px (handles bearing/pitch) */
   function windScreenDir(lon, lat, u, v) {
     var mag = Math.sqrt(u * u + v * v);
@@ -6668,13 +6645,11 @@
     if (!(len > 1e-6)) return null;
     return { x: dx / len, y: dy / len };
   }
-
   function windScreenDelta(lon, lat, u, v, lengthPx) {
     var d = windScreenDir(lon, lat, u, v);
     if (!d || !(lengthPx > 0)) return { dx: 0, dy: 0 };
     return { dx: d.x * lengthPx, dy: d.y * lengthPx };
   }
-
   function windOnGestureStart() {
     /* opt59: never carry particles through a zoom/pan — fade out, then clear */
     if (!windOn) return;
@@ -6687,7 +6662,6 @@
       } catch (eOp) {}
     }
   }
-
   function windOnGestureEnd() {
     if (!windOn) return;
     windMoving = false;
@@ -6708,7 +6682,6 @@
     /* refetch (debounced) — draws resume from the new field if the old one didn't cover */
     scheduleWindFieldRefresh(false);
   }
-
   function startWindAnim() {
     if (!windOn || tabHidden) return;
     if (windRaf) return;
@@ -6731,7 +6704,6 @@
     }
     windRaf = requestAnimationFrame(frame);
   }
-
   function stopWindAnim() {
     if (windRaf) {
       try { cancelAnimationFrame(windRaf); } catch (eR) {}
@@ -6740,7 +6712,51 @@
     windLastTs = 0;
     windAccumMs = 0;
   }
-
+  /* opt67: GPU wind (mapbox/webgl-wind adaptation) fed by the same Open-Meteo field */
+  var windGl = null;
+  var windGlFailed = false;
+  var windGlKey = "";
+  function windGlCanvas() {
+    var c = document.getElementById("wind-gl-canvas");
+    if (c || !windLayerEl) return c;
+    c = document.createElement("canvas");
+    c.id = "wind-gl-canvas";
+    c.setAttribute("aria-hidden", "true");
+    c.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+    windLayerEl.appendChild(c);
+    return c;
+  }
+  function windGlSample(x, y) {
+    var ll = map.unproject([x, y]);
+    var uv = sampleWindUV(ll.lng, ll.lat);
+    if (!uv) return null;
+    var d = windScreenDir(ll.lng, ll.lat, uv.u, uv.v);
+    var pps = Math.max(10, Math.min(90, 8 + uv.speed * 1.6));
+    return d ? { x: d.x * pps, y: d.y * pps, speed01: Math.min(1, uv.speed / 60) } : { x: 0, y: 0, speed01: 0 };
+  }
+  function paintWindGl(dt) {
+    var c = window.SunnyWindGL && !windGlFailed ? windGlCanvas() : null;
+    if (!c) return false;
+    if (!windGl) windGl = window.SunnyWindGL.create(c, windCanvas.width < 1400 ? 6400 : 12000);
+    if (!windGl) {
+      windGlFailed = true;
+      c.remove();
+      return false;
+    }
+    if (c.width !== windCanvas.width || c.height !== windCanvas.height) {
+      c.width = windCanvas.width;
+      c.height = windCanvas.height;
+    }
+    var view = windViewCss();
+    var ctr = map.getCenter();
+    var key = [windField.key, windField.t, ctr.lng.toFixed(4), ctr.lat.toFixed(4), map.getZoom().toFixed(3), map.getBearing().toFixed(1), c.width, c.height].join("|");
+    if (key !== windGlKey) {
+      windGlKey = key;
+      windGl.setField(window.SunnyWindGL.buildField(72, 45, view.w, view.h, windGlSample));
+    }
+    windGl.frame(dt, windVisK, windDpr);
+    return true;
+  }
   function paintWindFrame(dt) {
     ensureWindLayer();
     syncWindCanvasSize();
@@ -6756,13 +6772,13 @@
       return;
     }
     windFieldWaiting = false;
+    if (paintWindGl(dt)) return; /* opt67: GPU particles (wind-gl.js); 2D path below is the fallback */
     var view = windViewCss();
     if (windNeedsReseed || !windGrid || Math.abs(windGrid.w - view.w) > 1 || Math.abs(windGrid.h - view.h) > 1) {
       seedWindParticles(true);
     }
     var cap = windParticleCap();
     if (windParticles.length < cap) seedWindParticles(false);
-
     /* stratum occupancy (before this frame's moves) */
     var g = windGrid;
     var nCells = g.cols * g.rows;
@@ -6791,11 +6807,9 @@
     }
     var dpr = windDpr;
     var i, p, ll, uv, dir, speedKmh, pxPerSec, lengthPx, hx, hy, tx, ty, lwCss, maxA, lifeFade, grad;
-
     windCtx.lineCap = "round";
     windCtx.lineJoin = "round";
     windCtx.globalCompositeOperation = "source-over";
-
     for (i = 0; i < windParticles.length; i++) {
       p = windParticles[i];
       p.age += dt;
@@ -6828,15 +6842,12 @@
       hy = p.y * dpr;
       tx = hx - dir.x * lengthPx;
       ty = hy - dir.y * lengthPx;
-
       lifeFade = 1;
       if (p.age < 0.18) lifeFade = p.age / 0.18;
       else if (p.age > p.life - 0.28) lifeFade = Math.max(0, (p.life - p.age) / 0.28);
-
       /* opt60: subtle (k=0) … thick bright near-opaque (k=1); gradient falloff kept */
       maxA = Math.min(1, 0.35 + 0.65 * windVisK + speedKmh / 200) * lifeFade;
       if (maxA < 0.02) continue;
-
       lwCss = 0.7 + 2.5 * windVisK * windVisK + Math.min(0.8, speedKmh / 60) * (0.4 + 0.6 * windVisK);
       if (windVisK > 0.5) {
         /* dark halo under the streak so it pops on bright clouds / light basemaps */
@@ -6847,7 +6858,6 @@
         windCtx.lineTo(hx, hy);
         windCtx.stroke();
       }
-
       try {
         grad = windCtx.createLinearGradient(tx, ty, hx, hy);
         grad.addColorStop(0, "rgba(235,245,255,0)");
@@ -6864,7 +6874,6 @@
       windCtx.stroke();
     }
   }
-
   /* debug/verify hook (read-only) */
   window.__sunnyWind = function () {
     return {
@@ -6878,7 +6887,6 @@
       view: windViewCss()
     };
   };
-
   function onWindToggleChange() {
     var on = !!(toggleWind && toggleWind.checked);
     saveSetting(WIND_KEY, on ? "1" : "0");
@@ -6893,7 +6901,6 @@
       });
     }
   }
-
   function bootWindIfNeeded() {
     if (!windOn) return;
     if (toggleWind) toggleWind.checked = true;
@@ -6955,7 +6962,7 @@
     } catch (eLab) {}
   }
   function radarTileUrl(host, path) {
-    return window.SunnyRadar.tileUrl(host, path); /* opt65: ECCC GeoMet North American composite */
+    return window.SunnyRadar.tileUrl(host, path); /* opt67: IEM NEXRAD n0q composite */
   }
   function pickRadarFrame(data) {
     var past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past : [];
@@ -7229,20 +7236,17 @@
     var el = radarPlayLayerEl();
     return el ? el.querySelector(".radar-play-canvas") : null;
   }
-
   function radarTileZ() {
     /* 256-px tiles: MapLibre zoom z (512-px) ≈ tile zoom z+1; composite resolution cap */
     var z = Math.round((map ? map.getZoom() : 3) + 1);
     return Math.max(0, Math.min(window.SunnyRadar.MAX_ZOOM, z));
   }
-
   function radarCompKey(i) {
     var fr = radarPast[clampRadarIndex(i)];
     if (!fr || !fr.path || !radarHost) return null;
     var box = roundPlayBbox(mapBbox3857());
     return fr.path + "|" + radarTileZ() + "|" + box.minx + "," + box.miny + "," + box.maxx + "," + box.maxy;
   }
-
   function radarCompTouch(key) {
     var k = radarCompOrder.indexOf(key);
     if (k >= 0) radarCompOrder.splice(k, 1);
@@ -7252,7 +7256,6 @@
       delete radarComp[drop];
     }
   }
-
   function radarComposite(i, build) {
     var key = radarCompKey(i);
     if (!key) return null;
@@ -7283,7 +7286,7 @@
     radarComp[key] = rec;
     radarCompTouch(key);
     if (!ctx) { rec.done = true; return rec; }
-    /* opt65: one WMS GetMap covers the whole view (ECCC GeoMet), drawn to the canvas */
+    /* opt65: one WMS GetMap covers the whole view (IEM NEXRAD), drawn to the canvas */
     rec.total = 1;
     var img = new Image();
     img.crossOrigin = "anonymous";
@@ -7302,7 +7305,6 @@
     img.src = window.SunnyRadar.viewUrl(fr.path, box, cw, ch);
     return rec;
   }
-
   function radarCompPeek(i) {
     return radarComposite(i, false);
   }
@@ -7351,7 +7353,6 @@
       return steeringPriorUv(Number(a.time) * 1000, Number(b.time) * 1000);
     }
   };
-
   function radarTweenLayer() {
     var T = tweenApi();
     if (!T) return null;
@@ -7370,7 +7371,6 @@
     }
     return radarTween;
   }
-
   function showRadarCanvas() {
     var el = radarPlayLayerEl();
     if (!el) return;
@@ -7381,7 +7381,6 @@
       try { if (map.getLayer(RADAR_LAYER)) map.setLayoutProperty(RADAR_LAYER, "visibility", "none"); } catch (eV) {}
     }
   }
-
   function hideRadarCanvas(restore) {
     var el = document.getElementById("radar-play-layer");
     if (el) el.style.display = "none";
@@ -7411,7 +7410,6 @@
     if (radarCanvasOn) hideRadarCanvas(false);
     return false;
   }
-
   function setRadarFrame(i) {
     if (!radarOn()) return Promise.resolve(false);
     if (!radarPast.length || !radarHost) {
@@ -7422,7 +7420,6 @@
     }
     return Promise.resolve(applyRadarFrameAt(i));
   }
-
   function fetchAndApplyRadar(opts) {
     opts = opts || {};
     if (!radarOn() || !map) return Promise.resolve(false);
@@ -7482,12 +7479,10 @@
     }
     return window.SunnyRadar.fetchManifest().then(onRadarManifest).catch(onRadarFail);
   }
-
   function overlayXfadeEase(t) {
     t = Math.max(0, Math.min(1, t));
     return t * t * (3 - 2 * t);
   }
-
   function getLayerRasterOpacity(layerId) {
     if (!map || !map.getLayer(layerId)) return 0;
     try {
@@ -8609,6 +8604,10 @@
     });
   });
 
+  function pointSkip() {
+    return waitingForTap;
+  }
+  if (window.SunnyPoint) window.SunnyPoint.attach(map, pointSkip); /* opt67: tap for point forecast */
   map.on("click", function (e) {
     if (!waitingForTap) return;
     saveLastLocate(e.lngLat.lat, e.lngLat.lng);
@@ -9057,6 +9056,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt66").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt67").then(startSunny).catch(onMapToolkitFail);
   }
 })();
