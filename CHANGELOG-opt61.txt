@@ -1,0 +1,16 @@
+SUNNY opt61 - "A new update is ready" banner
+
+- update-banner.js (new, own file): checks version.json (cache: no-store plus ?t= timestamp)
+  on load, every 3 minutes, and when the tab becomes visible again. The running build is read
+  from its own script tag (?v=optNN). If version.json names a different build, a banner at the
+  top centre reads "A new update is ready" with an UPDATE button and a dismiss button.
+  It shows on every screen. UPDATE: asks a waiting service worker to take over (SKIP_WAITING),
+  clears old sunny-* caches, then reloads to the bare URL. If a new worker takes over, the
+  existing app.js controllerchange handler does the one reload; the banner does not add another.
+- sw.js: version.json is always fetched from the network and never cached. Added a
+  SKIP_WAITING message handler.
+- version.json at the site root: {"build":"optNN","hash":"<12-char hash of the main files>"}.
+
+EVERY FUTURE DEPLOY MUST: bump ?v=optNN and CACHE in sw.js, then run
+  node tools/write-version.js
+and commit the new version.json. Without that step, users never see the banner.

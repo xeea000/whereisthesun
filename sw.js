@@ -1,14 +1,15 @@
 /* SUNNY service worker — network-first shell so deploys stick; beach data network-first. */
-var CACHE = "sunny-v-opt60";
+var CACHE = "sunny-v-opt61";
 /* opt60: network-first shell; bare URL always latest. Precache shell only. */
 var PRECACHE = [
   "./",
   "index.html",
-  "styles.css?v=opt60",
-  "frame-tween.js?v=opt60",
-  "app.js?v=opt60",
-  "vendor/maplibre-gl.js?v=opt60",
-  "vendor/maplibre-gl.slim.css?v=opt60",
+  "styles.css?v=opt61",
+  "frame-tween.js?v=opt61",
+  "app.js?v=opt61",
+  "update-banner.js?v=opt61",
+  "vendor/maplibre-gl.js?v=opt61",
+  "vendor/maplibre-gl.slim.css?v=opt61",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png"
@@ -90,8 +91,20 @@ self.addEventListener("fetch", function (event) {
   var req = event.request;
   if (req.method !== "GET") return;
   var url = req.url;
+  /* opt61: version.json is the update signal — always network, never cached. */
+  try {
+    if (new URL(url).pathname.slice(-13) === "/version.json") {
+      event.respondWith(fetch(req, { cache: "no-store" }));
+      return;
+    }
+  } catch (eVer) {}
 
   if (isDataRequest(url) || isShellRequest(url)) {
     event.respondWith(networkFirst(req));
   }
+});
+
+/* opt61: the update banner asks a waiting worker to take over now. */
+self.addEventListener("message", function (event) {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
