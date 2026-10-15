@@ -32,13 +32,11 @@
   <link rel="dns-prefetch" href="https://tiles.openfreemap.org">
   <link rel="preconnect" href="https://mesonet.agron.iastate.edu" crossorigin>
   <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
-  <link rel="preconnect" href="https://api.rainviewer.com" crossorigin>
-  <link rel="dns-prefetch" href="https://api.rainviewer.com">
-  <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
-  <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt64">
-  <link rel="stylesheet" href="styles.css?v=opt64">
-  <link rel="stylesheet" href="settings-panel.css?v=opt64">
+  <link rel="preconnect" href="https://geo.weather.gc.ca" crossorigin>
+  <link rel="dns-prefetch" href="https://geo.weather.gc.ca">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt65">
+  <link rel="stylesheet" href="styles.css?v=opt65">
+  <link rel="stylesheet" href="settings-panel.css?v=opt65">
 </head>
 <body>
   <div id="map"></div>
@@ -204,12 +202,13 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt64"></script>
-  <script defer src="cloud-key.js?v=opt64"></script>
-  <script defer src="play-handoff.js?v=opt64"></script>
-  <script defer src="frame-tween.js?v=opt64"></script>
-  <script defer src="app.js?v=opt64"></script>
-  <script defer src="update-banner.js?v=opt64"></script>
-  <script defer src="settings-panel.js?v=opt64"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt65"></script>
+  <script defer src="cloud-key.js?v=opt65"></script>
+  <script defer src="play-handoff.js?v=opt65"></script>
+  <script defer src="radar-source.js?v=opt65"></script>
+  <script defer src="frame-tween.js?v=opt65"></script>
+  <script defer src="app.js?v=opt65"></script>
+  <script defer src="update-banner.js?v=opt65"></script>
+  <script defer src="settings-panel.js?v=opt65"></script>
 </body>
 </html>

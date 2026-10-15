@@ -344,14 +344,14 @@
       if (msg.indexOf("Not Found") !== -1) return;
       if (/\b404\b/.test(blob)) return;
       if (/gibs\.earthdata\.nasa\.gov/i.test(blob)) return;
-      if (/tilecache\.rainviewer\.com/i.test(blob)) return;
+      if (/geo\.weather\.gc\.ca/i.test(blob)) return;
       if (/AjaxError|ImageError|source.*error/i.test(blob) && /\.png|wmts|tile/i.test(blob)) return;
     } catch (eIgn) {}
   });
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.addControl(
-    new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> · free tiles' }),
+    new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · ECCC GeoMet radar · free tiles' }),
     "bottom-right"
   );
 
@@ -2620,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt64", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt65", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3113,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt64";
+      link.href = "motion-worker.js?v=opt65";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4403,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt64");
+      beachWorker = new Worker("beach-worker.js?v=opt65");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6910,9 +6910,6 @@
   var RADAR_LAYER = "radar";
   var RADAR_OPACITY = 0.7;
   var RADAR_REFRESH_MS = 6 * 60 * 1000; /* ~6 min while Radar on + tab visible + not playing */
-  var RADAR_COLOR = 2; /* Universal Blue — readable on dark + light basemaps */
-  var RADAR_OPTS = "1_1"; /* smoothed + snow */
-  var RADAR_MANIFEST_URL = "https://api.rainviewer.com/public/weather-maps.json";
   var RADAR_PLAY_DWELL_MS = PLAY_PACE_MS; /* opt37: shared pace with clouds */
   var radarRefreshTimer = null;
   var radarFetchGen = 0;
@@ -6962,7 +6959,7 @@
   }
 
   function radarTileUrl(host, path) {
-    return String(host) + String(path) + "/256/{z}/{x}/{y}/" + RADAR_COLOR + "/" + RADAR_OPTS + ".png";
+    return window.SunnyRadar.tileUrl(host, path); /* opt65: ECCC GeoMet North American composite */
   }
 
   function pickRadarFrame(data) {
@@ -7122,9 +7119,10 @@
         type: "raster",
         tiles: [url],
         tileSize: 256,
-        maxzoom: 7, /* RainViewer native max; MapLibre overzooms beyond */
-        attribution: '<a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a>'
+        maxzoom: window.SunnyRadar.MAX_ZOOM, /* 1 km composite; MapLibre overzooms beyond */
+        attribution: window.SunnyRadar.ATTRIB
       });
+      window.SunnyRadar.attach(map);
     } else {
       var src = map.getSource(RADAR_SRC);
       if (src && typeof src.setTiles === "function") {
@@ -7253,9 +7251,9 @@
   }
 
   function radarTileZ() {
-    /* 256-px tiles: MapLibre zoom z (512-px) ≈ tile zoom z+1; RainViewer native max 7 */
+    /* 256-px tiles: MapLibre zoom z (512-px) ≈ tile zoom z+1; composite resolution cap */
     var z = Math.round((map ? map.getZoom() : 3) + 1);
-    return Math.max(0, Math.min(7, z));
+    return Math.max(0, Math.min(window.SunnyRadar.MAX_ZOOM, z));
   }
 
   function radarCompKey(i) {
@@ -7305,35 +7303,23 @@
     radarComp[key] = rec;
     radarCompTouch(key);
     if (!ctx) { rec.done = true; return rec; }
-    var tpl = radarTileUrl(radarHost, fr.path);
-    var list = [];
-    for (var ty = ty0; ty <= ty1; ty++) {
-      for (var tx = tx0; tx <= tx1; tx++) list.push([tx, ty]);
+    /* opt65: one WMS GetMap covers the whole view (ECCC GeoMet), drawn to the canvas */
+    rec.total = 1;
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    function onViewLoad() {
+      try { ctx.drawImage(img, 0, 0, cw, ch); } catch (eD) {}
+      rec.loaded++;
+      rec.done = true;
+      try { if (radarCanvasOn || playAnimating) paintContinuousRadar(); } catch (eP) {}
     }
-    rec.total = list.length;
-    function settle() {
-      if (rec.loaded + rec.failed >= rec.total) {
-        rec.done = true;
-        try { if (radarCanvasOn || playAnimating) paintContinuousRadar(); } catch (eP) {}
-      }
+    function onViewError() {
+      rec.failed++;
+      rec.done = true;
     }
-    list.forEach(function (t) {
-      var img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = function () {
-        var wx = ((t[0] % n) + n) % n;
-        var dx = (t[0] * tileM - W / 2 - box.minx) / pxM * sc;
-        var dy = (W / 2 - t[1] * tileM - box.maxy) / -pxM * sc;
-        var ds = 256 * sc;
-        try { ctx.drawImage(img, dx, dy, ds, ds); } catch (eD) {}
-        rec.loaded++;
-        settle();
-      };
-      img.onerror = function () { rec.failed++; settle(); };
-      var x = ((t[0] % n) + n) % n;
-      img.src = tpl.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(t[1]));
-    });
-    if (!list.length) rec.done = true;
+    img.onload = onViewLoad;
+    img.onerror = onViewError;
+    img.src = window.SunnyRadar.viewUrl(fr.path, box, cw, ch);
     return rec;
   }
 
@@ -7375,7 +7361,7 @@
         motion: TWEEN_MOTION,
         estimator: sharedTweenEstimator(),
         source: radarTweenSource,
-        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS, cloudKey: true }
+        renderer: { maxSide: PLAY_CANVAS_MAX_SIDE, maxPixels: PLAY_CANVAS_MAX_PIXELS }
       });
       exposeTweenDebug();
     }
@@ -7440,10 +7426,7 @@
     opts = opts || {};
     if (!radarOn() || !map) return Promise.resolve(false);
     var gen = ++radarFetchGen;
-    return fetch(RADAR_MANIFEST_URL, { cache: "no-store" }).then(function (res) {
-      if (!res.ok) throw new Error("radar manifest");
-      return res.json();
-    }).then(function (data) {
+    function onRadarManifest(data) {
       if (gen !== radarFetchGen || !radarOn()) return false;
       var past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past.slice() : [];
       if (!past.length || !data.host) throw new Error("radar frame");
@@ -7487,14 +7470,16 @@
       ensureRadarLayer(radarTileUrl(data.host, frame.path), { fadeMs: 0 });
       syncRadarTimelineUi();
       return true;
-    }).catch(function () {
+    }
+    function onRadarFail() {
       if (!opts.quiet && statusEl && radarOn()) {
         try {
           statusEl.textContent = "Radar unavailable right now.";
         } catch (eSt) {}
       }
       return false;
-    });
+    }
+    return window.SunnyRadar.fetchManifest().then(onRadarManifest).catch(onRadarFail);
   }
 
   function overlayXfadeEase(t) {
@@ -9073,6 +9058,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt64").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt65").then(startSunny).catch(onMapToolkitFail);
   }
 })();

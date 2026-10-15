@@ -1,0 +1,15 @@
+SUNNY opt65 - radar from one seamless North American composite, honest coverage
+
+- radar-source.js (new): radar now comes from Environment and Climate Change Canada
+  MSC GeoMet, layer RADAR_1KM_RRAI (precipitation rate, 1 km, every 6 minutes, last 3 hours).
+  It is one composite of Canadian radars and US NEXRAD, so there is one colour scale and no
+  seam at the border. RainViewer is no longer used (its smoothed Canadian data drew puffy
+  circular blobs).
+- Areas no radar reaches are shown with GeoMet's coverage layer (RADAR_COVERAGE_RRAI.INV,
+  hatch style) at 45% opacity while Radar is selected, so a range edge never looks clear.
+- Play composite: one WMS GetMap per frame for the whole view instead of up to 64 tiles.
+- Fix (regression from opt63): the radar Play renderer had the cloud-only key switched on,
+  which erased coloured radar during Play. Only the clouds renderer uses it now.
+- Attribution: "Radar: ECCC MSC GeoMet (incl. NOAA NEXRAD), OGL-Canada"
+  (Open Government Licence - Canada).
+- Future deploys: run node tools/write-version.js (unchanged rule).
