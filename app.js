@@ -9076,12 +9076,13 @@
 
   } /* end startSunny */
 
+  function onMapToolkitFail() {
+    var st = document.getElementById("status");
+    if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
+  }
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt61").then(startSunny).catch(function () {
-      var st = document.getElementById("status");
-      if (st) st.textContent = "Map toolkit failed to load. Try a refresh.";
-    });
+    loadScript("vendor/maplibre-gl.js?v=opt61").then(startSunny).catch(onMapToolkitFail);
   }
 })();

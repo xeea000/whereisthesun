@@ -1119,7 +1119,6 @@ label.ov.is-radar-muted {
 label.ov.is-radar-muted {
   cursor: not-allowed;
 }
-
 /* opt61: "A new update is ready" banner (update-banner.js). Top centre, clear of the timeline. */
 .update-banner {
   position: fixed;

@@ -103,8 +103,8 @@ self.addEventListener("fetch", function (event) {
     event.respondWith(networkFirst(req));
   }
 });
-
 /* opt61: the update banner asks a waiting worker to take over now. */
-self.addEventListener("message", function (event) {
+function onSwMessage(event) {
   if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
-});
+}
+self.addEventListener("message", onSwMessage);
