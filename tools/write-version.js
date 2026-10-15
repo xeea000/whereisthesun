@@ -9,7 +9,7 @@ var crypto = require("crypto");
 var root = path.join(__dirname, "..");
 var FILES = [
   "index.html", "app.js", "frame-tween.js", "motion-worker.js",
-  "beach-worker.js", "update-banner.js", "styles.css", "sw.js"
+  "beach-worker.js", "update-banner.js", "settings-panel.js", "settings-panel.css", "styles.css", "sw.js"
 ];
 var sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
 var match = sw.match(/CACHE\s*=\s*"sunny-v-([^"]+)"/);

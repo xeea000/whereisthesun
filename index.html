@@ -36,8 +36,9 @@
   <link rel="dns-prefetch" href="https://api.rainviewer.com">
   <link rel="preconnect" href="https://tilecache.rainviewer.com" crossorigin>
   <link rel="dns-prefetch" href="https://tilecache.rainviewer.com">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt61">
-  <link rel="stylesheet" href="styles.css?v=opt61">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt62">
+  <link rel="stylesheet" href="styles.css?v=opt62">
+  <link rel="stylesheet" href="settings-panel.css?v=opt62">
 </head>
 <body>
   <div id="map"></div>
@@ -57,8 +58,49 @@
   <div class="hud">
     <p id="status" class="status">Finding you… Clouds sit lightly on the map so land stays visible.</p>
   </div>
+  <!-- opt62: calm bar. Essentials only: Play, playhead, Clouds|Radar, Settings. Everything else lives in #settings-pop. -->
   <div class="timeline">
     <div class="transport-row">
+      <button id="btn-play" class="tbtn tbtn-play play" type="button" aria-label="Play cloud animation" aria-pressed="false" title="Play">
+        <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+          <path d="M8.2 5.6v12.8l11-6.4z" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="track-wrap">
+        <span class="now-mark">NOW</span>
+        <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
+        <div id="playhead-thumb" class="playhead-thumb" aria-hidden="true"></div>
+        <div id="loop-splitter" class="loop-splitter" role="slider" aria-label="Loop start" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"></div>
+        <div id="time-ticks" class="time-ticks" aria-hidden="true"></div>
+      </div>
+      <span id="time-label">Clouds</span>
+      <div class="ov overlay-mode" role="group" aria-label="Overlay">
+        <div class="seg" id="overlay-seg">
+          <button type="button" class="seg-btn is-on" data-overlay="clouds" aria-pressed="true">Clouds</button>
+          <button type="button" class="seg-btn" data-overlay="radar" aria-pressed="false">Radar</button>
+        </div>
+      </div>
+      <button id="btn-settings" class="tbtn tbtn-settings" type="button" aria-label="Settings" title="Settings" aria-expanded="false" aria-controls="settings-pop">
+          <svg class="tbtn-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h11M20 17h-1" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+            <circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            <circle cx="18" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.75"/>
+          </svg>
+      </button>
+      <select id="play-speed" class="sr-only" tabindex="-1" aria-hidden="true">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+        <option value="3">3x</option>
+      </select>
+    </div>
+  </div>
+  <div id="settings-pop" class="settings-pop" role="dialog" aria-label="Settings" hidden>
+    <section class="set-group">
+      <h3 class="set-title">Playback</h3>
+      <div class="set-row"><span class="set-lab">Speed</span>
       <div class="speed-wrap">
         <button id="btn-speed" class="tbtn tbtn-speed" type="button" title="Speed 1x" aria-label="Speed 1x" aria-expanded="false" aria-haspopup="listbox" aria-controls="speed-menu">
           <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
@@ -74,6 +116,8 @@
           <button type="button" class="speed-opt" role="option" data-speed="3" aria-selected="false">3x</button>
         </div>
       </div>
+      </div>
+      <div class="set-row"><span class="set-lab">Loop</span>
       <label class="tbtn tbtn-loop" id="loop-btn" title="Loop on" aria-pressed="true">
         <input id="toggle-loop" type="checkbox" checked class="sr-only">
         <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
@@ -83,86 +127,72 @@
           <path d="M16.5 18.8v-4.1h-4.1" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </label>
-      <button id="btn-play" class="tbtn tbtn-play play" type="button" aria-label="Play cloud animation" aria-pressed="false" title="Play">
-        <svg class="tbtn-ico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-          <path d="M8.2 5.6v12.8l11-6.4z" fill="currentColor"/>
-        </svg>
-      </button>
-      <div class="track-wrap">
-        <span class="now-mark">NOW</span>
-        <input id="time-slider" type="range" min="0" max="0" value="0" step="1">
-        <div id="playhead-thumb" class="playhead-thumb" aria-hidden="true"></div>
-        <div id="loop-splitter" class="loop-splitter" role="slider" aria-label="Loop start" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"></div>
-        <div id="time-ticks" class="time-ticks" aria-hidden="true"></div>
       </div>
-      <span id="time-label">Clouds</span>
-      <select id="play-speed" class="sr-only" tabindex="-1" aria-hidden="true">
-        <option value="0.5">0.5x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.5">1.5x</option>
-        <option value="2">2x</option>
-        <option value="3">3x</option>
-      </select>
-    </div>
-    <div class="layer-row">
-      <div class="ov overlay-mode" role="group" aria-label="Overlay">
-        <span class="basemap-label">Overlay</span>
-        <div class="seg" id="overlay-seg">
-          <button type="button" class="seg-btn is-on" data-overlay="clouds" aria-pressed="true">Clouds</button>
-          <button type="button" class="seg-btn" data-overlay="radar" aria-pressed="false">Radar</button>
-        </div>
-      </div>
-      <label class="ov switch" title="Wind particles from Open-Meteo (free)">
-        <input id="toggle-wind" type="checkbox">
-        <span class="knob" aria-hidden="true"></span>
-        Wind
-      </label>
-      <label class="ov wind-vis-opt" title="Wind line visibility — subtle to very obvious">
-        <span class="wind-vis-lab">Lines</span>
-        <input id="wind-vis" type="range" min="0" max="100" step="1" value="60" aria-label="Wind line visibility">
-      </label>
-      <div class="ov range-mode" role="group" aria-label="Timeline range">
+      <div class="set-row"><span class="set-lab">Time span</span>
+        <div class="ov range-mode" role="group" aria-label="Timeline range">
         <div class="seg" id="range-seg">
           <button type="button" class="seg-btn is-on" data-range="24" aria-pressed="true">24h</button>
           <button type="button" class="seg-btn" data-range="12" aria-pressed="false">12h</button>
           <button type="button" class="seg-btn" data-range="6" aria-pressed="false">6h</button>
         </div>
+        </div>
       </div>
-      <label class="ov opacity-opt" id="cloud-opacity-label">Clouds
-        <input id="cloud-opacity" type="range" min="0" max="100" value="90" step="1">
-      </label>
-    </div>
-    <div class="map-row">
-      <div class="ov basemap" role="group" aria-label="Map style">
-        <span class="basemap-label">Map</span>
+    </section>
+    <section class="set-group">
+      <h3 class="set-title">Layers</h3>
+      <div class="set-row">
+        <label class="ov opacity-opt" id="cloud-opacity-label"><span class="set-lab">Clouds</span>
+          <input id="cloud-opacity" type="range" min="0" max="100" value="90" step="1">
+        </label>
+      </div>
+      <div class="set-row">
+        <label class="ov switch" title="Wind particles from Open-Meteo (free)">
+          <input id="toggle-wind" type="checkbox">
+          <span class="knob" aria-hidden="true"></span>
+          Wind
+        </label>
+        <label class="ov wind-vis-opt" title="How easy the wind lines are to see">
+          <span class="wind-vis-lab">Lines</span>
+          <input id="wind-vis" type="range" min="0" max="100" step="1" value="60" aria-label="Wind line visibility">
+        </label>
+      </div>
+    </section>
+    <section class="set-group">
+      <h3 class="set-title">Map</h3>
+      <div class="set-row">
+        <div class="ov basemap" role="group" aria-label="Map style">
         <div class="seg" id="basemap-seg">
           <button type="button" class="seg-btn is-on" data-basemap="roads" aria-pressed="true">Roads</button>
           <button type="button" class="seg-btn" data-basemap="satellite" aria-pressed="false">Satellite</button>
           <button type="button" class="seg-btn" data-basemap="dark" aria-pressed="false">Dark</button>
         </div>
+        </div>
       </div>
-      <label class="ov switch">
-        <input id="toggle-map" type="checkbox">
-        <span class="knob" aria-hidden="true"></span>
-        Labels
-      </label>
-      <label class="ov switch">
-        <input id="toggle-intl" type="checkbox">
-        <span class="knob" aria-hidden="true"></span>
-        International
-      </label>
-    </div>
+      <div class="set-row">
+        <label class="ov switch"><input id="toggle-map" type="checkbox"><span class="knob" aria-hidden="true"></span>Labels</label>
+        <label class="ov switch"><input id="toggle-intl" type="checkbox"><span class="knob" aria-hidden="true"></span>International</label>
+      </div>
+    </section>
+    <section class="set-group">
+      <h3 class="set-title">Beaches</h3>
+      <div class="set-row">
+        <button id="btn-all" class="ctrl set-btn" type="button" aria-pressed="false">All beaches</button>
+        <label class="sun-opt"><input id="toggle-sunny" type="checkbox" checked> Sunny only</label>
+      </div>
+    </section>
   </div>
   <div class="controls">
-    <button id="btn-locate" class="ctrl" type="button">Locate me</button>
-    <button id="btn-all" class="ctrl" type="button" aria-pressed="false">All beaches</button>
-    <div class="sun-stack">
-      <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled>
-        <span class="beach-emoji" aria-hidden="true">🏖️</span>
-        <span class="ctrl-label">Find Nearest Beaches</span>
-      </button>
-      <label class="sun-opt"><input id="toggle-sunny" type="checkbox" checked> Sunny</label>
-    </div>
+    <button id="btn-locate" class="ctrl ctrl-icon" type="button" aria-label="Locate me" title="Locate me">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="3.2" fill="currentColor"/>
+        <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.75"/>
+        <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled title="Find nearest beaches">
+      <span class="beach-emoji" aria-hidden="true">🏖️</span>
+      <span class="ctrl-label">Beaches</span>
+    </button>
   </div>
   <aside id="sunny-sheet" class="sunny-panel" hidden aria-labelledby="sunny-sheet-title">
     <div class="sunny-panel-head">
@@ -174,9 +204,10 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt61"></script>
-  <script defer src="frame-tween.js?v=opt61"></script>
-  <script defer src="app.js?v=opt61"></script>
-  <script defer src="update-banner.js?v=opt61"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt62"></script>
+  <script defer src="frame-tween.js?v=opt62"></script>
+  <script defer src="app.js?v=opt62"></script>
+  <script defer src="update-banner.js?v=opt62"></script>
+  <script defer src="settings-panel.js?v=opt62"></script>
 </body>
 </html>

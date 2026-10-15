@@ -1,0 +1,121 @@
+/* workspace/whereisthesun/settings-panel.css */
+/* opt62: calm bottom bar (Play, playhead, Clouds|Radar, Settings) and one Settings popover. */
+.timeline {
+  right: auto;
+  width: min(40rem, calc(100vw - 200px));
+  padding: 8px 10px;
+  gap: 0;
+  border-color: rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(18, 20, 23, 0.72);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+.timeline .transport-row { gap: 10px; flex-wrap: nowrap; }
+.timeline .tbtn { border: 0; border-radius: 50%; }
+.timeline .tbtn-play { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+.tbtn-settings { background: transparent; }
+.tbtn-settings[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
+.timeline .ov.overlay-mode { flex: 0 0 auto; }
+.timeline #time-label { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+.seg { border-color: rgba(255, 255, 255, 0.1); }
+.settings-pop {
+  position: fixed;
+  z-index: 35;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 66px);
+  width: min(21rem, calc(100vw - 24px));
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 6px 16px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(18, 20, 23, 0.82);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font: 500 0.86rem/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+.settings-pop[hidden] { display: none; }
+body.settings-open .update-banner { display: none; }
+.set-group { padding: 10px 0; }
+.set-group + .set-group { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.set-title {
+  margin: 0 0 6px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+}
+.set-lab { flex: 0 0 auto; }
+.settings-pop .ov { margin: 0; padding: 0; border: 0; background: transparent; }
+.settings-pop .opacity-opt,
+.settings-pop .wind-vis-opt { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; }
+.settings-pop input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--sun); }
+.settings-pop .speed-wrap { position: static; }
+.settings-pop #btn-speed { display: none; }
+.settings-pop .speed-menu,
+.settings-pop .speed-menu[hidden] {
+  position: static;
+  transform: none;
+  display: flex !important;
+  flex-direction: row;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: none;
+}
+.settings-pop .speed-opt { min-height: 32px; padding: 0 8px; }
+.settings-pop .tbtn-loop { border: 0; border-radius: 50%; }
+.settings-pop .set-btn { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 0.82rem; }
+.settings-pop .sun-opt { border: 0; background: transparent; padding: 0; font-size: 0.86rem; }
+/* Compact controls on the right: Locate me icon and a small Beaches pill. */
+.controls { flex-direction: row; align-items: center; gap: 8px; }
+.ctrl { min-height: 44px; border-color: rgba(255, 255, 255, 0.08); }
+.ctrl-icon { width: 44px; padding: 0; border-radius: 50%; }
+.ctrl-sun {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  flex-direction: row;
+  gap: 6px;
+  border-radius: 22px;
+}
+.ctrl-sun .beach-emoji { font-size: 22px; filter: none; }
+.ctrl-sun .ctrl-label { font-size: 0.86rem; max-width: none; }
+@media (max-width: 640px) {
+  .timeline {
+    top: auto;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    max-width: none;
+    padding: 6px 8px;
+  }
+  .timeline .transport-row { gap: 8px; }
+  .timeline .tbtn,
+  .timeline .tbtn-play { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+  .timeline #time-label { display: none; }
+  .timeline .seg-btn { min-height: 34px; padding: 0 9px; }
+  .controls { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 64px); right: max(10px, env(safe-area-inset-right)); }
+  .ctrl,
+  .ctrl-sun { min-height: 40px; }
+  .ctrl-icon { width: 40px; }
+  .ctrl-sun .beach-emoji { font-size: 19px; }
+  .settings-pop { left: 10px; right: 10px; width: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 62px); }
+  .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 116px); max-width: calc(100vw - 24px); }
+}
