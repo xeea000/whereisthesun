@@ -2620,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt73", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt74", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3113,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt73";
+      link.href = "motion-worker.js?v=opt74";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4403,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt73");
+      beachWorker = new Worker("beach-worker.js?v=opt74");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -8600,6 +8600,7 @@
     return waitingForTap;
   }
   if (window.SunnyPoint) window.SunnyPoint.attach(map, pointSkip); /* opt67: tap for point forecast */
+  if (window.SunnyCraters) window.SunnyCraters.attach(map); /* opt74: impact craters (Settings, Sightseeing) */
   map.on("click", function (e) {
     if (!waitingForTap) return;
     saveLastLocate(e.lngLat.lat, e.lngLat.lng);
@@ -9048,6 +9049,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt73").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt74").then(startSunny).catch(onMapToolkitFail);
   }
 })();

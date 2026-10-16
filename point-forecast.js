@@ -6,7 +6,7 @@
 (function () {
   "use strict";
   var API = "https://api.open-meteo.com/v1/forecast";
-  var BEACH_LAYERS = ["beaches-fill", "beaches-line", "beaches-dot"];
+  var BEACH_LAYERS = ["beaches-fill", "beaches-line", "beaches-dot", "craters-fill", "craters-dot"];
   var US = /-US$/i.test((navigator.language || "") + "") || navigator.language === "en";
   var popup = null;
   var gen = 0;

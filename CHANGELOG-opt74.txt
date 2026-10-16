@@ -1,0 +1,2 @@
+opt74 - Sightseeing: Impact craters toggle (Settings). 191 confirmed impact structures at true size (geodesic circles) with a 6 px centre dot; tap for name, diameter, age.
+Data: Wikipedia "List of impact structures on Earth" (confirmed tables, retrieved 2026-10-16), CC BY-SA 4.0, compiled largely from the Earth Impact Database (PASSC). Coordinates missing from the list come from each crater's own Wikipedia article; 12 rows with no coordinates anywhere were left out.
