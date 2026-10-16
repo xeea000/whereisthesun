@@ -3143,7 +3143,6 @@
     if (!c) return false;
     return !!(c.saveData || c.type === "cellular" || /2g|3g/.test(c.effectiveType || ""));
   }
-
   function warmIdleGoesCache() {
     /* opt38: quiet 2–4 nearby GOES WMS into playImgCache while idle */
     if (tabHidden || playMode || mapGesturing || scrubbing || radarOn()) return;
