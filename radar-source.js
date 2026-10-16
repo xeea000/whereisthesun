@@ -27,7 +27,8 @@
   /* MapLibre tile template; also filled by fill() */
   function tileUrl(host, path) {
     void host;
-    return wmsUrl(path, "{bbox-epsg-3857}", 256, 256);
+    var u = wmsUrl(path, "{bbox-epsg-3857}", 256, 256);
+    return window.SunnyRadarKey ? window.SunnyRadarKey.tileUrl(u) : u; /* opt69: drop echoes under 20 dBZ */
   }
   function tileBbox(z, x, y) {
     var size = 2 * HALF / Math.pow(2, z);

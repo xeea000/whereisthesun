@@ -1,0 +1,1 @@
+opt69 - hide NEXRAD echoes under 20 dBZ (clear-air rings) on static tiles, Play frames and fallback (radar-key.js, IEM n0q palette). Legend starts at green.

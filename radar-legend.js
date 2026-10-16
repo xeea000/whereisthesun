@@ -1,11 +1,11 @@
 // workspace/whereisthesun/radar-legend.js
 /* SUNNY radar colour legend (opt67). A compact bar under the zoom buttons, shown only
  * while Radar is selected. Colours follow the NEXRAD n0q base reflectivity scale (dBZ),
- * with plain words underneath: light, moderate, heavy, hail. */
+ * starting at 20 dBZ (weaker echoes are hidden, opt69), with plain words underneath: light, moderate, heavy, hail. */
 (function () {
   "use strict";
   var el = null;
-  var GRADIENT = "linear-gradient(90deg,#04e9e7 0%,#019ff4 12%,#0300f4 22%,#02fd02 30%,#01c501 40%,#008e00 48%," +
+  var GRADIENT = "linear-gradient(90deg,#43d67e 0%,#11d118 12%,#01a501 26%,#097310 38%," +
     "#fdf802 56%,#e5bc00 63%,#fd9500 70%,#fd0000 78%,#d40000 84%,#bc0000 88%,#f800fd 94%,#9854c6 100%)";
   function build() {
     el = document.createElement("div");
