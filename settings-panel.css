@@ -148,3 +148,6 @@ body.settings-open .update-banner { display: none; }
 .pf-chart { display: block; margin-top: 6px; }
 .pf-chart text { font: 9px system-ui, sans-serif; fill: rgba(225, 232, 242, 0.7); }
 .pf-src { margin-top: 2px; font-size: 10px; color: rgba(225, 232, 242, 0.55); }
+/* opt68: wind fades out while Play runs (wind-play-fade.js) */
+#wind-layer { transition: opacity 300ms linear; }
+#wind-layer.wind-play-hidden { opacity: 0 !important; transition: opacity 300ms linear !important; }

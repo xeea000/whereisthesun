@@ -1,0 +1,1 @@
+opt68 - wind fades out (300 ms) while Play runs and back in on Pause/Stop; Wind off is unchanged.
