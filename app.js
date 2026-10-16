@@ -5938,7 +5938,6 @@
   function sunnyModeOn() {
     return !toggleSunny || toggleSunny.checked;
   }
-
   /* opt75: no location yet, so search around the map centre instead of doing nothing */
   function beachesAtMapCentre() {
     var c = map.getCenter();
