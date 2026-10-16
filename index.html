@@ -34,10 +34,10 @@
   <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
   <link rel="preconnect" href="https://geo.weather.gc.ca" crossorigin>
   <link rel="dns-prefetch" href="https://geo.weather.gc.ca">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt75">
-  <link rel="stylesheet" href="styles.css?v=opt75">
-  <link rel="stylesheet" href="settings-panel.css?v=opt75">
-  <link rel="stylesheet" href="side-buttons.css?v=opt75">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt76">
+  <link rel="stylesheet" href="styles.css?v=opt76">
+  <link rel="stylesheet" href="settings-panel.css?v=opt76">
+  <link rel="stylesheet" href="side-buttons.css?v=opt76">
 </head>
 <body>
   <div id="map"></div>
@@ -183,6 +183,7 @@
       <h3 class="set-title">Sightseeing</h3>
       <div class="set-row">
         <label class="ov switch" title="Confirmed meteorite impact structures, drawn at true size"><input id="toggle-craters" type="checkbox"><span class="knob" aria-hidden="true"></span>Impact craters</label>
+        <label class="ov switch" title="Data used this session and download rate"><input id="toggle-data-meter" type="checkbox" checked><span class="knob" aria-hidden="true"></span>Data usage</label>
       </div>
     </section>
   </div>
@@ -217,24 +218,25 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt75"></script>
-  <script defer src="cloud-key.js?v=opt75"></script>
-  <script defer src="play-handoff.js?v=opt75"></script>
-  <script defer src="radar-key.js?v=opt75"></script>
-  <script defer src="radar-source.js?v=opt75"></script>
-  <script defer src="radar-warm.js?v=opt75"></script>
-  <script defer src="radar-mask.js?v=opt75"></script>
-  <script defer src="radar-legend.js?v=opt75"></script>
-  <script defer src="wind-field.js?v=opt75"></script>
-  <script defer src="wind-gl.js?v=opt75"></script>
-  <script defer src="point-forecast.js?v=opt75"></script>
-  <script defer src="craters.js?v=opt75"></script>
-  <script defer src="crown-land.js?v=opt75"></script>
-  <script defer src="side-buttons.js?v=opt75"></script>
-  <script defer src="wind-play-fade.js?v=opt75"></script>
-  <script defer src="frame-tween.js?v=opt75"></script>
-  <script defer src="app.js?v=opt75"></script>
-  <script defer src="update-banner.js?v=opt75"></script>
-  <script defer src="settings-panel.js?v=opt75"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt76"></script>
+  <script defer src="cloud-key.js?v=opt76"></script>
+  <script defer src="play-handoff.js?v=opt76"></script>
+  <script defer src="radar-key.js?v=opt76"></script>
+  <script defer src="radar-source.js?v=opt76"></script>
+  <script defer src="radar-warm.js?v=opt76"></script>
+  <script defer src="radar-mask.js?v=opt76"></script>
+  <script defer src="radar-legend.js?v=opt76"></script>
+  <script defer src="wind-field.js?v=opt76"></script>
+  <script defer src="wind-gl.js?v=opt76"></script>
+  <script defer src="point-forecast.js?v=opt76"></script>
+  <script defer src="craters.js?v=opt76"></script>
+  <script defer src="crown-land.js?v=opt76"></script>
+  <script defer src="side-buttons.js?v=opt76"></script>
+  <script defer src="wind-play-fade.js?v=opt76"></script>
+  <script defer src="frame-tween.js?v=opt76"></script>
+  <script defer src="app.js?v=opt76"></script>
+  <script defer src="update-banner.js?v=opt76"></script>
+  <script defer src="settings-panel.js?v=opt76"></script>
+  <script defer src="data-meter.js?v=opt76"></script>
 </body>
 </html>

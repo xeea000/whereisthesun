@@ -1,0 +1,1 @@
+opt76: data meter (on by default, top-right, Settings > Data usage); skip background frame warming on cellular/Save-Data.

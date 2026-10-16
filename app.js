@@ -1800,6 +1800,7 @@
        fill without starving the live advance / prefetch. */
     cancelPlayTimelineWarm();
     if (!playMode || tabHidden || playUseOpenMeteo || !cloudTimes.length) return;
+    if (lowDataLink()) return; /* opt76: cellular / Save-Data: no whole-timeline warm */
     try {
       if (map && (map.isMoving() || map.isZooming())) return;
     } catch (eMv) {}
@@ -3136,10 +3137,17 @@
     }, IDLE_GOES_WARM_MS);
   }
 
+  function lowDataLink() {
+    /* opt76: Save-Data or a slow/cellular link: skip background warming */
+    var c = navigator.connection;
+    if (!c) return false;
+    return !!(c.saveData || c.type === "cellular" || /2g|3g/.test(c.effectiveType || ""));
+  }
+
   function warmIdleGoesCache() {
     /* opt38: quiet 2–4 nearby GOES WMS into playImgCache while idle */
     if (tabHidden || playMode || mapGesturing || scrubbing || radarOn()) return;
-    if (!cloudTimes.length || playUseOpenMeteo) return;
+    if (!cloudTimes.length || playUseOpenMeteo || lowDataLink()) return;
     try {
       if (map && (map.isMoving() || map.isZooming())) return;
     } catch (eIdle) {}
