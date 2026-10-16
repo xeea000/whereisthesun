@@ -2620,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt69", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt70", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3113,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt69";
+      link.href = "motion-worker.js?v=opt70";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4403,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt69");
+      beachWorker = new Worker("beach-worker.js?v=opt70");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -6360,6 +6360,7 @@
     });
   }
   function fetchWindFieldForView() {
+    if (windGlWanted()) return Promise.resolve({ fixed: true }); /* opt70: wind-field.js owns the data */
     if (!map || !windOn) return Promise.resolve(null);
     var key = windViewKey();
     var cached = windCache[key];
@@ -6470,6 +6471,7 @@
     return windFetchPromise;
   }
   function scheduleWindFieldRefresh(immediate) {
+    if (windGl || windGlWanted()) return; /* opt70: fixed field, no reseed or refetch on gestures */
     if (!windOn) return;
     if (windMoveTimer) {
       clearTimeout(windMoveTimer);
@@ -6651,6 +6653,7 @@
     return { dx: d.x * lengthPx, dy: d.y * lengthPx };
   }
   function windOnGestureStart() {
+    if (windGl) return; /* opt70: fixed field, no reseed or refetch on gestures */
     /* opt59: never carry particles through a zoom/pan — fade out, then clear */
     if (!windOn) return;
     windMoving = true;
@@ -6663,6 +6666,7 @@
     }
   }
   function windOnGestureEnd() {
+    if (windGl) return; /* opt70: fixed field, no reseed or refetch on gestures */
     if (!windOn) return;
     windMoving = false;
     windParticles = [];
@@ -6712,10 +6716,9 @@
     windLastTs = 0;
     windAccumMs = 0;
   }
-  /* opt67: GPU wind (mapbox/webgl-wind adaptation) fed by the same Open-Meteo field */
+  /* opt70: GPU wind on one fixed lat/lon field (wind-field.js); particles live in map space */
   var windGl = null;
   var windGlFailed = false;
-  var windGlKey = "";
   function windGlCanvas() {
     var c = document.getElementById("wind-gl-canvas");
     if (c || !windLayerEl) return c;
@@ -6726,18 +6729,13 @@
     windLayerEl.appendChild(c);
     return c;
   }
-  function windGlSample(x, y) {
-    var ll = map.unproject([x, y]);
-    var uv = sampleWindUV(ll.lng, ll.lat);
-    if (!uv) return null;
-    var d = windScreenDir(ll.lng, ll.lat, uv.u, uv.v);
-    var pps = Math.max(10, Math.min(90, 8 + uv.speed * 1.6));
-    return d ? { x: d.x * pps, y: d.y * pps, speed01: Math.min(1, uv.speed / 60) } : { x: 0, y: 0, speed01: 0 };
+  function windGlWanted() {
+    return !!(window.SunnyWindGL && window.SunnyWindField && !windGlFailed);
   }
   function paintWindGl(dt) {
-    var c = window.SunnyWindGL && !windGlFailed ? windGlCanvas() : null;
+    var c = window.SunnyWindGL && window.SunnyWindField && !windGlFailed ? windGlCanvas() : null;
     if (!c) return false;
-    if (!windGl) windGl = window.SunnyWindGL.create(c, windCanvas.width < 1400 ? 6400 : 12000);
+    if (!windGl) windGl = window.SunnyWindGL.create(c, windCanvas.width < 1400 ? 5000 : 9000);
     if (!windGl) {
       windGlFailed = true;
       c.remove();
@@ -6747,14 +6745,8 @@
       c.width = windCanvas.width;
       c.height = windCanvas.height;
     }
-    var view = windViewCss();
-    var ctr = map.getCenter();
-    var key = [windField.key, windField.t, ctr.lng.toFixed(4), ctr.lat.toFixed(4), map.getZoom().toFixed(3), map.getBearing().toFixed(1), c.width, c.height].join("|");
-    if (key !== windGlKey) {
-      windGlKey = key;
-      windGl.setField(window.SunnyWindGL.buildField(72, 45, view.w, view.h, windGlSample));
-    }
-    windGl.frame(dt, windVisK, windDpr);
+    window.SunnyWindField.ensure(map);
+    windGl.frame(map, dt, windVisK, windDpr);
     return true;
   }
   function paintWindFrame(dt) {
@@ -6764,6 +6756,7 @@
     var w = windCanvas.width;
     var h = windCanvas.height;
     windCtx.clearRect(0, 0, w, h);
+    if (paintWindGl(dt)) return; /* opt70: GPU particles keep running through pan/zoom; 2D below is the fallback */
     /* opt59: hold during gestures; never draw from a field that doesn't cover the view */
     if (windMoving || mapGesturing) return;
     try { if (map.isMoving() || map.isZooming()) return; } catch (eMv) {}
@@ -6772,7 +6765,6 @@
       return;
     }
     windFieldWaiting = false;
-    if (paintWindGl(dt)) return; /* opt67: GPU particles (wind-gl.js); 2D path below is the fallback */
     var view = windViewCss();
     if (windNeedsReseed || !windGrid || Math.abs(windGrid.w - view.w) > 1 || Math.abs(windGrid.h - view.h) > 1) {
       seedWindParticles(true);
@@ -9056,6 +9048,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt69").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt70").then(startSunny).catch(onMapToolkitFail);
   }
 })();

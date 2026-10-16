@@ -1,0 +1,1 @@
+opt70 - wind on one fixed geographic field: Open-Meteo 10 m wind on a fixed 4-degree lat/lon grid in fixed tiles, cached 45 min (wind-field.js), bilinear in lat/lon. GPU particles live in map space and persist through pan/zoom (wind-gl.js); only particles that leave the view, age out or crowd respawn. Old per-view refetch is off while the GPU path runs.

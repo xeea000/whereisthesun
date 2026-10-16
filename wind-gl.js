@@ -5,35 +5,24 @@
  * provided that the above copyright notice and this permission notice appear in all copies.
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO
  * THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
- * Changes for SUNNY: the wind texture is in screen space (CSS px per second, built by
- * app.js from the Open-Meteo u/v grid for the current view), particle positions are
- * screen fractions, respawn is uniform over the view so spread stays even, and trails
- * fade with a small floor so no ghost pixels stay behind. Positions are stored in RGBA
- * textures (two 8-bit channels per axis), so no float textures are needed. */
+ * Changes for SUNNY (opt70): particles live in map space (Web Mercator, kept in float64 on
+ * the CPU) and move along the fixed geographic field from wind-field.js, so the flow is
+ * tied to places, not to the camera. Each frame they are projected to the screen and drawn
+ * as GPU points over a fading trail texture. Panning or zooming never resets them: trails
+ * fade faster while the map moves, and only particles that leave the view, age out or
+ * crowd one spot respawn, into the emptiest part of the screen, so spread stays even. */
 (function () {
   "use strict";
-  var MAX_V = 100;
   var QUAD_VS = "precision mediump float;attribute vec2 a_pos;varying vec2 v_tex;" +
     "void main(){v_tex=a_pos;gl_Position=vec4(2.0*a_pos-1.0,0.0,1.0);}";
   var SCREEN_FS = "precision mediump float;uniform sampler2D u_screen;uniform float u_opacity;varying vec2 v_tex;" +
     "void main(){vec4 c=texture2D(u_screen,v_tex);gl_FragColor=max(c*u_opacity-vec4(1.5/255.0),0.0);}";
-  var UPDATE_FS = "precision highp float;uniform sampler2D u_particles;uniform sampler2D u_wind;" +
-    "uniform vec2 u_res;uniform float u_dt;uniform float u_seed;uniform float u_drop;varying vec2 v_tex;" +
-    "float rand(vec2 co){vec3 r=vec3(12.9898,78.233,4375.85453);float t=dot(r.xy,co);return fract(sin(t)*(r.z+t));}" +
-    "void main(){vec2 tc=v_tex;vec4 c=texture2D(u_particles,tc);vec2 pos=vec2(c.r/255.0+c.b,c.g/255.0+c.a);" +
-    "vec4 w=texture2D(u_wind,pos);vec2 vel=(w.rg*2.0-1.0)*" + MAX_V.toFixed(1) + ";" +
-    "pos=pos+vel*u_dt/u_res;vec2 seed=(pos+tc)*u_seed;" +
-    "float drop=step(1.0-u_drop-w.b*0.01,rand(seed));" +
-    "if(w.a<0.5||pos.x<0.0||pos.y<0.0||pos.x>1.0||pos.y>1.0)drop=1.0;" +
-    "vec2 rp=vec2(rand(seed+1.3),rand(seed+2.1));pos=mix(pos,rp,drop);" +
-    "gl_FragColor=vec4(fract(pos*255.0),floor(pos*255.0)/255.0);}";
-  var DRAW_VS = "precision mediump float;attribute float a_index;uniform sampler2D u_particles;" +
-    "uniform sampler2D u_wind;uniform float u_res;uniform float u_size;varying float v_speed;" +
-    "void main(){vec4 c=texture2D(u_particles,vec2((mod(a_index,u_res)+0.5)/u_res,(floor(a_index/u_res)+0.5)/u_res));" +
-    "vec2 pos=vec2(c.r/255.0+c.b,c.g/255.0+c.a);v_speed=texture2D(u_wind,pos).b;" +
-    "gl_PointSize=u_size;gl_Position=vec4(2.0*pos.x-1.0,1.0-2.0*pos.y,0.0,1.0);}";
-  var DRAW_FS = "precision mediump float;uniform vec3 u_color;uniform float u_alpha;varying float v_speed;" +
-    "void main(){float a=u_alpha*(0.55+0.45*v_speed);gl_FragColor=vec4(u_color*a,a);}";
+  var DRAW_VS = "precision mediump float;attribute vec3 a_p;uniform float u_size;varying float v_a;" +
+    "void main(){v_a=a_p.z;gl_PointSize=u_size;gl_Position=vec4(a_p.xy,0.0,1.0);}";
+  var DRAW_FS = "precision mediump float;uniform vec3 u_color;uniform float u_alpha;varying float v_a;" +
+    "void main(){float a=u_alpha*v_a;gl_FragColor=vec4(u_color*a,a);}";
+  var GX = 16;
+  var GY = 10;
   function shader(gl, type, src) {
     var s = gl.createShader(type);
     gl.shaderSource(s, src);
@@ -60,60 +49,60 @@
     }
     return out;
   }
-  function texture(gl, filter, data, w, h) {
+  function texture(gl, w, h) {
     var t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     return t;
   }
-  function bindTex(gl, t, unit) {
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, t);
+  /* Web Mercator: x, y in 0..1 (y down) */
+  function toLngLat(x, y) {
+    return [x * 360 - 180, Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI];
   }
-  function randomState(n) {
-    var a = new Uint8Array(n * n * 4);
-    for (var i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
-    return a;
+  function toMerc(lng, lat) {
+    var s = Math.sin(lat * Math.PI / 180);
+    return [(lng + 180) / 360, 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)];
+  }
+  /* screen = A * (merc - m0) + s0, from three projected points (handles bearing) */
+  function affine(map) {
+    var c = map.getCenter();
+    var m0 = toMerc(c.lng, c.lat);
+    var d = 1e-4 / Math.pow(2, Math.max(0, map.getZoom() - 4));
+    var p0 = map.project(toLngLat(m0[0], m0[1]));
+    var px = map.project(toLngLat(m0[0] + d, m0[1]));
+    var py = map.project(toLngLat(m0[0], m0[1] + d));
+    var a = (px.x - p0.x) / d, b = (py.x - p0.x) / d, c2 = (px.y - p0.y) / d, e = (py.y - p0.y) / d;
+    var det = a * e - b * c2;
+    return { a: a, b: b, c: c2, e: e, ia: e / det, ib: -b / det, ic: -c2 / det, ie: a / det, m0: m0, s0: [p0.x, p0.y] };
   }
   function Wind(canvas, count) {
     var gl = canvas.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true });
     if (!gl) throw new Error("no webgl");
     this.gl = gl;
     this.canvas = canvas;
-    this.res = Math.ceil(Math.sqrt(count));
+    this.n = count;
     this.quadProg = program(gl, QUAD_VS, SCREEN_FS);
-    this.updateProg = program(gl, QUAD_VS, UPDATE_FS);
     this.drawProg = program(gl, DRAW_VS, DRAW_FS);
     this.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1]), gl.STATIC_DRAW);
-    var idx = new Float32Array(this.res * this.res);
-    for (var i = 0; i < idx.length; i++) idx[i] = i;
-    this.index = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.index);
-    gl.bufferData(gl.ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    this.pbuf = gl.createBuffer();
+    this.verts = new Float32Array(count * 3);
     this.fb = gl.createFramebuffer();
-    this.windTex = null;
-    this.resetParticles();
+    this.mx = new Float64Array(count);
+    this.my = new Float64Array(count);
+    this.age = new Float32Array(count);
+    this.life = new Float32Array(count);
+    this.cells = new Int16Array(GX * GY);
+    this.seeded = false;
     this.w = 0;
     this.h = 0;
-  }
-  function resetParticles() {
-    var gl = this.gl;
-    var s = randomState(this.res);
-    this.stateA = texture(gl, gl.NEAREST, s, this.res, this.res);
-    this.stateB = texture(gl, gl.NEAREST, s, this.res, this.res);
-  }
-  /* field: {cols, rows, data: Uint8Array RGBA}: R,G = velocity x,y (0.5 = still), B = speed 0..1, A = 255 where wind is known */
-  function setField(field) {
-    var gl = this.gl;
-    if (this.windTex) gl.deleteTexture(this.windTex);
-    this.windTex = texture(gl, gl.LINEAR, field.data, field.cols, field.rows);
-    this.clear();
+    this.drawn = 0;
+    this.respawns = 0;
   }
   function resize() {
     var gl = this.gl;
@@ -122,22 +111,84 @@
     if (w === this.w && h === this.h) return;
     this.w = w;
     this.h = h;
-    var blank = new Uint8Array(w * h * 4);
-    this.screenA = texture(gl, gl.NEAREST, blank, w, h);
-    this.screenB = texture(gl, gl.NEAREST, blank, w, h);
+    this.screenA = texture(gl, w, h);
+    this.screenB = texture(gl, w, h);
   }
-  function clear() {
-    var gl = this.gl;
-    this.resize();
-    var t = [this.screenA, this.screenB];
-    for (var i = 0; i < 2; i++) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t[i], 0);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
+  function cellOf(sx, sy, vw, vh) {
+    var cx = Math.floor(sx / vw * GX);
+    var cy = Math.floor(sy / vh * GY);
+    return cx < 0 || cy < 0 || cx >= GX || cy >= GY ? -1 : cy * GX + cx;
+  }
+  /* put particle k at a random spot in the emptiest screen cell */
+  function respawn(k, A, vw, vh) {
+    var start = Math.floor(Math.random() * GX * GY);
+    var best = start;
+    for (var q = 0; q < GX * GY; q++) {
+      var ci = (start + q) % (GX * GY);
+      if (this.cells[ci] < this.cells[best]) best = ci;
+      if (this.cells[best] === 0) break;
     }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    this.cells[best]++;
+    this.respawns++;
+    var sx = ((best % GX) + Math.random()) / GX * vw - A.s0[0];
+    var sy = (Math.floor(best / GX) + Math.random()) / GY * vh - A.s0[1];
+    this.mx[k] = A.m0[0] + A.ia * sx + A.ib * sy;
+    this.my[k] = A.m0[1] + A.ic * sx + A.ie * sy;
+    this.age[k] = 0;
+    this.life[k] = 3 + Math.random() * 5;
+  }
+  /* advance, project and pack the particles; returns how many to draw */
+  function step(map, dt, vw, vh, moving) {
+    var A = affine(map);
+    var k, sx, sy, ci;
+    var field = window.SunnyWindField;
+    this.cells.fill(0);
+    for (k = 0; k < this.n; k++) {
+      sx = A.a * (this.mx[k] - A.m0[0]) + A.b * (this.my[k] - A.m0[1]) + A.s0[0];
+      sy = A.c * (this.mx[k] - A.m0[0]) + A.e * (this.my[k] - A.m0[1]) + A.s0[1];
+      ci = cellOf(sx, sy, vw, vh);
+      if (ci >= 0 && this.seeded) this.cells[ci]++;
+    }
+    if (!this.seeded) {
+      for (k = 0; k < this.n; k++) {
+        respawn.call(this, k, A, vw, vh);
+        this.age[k] = Math.random() * this.life[k];
+      }
+      this.seeded = true;
+    }
+    var mean = this.n / (GX * GY);
+    var m = 0;
+    for (k = 0; k < this.n; k++) {
+      var ll = toLngLat(this.mx[k], this.my[k]);
+      var s = field.sample(ll[0], ll[1]);
+      sx = A.a * (this.mx[k] - A.m0[0]) + A.b * (this.my[k] - A.m0[1]) + A.s0[0];
+      sy = A.c * (this.mx[k] - A.m0[0]) + A.e * (this.my[k] - A.m0[1]) + A.s0[1];
+      ci = cellOf(sx, sy, vw, vh);
+      this.age[k] += dt;
+      var crowded = !moving && ci >= 0 && this.cells[ci] > mean * 2.2 && Math.random() < 0.02;
+      if (ci < 0 || this.age[k] > this.life[k] || crowded || (!s && Math.random() < 0.01)) {
+        if (ci >= 0) this.cells[ci]--;
+        respawn.call(this, k, A, vw, vh);
+        continue;
+      }
+      if (!s) continue;
+      var sp = Math.sqrt(s.u * s.u + s.v * s.v);
+      if (sp < 0.05) continue;
+      var pps = Math.max(10, Math.min(90, 8 + sp * 3.6 * 1.6));
+      var dxs = A.a * s.u - A.b * s.v;
+      var dys = A.c * s.u - A.e * s.v;
+      var len = Math.sqrt(dxs * dxs + dys * dys) || 1;
+      dxs = dxs / len * pps * dt;
+      dys = dys / len * pps * dt;
+      this.mx[k] += A.ia * dxs + A.ib * dys;
+      this.my[k] += A.ic * dxs + A.ie * dys;
+      var fade = Math.min(1, this.age[k] / 0.3, (this.life[k] - this.age[k]) / 0.4);
+      this.verts[m * 3] = (sx + dxs) / vw * 2 - 1;
+      this.verts[m * 3 + 1] = 1 - (sy + dys) / vh * 2;
+      this.verts[m * 3 + 2] = fade * (0.55 + 0.45 * Math.min(1, sp / 17));
+      m++;
+    }
+    return m;
   }
   function quadPass(prog, target) {
     var gl = this.gl;
@@ -148,47 +199,46 @@
     gl.vertexAttribPointer(prog.a_pos, 2, gl.FLOAT, false, 0, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
-  function drawParticles(color, alpha, size) {
+  function drawPoints(color, alpha, size) {
     var gl = this.gl;
     var p = this.drawProg;
     gl.useProgram(p.p);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.index);
-    gl.enableVertexAttribArray(p.a_index);
-    gl.vertexAttribPointer(p.a_index, 1, gl.FLOAT, false, 0, 0);
-    bindTex(gl, this.windTex, 0);
-    bindTex(gl, this.stateA, 1);
-    gl.uniform1i(p.u_wind, 0);
-    gl.uniform1i(p.u_particles, 1);
-    gl.uniform1f(p.u_res, this.res);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.pbuf);
+    gl.enableVertexAttribArray(p.a_p);
+    gl.vertexAttribPointer(p.a_p, 3, gl.FLOAT, false, 0, 0);
     gl.uniform1f(p.u_size, size);
     gl.uniform3f(p.u_color, color[0], color[1], color[2]);
     gl.uniform1f(p.u_alpha, alpha);
-    gl.drawArrays(gl.POINTS, 0, this.res * this.res);
+    gl.drawArrays(gl.POINTS, 0, this.drawn);
   }
-  /* one animation step: fade trails, draw particles, show, then move particles. vis 0..1 */
-  function frame(dt, vis, dpr) {
-    if (!this.windTex) return;
+  /* one frame: move particles, fade trails (faster while the map moves), draw, show. vis 0..1 */
+  function frame(map, dt, vis, dpr) {
     var gl = this.gl;
     this.resize();
+    var moving = false;
+    try { moving = map.isMoving() || map.isZooming() || map.isRotating(); } catch (eM) {}
+    this.drawn = this.step(map, dt, this.w / dpr, this.h / dpr, moving);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.pbuf);
+    gl.bufferData(gl.ARRAY_BUFFER, this.verts.subarray(0, this.drawn * 3), gl.DYNAMIC_DRAW);
     gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.STENCIL_TEST);
     gl.viewport(0, 0, this.w, this.h);
     var q = this.quadProg;
     gl.useProgram(q.p);
-    bindTex(gl, this.screenA, 2);
-    gl.uniform1i(q.u_screen, 2);
-    gl.uniform1f(q.u_opacity, 0.9 + 0.075 * vis);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.screenA);
+    gl.uniform1i(q.u_screen, 0);
+    gl.uniform1f(q.u_opacity, moving ? 0.55 : 0.9 + 0.075 * vis);
     gl.disable(gl.BLEND);
     this.quadPass(q, this.screenB);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     var size = (1 + 1.4 * vis) * dpr;
-    if (vis > 0.5) this.drawParticles([0, 0.08, 0.16], 0.5 * (vis - 0.5), size + 1.5 * dpr);
-    this.drawParticles([0.92, 0.96, 1], 0.25 + 0.6 * vis, size);
+    if (vis > 0.5) this.drawPoints([0, 0.08, 0.16], 0.5 * (vis - 0.5), size + 1.5 * dpr);
+    this.drawPoints([0.92, 0.96, 1], 0.25 + 0.6 * vis, size);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.disable(gl.BLEND);
     gl.useProgram(q.p);
-    bindTex(gl, this.screenB, 2);
+    gl.bindTexture(gl.TEXTURE_2D, this.screenB);
     gl.uniform1f(q.u_opacity, 1);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -196,56 +246,27 @@
     var t = this.screenA;
     this.screenA = this.screenB;
     this.screenB = t;
-    var u = this.updateProg;
-    gl.viewport(0, 0, this.res, this.res);
-    gl.useProgram(u.p);
-    bindTex(gl, this.windTex, 0);
-    bindTex(gl, this.stateA, 1);
-    gl.uniform1i(u.u_wind, 0);
-    gl.uniform1i(u.u_particles, 1);
-    gl.uniform2f(u.u_res, this.w / dpr, this.h / dpr);
-    gl.uniform1f(u.u_dt, dt);
-    gl.uniform1f(u.u_seed, Math.random());
-    gl.uniform1f(u.u_drop, 0.012);
-    this.quadPass(u, this.stateB);
-    t = this.stateA;
-    this.stateA = this.stateB;
-    this.stateB = t;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
-  Wind.prototype.resetParticles = resetParticles;
-  Wind.prototype.setField = setField;
+  function particleState() {
+    return { n: this.n, drawn: this.drawn, respawns: this.respawns, mx: Array.prototype.slice.call(this.mx, 0, 50), my: Array.prototype.slice.call(this.my, 0, 50) };
+  }
   Wind.prototype.resize = resize;
-  Wind.prototype.clear = clear;
+  Wind.prototype.step = step;
   Wind.prototype.quadPass = quadPass;
-  Wind.prototype.drawParticles = drawParticles;
+  Wind.prototype.drawPoints = drawPoints;
   Wind.prototype.frame = frame;
-  /* build the screen-space wind texture. sample(xCss, yCss) → {x, y} px/s or null; speed01 */
-  function buildField(cols, rows, w, h, sample) {
-    var data = new Uint8Array(cols * rows * 4);
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        var k = (r * cols + c) * 4;
-        var s = sample((c + 0.5) / cols * w, (r + 0.5) / rows * h);
-        if (!s) {
-          data[k] = 128;
-          data[k + 1] = 128;
-          continue;
-        }
-        data[k] = Math.round(Math.max(0, Math.min(1, s.x / MAX_V * 0.5 + 0.5)) * 255);
-        data[k + 1] = Math.round(Math.max(0, Math.min(1, s.y / MAX_V * 0.5 + 0.5)) * 255);
-        data[k + 2] = Math.round(Math.max(0, Math.min(1, s.speed01)) * 255);
-        data[k + 3] = 255;
-      }
-    }
-    return { cols: cols, rows: rows, data: data };
-  }
+  Wind.prototype.state = particleState;
+  var last = null;
   function create(canvas, count) {
     try {
-      return new Wind(canvas, count);
+      last = new Wind(canvas, count);
+      return last;
     } catch (eW) {
       return null;
     }
   }
-  window.SunnyWindGL = { create: create, buildField: buildField };
+  function debug() {
+    return last ? last.state() : null;
+  }
+  window.SunnyWindGL = { create: create, debug: debug };
 })();
