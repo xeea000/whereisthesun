@@ -1,0 +1,1 @@
+opt71 - cloud key drops warm or strongly coloured pixels so GeoColor night city lights are transparent (cloud-key.js tiles and fallback, frame-tween.js Play shader). Bluish-white night clouds stay.

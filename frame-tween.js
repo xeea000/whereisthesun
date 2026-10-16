@@ -54,7 +54,9 @@
     "  else { c = (a * wa + b * wb) / (wa + wb); }",
     "  if (uHasB < 0.5) c = texture2D(uA, vUv);",
     "  if (uKey > 0.5 && c.a > 0.0) { vec3 rgb = c.rgb / c.a;",
-    "    float k = smoothstep(uKeyLoHi.x, uKeyLoHi.y, min(rgb.r, min(rgb.g, rgb.b)));",
+    "    float mn = min(rgb.r, min(rgb.g, rgb.b)); float mx = max(rgb.r, max(rgb.g, rgb.b));",
+    "    float warm = max(rgb.r, rgb.g) - rgb.b;", /* opt70: city lights are warm; same numbers as cloud-key.js */
+    "    float k = smoothstep(uKeyLoHi.x, uKeyLoHi.y, mn) * (1.0 - smoothstep(0.04, 0.12, warm)) * (1.0 - smoothstep(0.22, 0.35, mx - mn));",
     "    c = vec4(rgb * k, k) * c.a; }",
     "  gl_FragColor = c * uAlpha; }"
   ].join("\n");

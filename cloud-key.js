@@ -6,23 +6,42 @@
  *   - in the Play shader in frame-tween.js (window.SunnyCloudKey.LO and HI).
  * Rule: alpha = smoothstep(LO, HI, darkest colour channel). Clouds are white or grey
  * (all channels high); the night backdrop, city lights, land and ocean each have at
- * least one low channel. */
+ * least one low channel.
+ * opt70: city lights in the night backdrop are bright but warm (yellow/orange), so a pixel
+ * is also dropped when it is warm (red or green above blue by WARM_LO..WARM_HI) or has
+ * strong colour (max minus min channel CHROMA_LO..CHROMA_HI). Bluish-white night clouds
+ * stay. The Play shader in frame-tween.js uses the same numbers. */
 (function () {
   "use strict";
   var LO = 0.28;
   var HI = 0.78;
+  var WARM_LO = 0.04;
+  var WARM_HI = 0.12;
+  var CHROMA_LO = 0.22;
+  var CHROMA_HI = 0.35;
   var registered = false;
-  function smooth(x) {
-    var t = Math.max(0, Math.min(1, (x - LO) / (HI - LO)));
+  function smoothRange(lo, hi, x) {
+    var t = Math.max(0, Math.min(1, (x - lo) / (hi - lo)));
     return t * t * (3 - 2 * t);
   }
+  function smooth(x) {
+    return smoothRange(LO, HI, x);
+  }
   var TABLE = new Uint8ClampedArray(256);
-  for (var i = 0; i < 256; i++) TABLE[i] = Math.round(255 * smooth(i / 255));
+  var WARM = new Uint8ClampedArray(256);
+  var CHROMA = new Uint8ClampedArray(256);
+  for (var i = 0; i < 256; i++) {
+    TABLE[i] = Math.round(255 * smooth(i / 255));
+    WARM[i] = Math.round(255 * (1 - smoothRange(WARM_LO, WARM_HI, i / 255)));
+    CHROMA[i] = Math.round(255 * (1 - smoothRange(CHROMA_LO, CHROMA_HI, i / 255)));
+  }
   function keyPixels(d) {
     for (var j = 0; j < d.length; j += 4) {
-      var mn = d[j] < d[j + 1] ? d[j] : d[j + 1];
-      if (d[j + 2] < mn) mn = d[j + 2];
-      d[j + 3] = Math.round(TABLE[mn] * d[j + 3] / 255);
+      var r = d[j], g = d[j + 1], b = d[j + 2];
+      var mn = Math.min(r, g, b);
+      var mx = Math.max(r, g, b);
+      var k = TABLE[mn] * WARM[Math.max(0, Math.max(r, g) - b)] * CHROMA[mx - mn] / 65025;
+      d[j + 3] = Math.round(k * d[j + 3] / 255);
     }
     return d;
   }
