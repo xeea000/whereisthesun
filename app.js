@@ -19,14 +19,16 @@
   try {
     if (typeof navigator !== "undefined" && navigator.serviceWorker) {
       var __sunnySwReloaded = false;
-      navigator.serviceWorker.addEventListener("controllerchange", function () {
-        if (__sunnySwReloaded) return;
+      /* opt77: first install claiming the page is not an update, so no reload (it re-downloaded everything) */
+      var __sunnyHadSw = !!navigator.serviceWorker.controller;
+      function onSunnySwSwap() {
+        if (__sunnySwReloaded || !__sunnyHadSw) return;
         __sunnySwReloaded = true;
         try { location.reload(); } catch (eRel) {}
-      });
+      }
+      navigator.serviceWorker.addEventListener("controllerchange", onSunnySwSwap);
     }
   } catch (eSwHook) {}
-
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var s = document.createElement("script");

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // workspace/whereisthesun/tools/write-version.js
 /* SUNNY: writes version.json at the site root. Run on EVERY deploy, after bumping optNN.
- * Build name comes from CACHE in sw.js; hash covers the main shell files. */
+ * Build name comes from BUILD in sw.js; hash covers the main shell files. */
 "use strict";
 var fs = require("fs");
 var path = require("path");
@@ -12,9 +12,9 @@ var FILES = [
   "beach-worker.js", "update-banner.js", "settings-panel.js", "settings-panel.css", "cloud-key.js", "play-handoff.js", "styles.css", "sw.js"
 ];
 var sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");
-var match = sw.match(/CACHE\s*=\s*"sunny-v-([^"]+)"/);
+var match = sw.match(/BUILD\s*=\s*"([^"]+)"/);
 if (!match) {
-  console.error("write-version: could not find CACHE in sw.js");
+  console.error("write-version: could not find BUILD in sw.js");
   process.exit(1);
 }
 var hash = crypto.createHash("sha256");

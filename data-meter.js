@@ -1,9 +1,11 @@
 // workspace/whereisthesun/data-meter.js
-/* SUNNY data meter (opt76). Small faint readout in the top-right corner: data used this
+/* SUNNY data meter (opt76, opt77). Small faint readout in the top-right corner: data used this
  * session and the current download rate. Counts PerformanceObserver resource entries
  * (transferSize, else encodedBodySize). Cross-origin files without the TAO timing header
  * report 0 bytes; those are estimated from the average known size of the same kind and
  * the total is then shown with "~". Workers may add bytes with SunnyDataMeter.add(n).
+ * opt77: once the service worker controls the page it reports the bytes it pulled from
+ * the network (cache hits cost nothing), and page timing entries are then ignored.
  * On by default; the Settings switch "Data usage" turns it off (saved). */
 (function () {
   "use strict";
@@ -23,7 +25,18 @@
     total += bytes;
     recent.push([now, bytes]);
   }
+  /* Under the worker, timing entries include cache hits; the worker reports real network bytes. */
+  function underSw() {
+    try { return !!navigator.serviceWorker.controller; } catch (eSw) { return false; }
+  }
+  function onSwBytes(ev) {
+    var d = ev.data;
+    if (!d || d.type !== "SUNNY_NET_BYTES") return;
+    if (d.opaque) partial = true;
+    count((d.bytes || 0) + d.opaque * avgFor("img"), performance.now());
+  }
   function onEntry(e) {
+    if (underSw()) return;
     var n = e.transferSize || e.encodedBodySize || 0;
     var kind = e.initiatorType || "other";
     if (n > 0) {
@@ -87,6 +100,7 @@
     performance.getEntriesByType("resource").forEach(onEntry);
     new PerformanceObserver(onList).observe({ type: "resource", buffered: false });
   } catch (eObs) {}
+  try { navigator.serviceWorker.addEventListener("message", onSwBytes); } catch (eMsg) {}
   var saved = null;
   try { saved = localStorage.getItem(KEY); } catch (eLs) {}
   var on = saved !== "0";
