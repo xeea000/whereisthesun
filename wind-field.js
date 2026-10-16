@@ -3,11 +3,11 @@
  * 4 degrees of latitude and longitude at fixed positions (multiples of 4), fetched in
  * fixed 32 x 32 degree tiles of 64 nodes, one multi-point request per tile.
  * A tile is fetched once and kept for 45 minutes (memory and localStorage), so panning or
- * zooming never changes the field: new tiles only add data beside the old ones, and any
+ * zooming never changes the field: new tiles only add data beside the loaded ones, and any
  * node holds the same value whichever tile request brought it. sample(lon, lat) is
  * bilinear in lat/lon between the four surrounding nodes; it returns null until they load.
- * Open-Meteo counts every location in a multi-point request as one call and allows about
- * 600 a minute on the free tier, so requests are paced by a small token bucket and the
+ * Open-Meteo counts every location in a multi-point request as one call and the free tier takes about
+ * 600 a minute, so requests are paced by a small token bucket and the
  * spacing is 4 degrees; a finer grid gets 429 (too many requests) on a continent view. */
 (function () {
   "use strict";
