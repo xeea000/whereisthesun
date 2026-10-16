@@ -1,0 +1,4 @@
+opt75
+- Find Beaches is never disabled. With no location it searches around the map centre and says so.
+- Round Craters button above Beaches, synced with the Settings switch.
+- Round Crown Land button: Ontario CLUPA Provincial (LIO, OGL-Ontario) raster overlay, tap for designation. Ontario only.

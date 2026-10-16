@@ -34,9 +34,10 @@
   <link rel="dns-prefetch" href="https://mesonet.agron.iastate.edu">
   <link rel="preconnect" href="https://geo.weather.gc.ca" crossorigin>
   <link rel="dns-prefetch" href="https://geo.weather.gc.ca">
-  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt74">
-  <link rel="stylesheet" href="styles.css?v=opt74">
-  <link rel="stylesheet" href="settings-panel.css?v=opt74">
+  <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?v=opt75">
+  <link rel="stylesheet" href="styles.css?v=opt75">
+  <link rel="stylesheet" href="settings-panel.css?v=opt75">
+  <link rel="stylesheet" href="side-buttons.css?v=opt75">
 </head>
 <body>
   <div id="map"></div>
@@ -193,7 +194,15 @@
         <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
       </svg>
     </button>
-    <button id="btn-sun" class="ctrl ctrl-sun" type="button" disabled title="Find nearest beaches">
+    <button id="btn-crown" class="ctrl ctrl-round" type="button" aria-pressed="false" title="Crown land overlay (Ontario only, LIO open data)">
+      <span class="round-emoji" aria-hidden="true">🌲</span>
+      <span class="ctrl-label"><span>Crown</span><span>Land</span></span>
+    </button>
+    <button id="btn-craters" class="ctrl ctrl-round" type="button" aria-pressed="false" title="Show confirmed impact craters">
+      <span class="round-emoji" aria-hidden="true">☄️</span>
+      <span class="ctrl-label"><span>Craters</span></span>
+    </button>
+    <button id="btn-sun" class="ctrl ctrl-sun" type="button" title="Find beaches near you (or near the map centre if your location is off)">
       <span class="beach-emoji" aria-hidden="true">🏖️</span>
       <span class="ctrl-label"><span>Find</span><span>Beaches</span></span>
     </button>
@@ -208,22 +217,24 @@
   </aside>
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
-  <script defer src="vendor/maplibre-gl.js?v=opt74"></script>
-  <script defer src="cloud-key.js?v=opt74"></script>
-  <script defer src="play-handoff.js?v=opt74"></script>
-  <script defer src="radar-key.js?v=opt74"></script>
-  <script defer src="radar-source.js?v=opt74"></script>
-  <script defer src="radar-warm.js?v=opt74"></script>
-  <script defer src="radar-mask.js?v=opt74"></script>
-  <script defer src="radar-legend.js?v=opt74"></script>
-  <script defer src="wind-field.js?v=opt74"></script>
-  <script defer src="wind-gl.js?v=opt74"></script>
-  <script defer src="point-forecast.js?v=opt74"></script>
-  <script defer src="craters.js?v=opt74"></script>
-  <script defer src="wind-play-fade.js?v=opt74"></script>
-  <script defer src="frame-tween.js?v=opt74"></script>
-  <script defer src="app.js?v=opt74"></script>
-  <script defer src="update-banner.js?v=opt74"></script>
-  <script defer src="settings-panel.js?v=opt74"></script>
+  <script defer src="vendor/maplibre-gl.js?v=opt75"></script>
+  <script defer src="cloud-key.js?v=opt75"></script>
+  <script defer src="play-handoff.js?v=opt75"></script>
+  <script defer src="radar-key.js?v=opt75"></script>
+  <script defer src="radar-source.js?v=opt75"></script>
+  <script defer src="radar-warm.js?v=opt75"></script>
+  <script defer src="radar-mask.js?v=opt75"></script>
+  <script defer src="radar-legend.js?v=opt75"></script>
+  <script defer src="wind-field.js?v=opt75"></script>
+  <script defer src="wind-gl.js?v=opt75"></script>
+  <script defer src="point-forecast.js?v=opt75"></script>
+  <script defer src="craters.js?v=opt75"></script>
+  <script defer src="crown-land.js?v=opt75"></script>
+  <script defer src="side-buttons.js?v=opt75"></script>
+  <script defer src="wind-play-fade.js?v=opt75"></script>
+  <script defer src="frame-tween.js?v=opt75"></script>
+  <script defer src="app.js?v=opt75"></script>
+  <script defer src="update-banner.js?v=opt75"></script>
+  <script defer src="settings-panel.js?v=opt75"></script>
 </body>
 </html>
