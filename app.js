@@ -349,7 +349,7 @@
     } catch (eIgn) {}
   });
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-left");
   map.addControl(
     new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · NOAA NEXRAD radar (IEM) · free tiles' }),
     "bottom-right"
@@ -2620,7 +2620,7 @@
     var T = tweenApi();
     if (!T) return null;
     if (!tweenEstimator) {
-      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt71", cap: 96, estWidth: 256 });
+      tweenEstimator = T.createMotionEstimator({ workerUrl: "motion-worker.js?v=opt72", cap: 96, estWidth: 256 });
     }
     return tweenEstimator;
   }
@@ -3113,7 +3113,7 @@
       var link = document.createElement("link");
       link.rel = "prefetch";
       link.as = "script";
-      link.href = "motion-worker.js?v=opt71";
+      link.href = "motion-worker.js?v=opt72";
       link.setAttribute("data-sunny-flow-prefetch", "1");
       document.head.appendChild(link);
     } catch (ePf) {}
@@ -4403,7 +4403,7 @@
     if (typeof Worker === "undefined") return null;
     try {
       /* created only when a region fetch actually needs decode off-main */
-      beachWorker = new Worker("beach-worker.js?v=opt71");
+      beachWorker = new Worker("beach-worker.js?v=opt72");
       beachWorker.onmessage = function (ev) {
         var msg = ev.data || {};
         var pending = beachWorkerPending[msg.id];
@@ -9048,6 +9048,6 @@
   if (typeof maplibregl !== "undefined") {
     startSunny();
   } else {
-    loadScript("vendor/maplibre-gl.js?v=opt71").then(startSunny).catch(onMapToolkitFail);
+    loadScript("vendor/maplibre-gl.js?v=opt72").then(startSunny).catch(onMapToolkitFail);
   }
 })();

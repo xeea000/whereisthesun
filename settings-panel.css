@@ -151,3 +151,16 @@ body.settings-open .update-banner { display: none; }
 /* opt68: wind fades out while Play runs (wind-play-fade.js) */
 #wind-layer { transition: opacity 300ms linear; }
 #wind-layer.wind-play-hidden { opacity: 0 !important; transition: opacity 300ms linear !important; }
+/* opt72: plain status text, zoom and legend bottom left, faint credits top right */
+.status { background: none !important; border: 0 !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; color: #fff !important; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.5); padding-left: 2px; }
+#map .maplibregl-ctrl-bottom-left { display: block !important; z-index: 7; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 108px); left: max(6px, env(safe-area-inset-left)); }
+.radar-legend { top: auto; right: auto; left: max(12px, env(safe-area-inset-left)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 72px); }
+#map .maplibregl-ctrl-bottom-right { top: calc(env(safe-area-inset-top, 0px) + 6px); bottom: auto; margin-bottom: 0; z-index: 7; }
+#map .maplibregl-ctrl-attrib { opacity: 0.25; font-size: 10px; background: rgba(0, 0, 0, 0.3) !important; transition: opacity 160ms linear; }
+#map .maplibregl-ctrl-attrib:hover, #map .maplibregl-ctrl-attrib:focus-within, #map .maplibregl-ctrl-attrib:active { opacity: 0.9; }
+@media (max-width: 700px) {
+  #map .maplibregl-ctrl-bottom-left { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 104px); }
+  .radar-legend { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 68px); }
+  .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 190px); }
+  #map .maplibregl-ctrl-bottom-right { top: calc(env(safe-area-inset-top, 0px) + 52px); }
+}

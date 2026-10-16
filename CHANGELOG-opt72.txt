@@ -1,0 +1,1 @@
+opt72 - plain white status text, zoom buttons and radar legend bottom left above the bar, faint credits top right.
