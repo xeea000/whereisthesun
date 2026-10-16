@@ -164,3 +164,16 @@ body.settings-open .update-banner { display: none; }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 190px); }
   #map .maplibregl-ctrl-bottom-right { top: calc(env(safe-area-inset-top, 0px) + 52px); }
 }
+/* opt73: Locate above the zoom buttons (bottom left); round stacked Beaches button (bottom right) */
+#btn-locate { position: fixed; left: max(16px, calc(env(safe-area-inset-left) + 10px)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 184px); width: 29px; height: 29px; min-height: 29px; border-radius: 4px; z-index: 7; }
+#btn-locate svg { width: 17px; height: 17px; }
+.ctrl-sun { width: 64px; height: 64px; min-height: 64px; padding: 0; border-radius: 50%; flex-direction: column; justify-content: center; align-items: center; gap: 1px; }
+.ctrl-sun .beach-emoji { font-size: 20px; line-height: 1; }
+.ctrl-sun .ctrl-label { display: flex; flex-direction: column; align-items: center; font-size: 9px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.1; text-transform: uppercase; }
+@media (max-width: 700px) {
+  #btn-locate { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 176px); width: 29px; min-height: 29px; }
+  .ctrl-sun { width: 56px; height: 56px; min-height: 56px; }
+  .ctrl-sun .beach-emoji { font-size: 17px; }
+  .ctrl-sun .ctrl-label { font-size: 8px; }
+  .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 236px); }
+}
