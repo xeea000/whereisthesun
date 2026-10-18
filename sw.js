@@ -7,11 +7,11 @@
  *   beach pieces (data/*?h=<hash>, opt78), so each piece is downloaded once.
  * - Frames cache (kept across deploys, capped, aged out after 26 h): settled past satellite
  *   and radar frames. A frame for a fixed past time never changes, so it is fetched once.
- * - Reports bytes it pulled from the network to the page's data meter (postMessage).
- * Real network bytes come from the worker's own timing entries (transferSize is 0 for
- * HTTP-cache hits). Cross-origin servers without the timing header report 0, so those
- * fall back to Content-Length; opaque responses have no size and are only counted. */
-var BUILD = "opt79"; /* deploy name, read by tools/write-version.js */
+ * - Counts the bytes it pulls from the network for the page's Lag-O-Meter (opt80):
+ *   vendor/lag-o-meter-1.4.0/sw-counter.js reads the worker's own timing entries and
+ *   posts them to the page, since the page reads 0 for every file this worker answers. */
+importScripts("vendor/lag-o-meter-1.4.0/sw-counter.js");
+var BUILD = "opt80"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -25,7 +25,7 @@ var FRAME_SETTLE_MS = 45 * 60 * 1000;
 var PRECACHE = [
   "./",
   "index.html",
-  "vendor/lag-o-meter-1.3.0/start.js?h=00de626178&key=sunny-lag",
+  "vendor/lag-o-meter-1.4.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
   "styles.css?h=78f082975a",
   "settings-panel.css?h=5ab8872727",
@@ -51,18 +51,13 @@ var PRECACHE = [
   "app.js?h=05a78bdfaf",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
-  "lagmeter.js?h=e229a4b5e6",
+  "lagmeter.js?h=bcfbb0fc10",
   "manifest.webmanifest?h=3122f023bd",
   "icon-192.png?h=737599b667",
   "icon-512.png?h=52a83ea426"
 ];
 /* PRECACHE-END */
 var TILE_HOSTS = ["tile.openstreetmap.org", "basemaps.cartocdn.com", "server.arcgisonline.com", "tiles.openfreemap.org"];
-var pendingBytes = 0;
-var pendingOpaque = 0;
-var flushTimer = null;
-var lenByUrl = {};
-var haveTiming = false;
 var lastAgeOut = 0;
 function noop() {}
 function warnPrecache(path, err) {
@@ -116,56 +111,8 @@ function claimAll() {
 function onActivate(event) {
   event.waitUntil(caches.keys().then(dropUnknownCaches).then(pruneApp).then(claimAll));
 }
-function postTo(client) {
-  client.postMessage({ type: "SUNNY_NET_BYTES", bytes: pendingBytes, opaque: pendingOpaque });
-}
-function postBytes(list) {
-  list.forEach(postTo);
-  pendingBytes = 0;
-  pendingOpaque = 0;
-}
-function flushBytes() {
-  flushTimer = null;
-  self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then(postBytes);
-}
-function soon() {
-  if (!flushTimer) flushTimer = setTimeout(flushBytes, 700);
-}
-function countEntry(e) {
-  var n = e.transferSize;
-  if (!n && e.name.indexOf(self.location.origin) !== 0) n = lenByUrl[e.name] || 0;
-  delete lenByUrl[e.name];
-  pendingBytes += n;
-}
-function onTiming(list) {
-  list.getEntries().forEach(countEntry);
-  soon();
-}
-try {
-  new PerformanceObserver(onTiming).observe({ type: "resource" });
-  haveTiming = true;
-} catch (eObs) {}
-function noteBytes(req, res) {
-  if (!res) return;
-  if (res.type === "opaque") {
-    pendingOpaque += 1;
-    soon();
-    return;
-  }
-  var len = parseInt(res.headers.get("content-length") || "", 10) || 0;
-  if (haveTiming) {
-    if (len) lenByUrl[req.url || req] = len + 300;
-    return;
-  }
-  pendingBytes += len;
-  soon();
-}
 function netFetch(req, opts) {
-  function seen(res) {
-    noteBytes(req, res);
-    return res;
-  }
-  return fetch(req, opts).then(seen);
+  return fetch(req, opts);
 }
 function trim(name, max) {
   function trimKeys(cache) {
