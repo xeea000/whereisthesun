@@ -2373,7 +2373,22 @@
     }
   }
 
+  /* opt78: on a first visit, satellite tiles wait (max 1.5 s) until the service worker
+   * controls the page, so it keeps them and the next visit does not download them again. */
+  var swGateOpen = false;
+  var swGateUrl = null;
+  function openSwGate() {
+    swGateOpen = true;
+    return presentStaticGibsNow(swGateUrl);
+  }
   function presentStaticGibs(url) {
+    if (swGateOpen) return presentStaticGibsNow(url);
+    var first = swGateUrl === null;
+    swGateUrl = url;
+    if (!first) return Promise.resolve(true);
+    return window.SunnySwReady(1500).then(openSwGate);
+  }
+  function presentStaticGibsNow(url) {
     var m = cloudTargetMap();
     if (!m || tabHidden) return Promise.resolve(false);
     if (!cloudSourcesReady || !m.getSource(GIBS_SRC)) {
