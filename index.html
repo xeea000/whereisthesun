@@ -17,6 +17,7 @@
   </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script type="module" async src="vendor/lag-o-meter-1.3.0/start.js?h=00de626178&key=sunny-lag"></script>
   <title>SUNNY</title>
   <meta name="theme-color" content="#121417">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -36,7 +37,7 @@
   <link rel="dns-prefetch" href="https://geo.weather.gc.ca">
   <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?h=5ae31c574f">
   <link rel="stylesheet" href="styles.css?h=78f082975a">
-  <link rel="stylesheet" href="settings-panel.css?h=a8d0a7ccc0">
+  <link rel="stylesheet" href="settings-panel.css?h=5ab8872727">
   <link rel="stylesheet" href="side-buttons.css?h=5ab83bde0d">
 </head>
 <body>
@@ -183,7 +184,7 @@
       <h3 class="set-title">Sightseeing</h3>
       <div class="set-row">
         <label class="ov switch" title="Confirmed meteorite impact structures, drawn at true size"><input id="toggle-craters" type="checkbox"><span class="knob" aria-hidden="true"></span>Impact craters</label>
-        <label class="ov switch" title="Data used this session and download rate"><input id="toggle-data-meter" type="checkbox" checked><span class="knob" aria-hidden="true"></span>Data usage</label>
+        <label class="ov switch" title="Network Statistics monitor"><input id="toggle-lag-meter" type="checkbox" checked><span class="knob" aria-hidden="true"></span>Show Lag-O-Meter</label>
       </div>
     </section>
   </div>
@@ -239,6 +240,6 @@
   <script defer src="app.js?h=05a78bdfaf"></script>
   <script defer src="update-banner.js?h=e3362c1916"></script>
   <script defer src="settings-panel.js?h=0e2b6b8551"></script>
-  <script defer src="data-meter.js?h=688018d308"></script>
+  <script type="module" src="lagmeter.js?h=e229a4b5e6"></script>
 </body>
 </html>

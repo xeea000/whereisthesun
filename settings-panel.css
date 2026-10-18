@@ -177,14 +177,3 @@ body.settings-open .update-banner { display: none; }
   .ctrl-sun .ctrl-label { font-size: 8px; }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 236px); }
 }
-/* opt76: data meter readout, faint, top-right, never over buttons */
-.data-meter {
-  position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 6px);
-  right: 8px;
-  z-index: 5;
-  font: 11px/1.2 system-ui, sans-serif;
-  color: rgba(255, 255, 255, 0.55);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-}

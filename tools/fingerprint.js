@@ -9,6 +9,32 @@ var path = require("path");
 var crypto = require("crypto");
 var root = path.join(__dirname, "..");
 var EXTRA = ["manifest.webmanifest", "icon-192.png", "icon-512.png"];
+/* opt79: the Lag-O-Meter copy must be the pinned one, byte for byte (workspace/lag-o-meter/README.md says how to upgrade). */
+var LAG_DIR = "vendor/lag-o-meter-1.3.0";
+var LAG_PINNED = "lag-o-meter 1.3.0 sha256:917ef6682a041155f6a1292ca7537093f689552951898b2dfcb0dee3a00a9d40";
+/* The fingerprint line of a vendored meter: its version and a sha256 over each file's name, length and bytes, sorted by name. */
+function lagLine(dir) {
+  var h = crypto.createHash("sha256");
+  function isFile(e) {
+    return e.isFile();
+  }
+  function nameOf(e) {
+    return e.name;
+  }
+  function addFile(name) {
+    var bytes = fs.readFileSync(path.join(dir, name));
+    h.update(name + "\0" + bytes.length + "\0");
+    h.update(bytes);
+  }
+  fs.readdirSync(dir, { withFileTypes: true }).filter(isFile).map(nameOf).sort().forEach(addFile);
+  var version = /VERSION = "([^"]+)"/.exec(fs.readFileSync(path.join(dir, "version.js"), "utf8"))[1];
+  return "lag-o-meter " + version + " sha256:" + h.digest("hex");
+}
+var lag = lagLine(path.join(root, LAG_DIR));
+if (lag !== LAG_PINNED) {
+  console.error(LAG_DIR + " is not the pinned Lag-O-Meter: " + lag + ", want " + LAG_PINNED);
+  process.exit(1);
+}
 function hashOf(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(path.join(root, file))).digest("hex").slice(0, 10);
 }
@@ -35,13 +61,18 @@ var beachVSrc = fs.readFileSync(beachVPath, "utf8").replace(/SUNNY_BEACH_V = "[^
 fs.writeFileSync(beachVPath, beachVSrc);
 var html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 var assets = [];
-function rewrite(all, attr, file) {
+/* Any other query part, such as the meter's start.js?key=, stays after the hash. */
+function rewrite(all, attr, file, query) {
   if (/^https?:/.test(file)) return all;
-  var out = stamp(file);
+  function keep(part) {
+    return part && !/^h=/.test(part);
+  }
+  var rest = (query || "").replace(/^\?/, "").split("&").filter(keep);
+  var out = stamp(file) + (rest.length ? "&" + rest.join("&") : "");
   assets.push(out);
   return attr + '="' + out + '"';
 }
-html = html.replace(/(src|href)="([^"?#]+\.(?:js|css))(?:\?[^"]*)?"/g, rewrite);
+html = html.replace(/(src|href)="([^"?#]+\.(?:js|css))(\?[^"]*)?"/g, rewrite);
 fs.writeFileSync(path.join(root, "index.html"), html);
 var list = ["./", "index.html"].concat(assets, EXTRA.map(stamp));
 var body = "var PRECACHE = " + JSON.stringify(list, null, 2) + ";";
