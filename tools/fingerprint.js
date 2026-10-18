@@ -15,6 +15,24 @@ function hashOf(file) {
 function stamp(file) {
   return file + "?h=" + hashOf(file);
 }
+/* opt78: one hash over all beach files; the app fetches them as data/<file>?h=<hash>. */
+function beachDataHash() {
+  var dir = path.join(root, "data");
+  var h = crypto.createHash("sha256");
+  function addFile(name) {
+    h.update(name);
+    h.update(fs.readFileSync(path.join(dir, name)));
+  }
+  fs.readdirSync(dir).filter(isBeachFile).sort().forEach(addFile);
+  return h.digest("hex").slice(0, 10);
+}
+function isBeachFile(name) {
+  return name === "manifest.json" || /\.gz$/.test(name);
+}
+var beachV = beachDataHash();
+var beachVPath = path.join(root, "beach-data-v.js");
+var beachVSrc = fs.readFileSync(beachVPath, "utf8").replace(/SUNNY_BEACH_V = "[^"]*"/, 'SUNNY_BEACH_V = "' + beachV + '"');
+fs.writeFileSync(beachVPath, beachVSrc);
 var html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 var assets = [];
 function rewrite(all, attr, file) {

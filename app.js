@@ -252,7 +252,6 @@
   var beachRegionsLoaded = Object.create(null);
   var beachRegionInflight = Object.create(null);
   var beachDbComplete = false;
-  var beachBgStarted = false;
   var beachSeenIds = Object.create(null);
   var beachByIdMap = Object.create(null);
   var GRID_DEG = 1;
@@ -265,8 +264,6 @@
   var sheetSunnyMode = true;
   var sheetListRows = [];
   var wxSearchGen = 0;
-  var BG_RING_KM = 1000;
-  var BG_PAD_CELLS = 2;
 
   var lastPaintKey = "";
   var overlayReady = false;
@@ -4344,10 +4341,15 @@
   function loadBeachManifest() {
     if (beachManifest) return Promise.resolve(beachManifest);
     if (beachManifestPromise) return beachManifestPromise;
-    beachManifestPromise = fetch("data/manifest.json").then(function (res) {
+    function readManifestRes(res) {
       if (!res.ok) throw new Error("beach list");
       return res.json();
-    }).then(function (manifest) {
+    }
+    function forgetManifest(err) {
+      beachManifestPromise = null;
+      throw err;
+    }
+    function keepManifest(manifest) {
       if (Array.isArray(manifest)) {
         beachManifest = {
           v: BEACH_DB_VER,
@@ -4362,10 +4364,8 @@
         }
       }
       return beachManifest;
-    }).catch(function (err) {
-      beachManifestPromise = null;
-      throw err;
-    });
+    }
+    beachManifestPromise = fetch(beachDataUrl("data/manifest.json")).then(readManifestRes).then(keepManifest).catch(forgetManifest);
     return beachManifestPromise;
   }
 
@@ -4404,8 +4404,6 @@
   var beachWorker = null;
   var beachWorkerSeq = 0;
   var beachWorkerPending = Object.create(null);
-  var idlePrefetchBusy = false;
-  var idlePrefetchSeen = Object.create(null);
 
   function getBeachWorker() {
     if (beachWorker) return beachWorker;
@@ -4501,6 +4499,14 @@
     });
   }
 
+  function beachDataUrl(path) {
+    return path + "?h=" + (window.SUNNY_BEACH_V || "dev");
+  }
+
+  function withBeachHash(f) {
+    return { url: beachDataUrl(f.url), format: f.format };
+  }
+
   function regionFileCandidates(region) {
     var files = [];
     var fmt = beachManifest && beachManifest.format;
@@ -4514,45 +4520,7 @@
     } else if (fmt === "bin1" && files.length === 1 && files[0].format === "bin1") {
       files.push({ url: "data/" + region.id + ".json.gz", format: "json" });
     }
-    return files;
-  }
-
-  function maybeIdlePrefetchRing() {
-    if (mapGesturing || idlePrefetchBusy || tabHidden || !beachManifest || !beachManifest.regions) return;
-    if (!beachDb || !beachDb.length) return;
-    var lat = origin ? origin.lat : DEFAULT_WARM_LAT;
-    var lon = origin ? origin.lon : DEFAULT_WARM_LON;
-    var ring = pickRegionsAround(lat, lon, BG_RING_KM * 1.35, BG_PAD_CELLS + 1);
-    var need = [];
-    var i, r;
-    for (i = 0; i < ring.length; i++) {
-      r = ring[i];
-      if (!r || !r.id) continue;
-      if (beachRegionsLoaded[r.id] || beachRegionInflight[r.id] || idlePrefetchSeen[r.id]) continue;
-      need.push(r);
-    }
-    if (!need.length) return;
-    idlePrefetchBusy = true;
-    var CONCURRENCY = 2;
-    var idx = 0;
-    function pump() {
-      if (idx >= need.length || tabHidden) {
-        idlePrefetchBusy = false;
-        return Promise.resolve();
-      }
-      var batch = [];
-      while (batch.length < CONCURRENCY && idx < need.length) {
-        var reg = need[idx++];
-        idlePrefetchSeen[reg.id] = 1;
-        batch.push(reg);
-      }
-      return Promise.all(batch.map(function (reg) {
-        return fetchOneRegion(reg).catch(function () { return null; });
-      })).then(function () {
-        return yieldMain().then(pump);
-      });
-    }
-    pump();
+    return files.map(withBeachHash);
   }
 
   function networkFetchRegion(region) {
@@ -4693,52 +4661,6 @@
     });
   }
 
-  function startBackgroundRegionLoad(quiet, lat, lon) {
-    if (beachBgStarted || beachDbComplete) return;
-    beachBgStarted = true;
-    if (lat == null || lon == null) {
-      if (origin) { lat = origin.lat; lon = origin.lon; }
-      else { lat = DEFAULT_WARM_LAT; lon = DEFAULT_WARM_LON; }
-    }
-    loadBeachManifest().then(function (manifest) {
-      var regions = manifest.regions;
-      if (!regions || !regions.length) return;
-      /* Nearby ring only — never background-fetch the whole planet (~198 regions). */
-      var pending = pickRegionsAround(lat, lon, BG_RING_KM, BG_PAD_CELLS);
-      var filtered = [];
-      var i, r;
-      for (i = 0; i < pending.length; i++) {
-        r = pending[i];
-        if (r && r.id && !beachRegionsLoaded[r.id]) filtered.push(r);
-      }
-      pending = filtered;
-      if (!pending.length) return;
-      if (!quiet) setStatus("Loading beaches for this area…");
-      var idx = 0;
-      var CONCURRENCY = 3;
-      function pump() {
-        if (idx >= pending.length) return;
-        var batch = [];
-        while (batch.length < CONCURRENCY && idx < pending.length) {
-          batch.push(pending[idx++]);
-        }
-        return Promise.all(batch.map(function (reg) {
-          return fetchOneRegion(reg).catch(function (err) {
-            console.error(err);
-            return null;
-          });
-        })).then(function () {
-          if (idx >= pending.length) return;
-          return yieldMain().then(pump);
-        });
-      }
-      return pump();
-    }).catch(function (err) {
-      console.error(err);
-      beachBgStarted = false;
-    });
-  }
-
   function finishFromFullCache(data) {
     beachDb = null;
     beachGrid = null;
@@ -4788,7 +4710,6 @@
     function priorityThenBackground() {
       dbStatus("Loading beaches for this area…");
       return ensureRegionsFor(lat, lon, 150).then(function (db) {
-        startBackgroundRegionLoad(quiet, lat, lon);
         return db || beachDb || [];
       }).catch(function (err) {
         console.error(err);
@@ -4799,7 +4720,6 @@
     // Already have some rows (priority loaded) — still fine to resolve; callers that need
     // more geography should use ensureRegionsFor / ensureRegionsForBbox.
     if (beachDb && beachDb.length) {
-      startBackgroundRegionLoad(true, lat, lon);
       return ensureRegionsFor(lat, lon, 150).then(function () {
         return beachDb;
       });
@@ -8165,32 +8085,6 @@
     } catch (eLoc) {}
   }
 
-  function readLastLocate() {
-    try {
-      var raw = localStorage.getItem(LOCATE_KEY);
-      if (!raw) return null;
-      var o = JSON.parse(raw);
-      if (!o || !isFinite(o.lat) || !isFinite(o.lon)) return null;
-      if (o.lat < -90 || o.lat > 90 || o.lon < -180 || o.lon > 180) return null;
-      return { lat: Number(o.lat), lon: Number(o.lon) };
-    } catch (eRead) {
-      return null;
-    }
-  }
-
-  function preloadRegionsNearLastGps() {
-    /* opt10: before full idle ring, ensure 1–2 region cells covering last GPS */
-    var last = readLastLocate();
-    if (!last) return;
-    loadBeachManifest().then(function (manifest) {
-      if (!manifest || !manifest.regions || !manifest.regions.length) return;
-      var regs = pickRegionsAround(last.lat, last.lon, 40, 0);
-      if (!regs.length) return;
-      var few = regs.slice(0, 2);
-      return ensureRegionsList(few, null);
-    }).catch(function () {});
-  }
-
   function formatLocateAccuracy(meters) {
     if (!isFinite(meters) || meters <= 0) return "";
     if (meters < 1000) return " (±" + Math.round(meters) + " m)";
@@ -8507,18 +8401,40 @@
       paintBeaches(beaches);
       if (allMode) {
         loadViewBeaches();
-      } else {
-        /* On-demand: warm cells under the view without full-planet fetch */
+      } else if (beaches && beaches.length) {
+        /* On-demand: warm cells under the view only while beach results are shown (opt78) */
         try {
           var qb = viewBbox();
           ensureRegionsForBbox(qb.south, qb.north, qb.west, qb.east, true).catch(function () {});
         } catch (eMove) {}
       }
-      maybeIdlePrefetchRing();
       scheduleIdleGoesWarm();
       if (windOn) scheduleWindFieldRefresh(false);
     }, MOVE_DEBOUNCE_MS);
   });
+
+  function showGoesBootTip(iso) {
+    applyGoesLatestToTimeline(iso);
+    if (!playMode && !tabHidden && !radarOn()) {
+      var urlNow = gibsTiles(iso || goesLatestIsoSync(), origin ? origin.lon : -79);
+      presentStaticGibs(urlNow);
+      setCloudFrame(cloudIndex);
+    }
+  }
+
+  function showGoesFallbackTip() {
+    /* probe failed — fall back to conservative wall tip once */
+    if (!playMode && !tabHidden && !radarOn()) {
+      var fb = goesLatestIsoSync();
+      applyGoesLatestToTimeline(fb);
+      presentStaticGibs(gibsTiles(fb, origin ? origin.lon : -79));
+      setCloudFrame(cloudIndex);
+    }
+  }
+
+  function resolveGoesForOrigin() {
+    return resolveGoesLatestIso(origin ? origin.lon : -79);
+  }
 
   map.on("load", function () {
     /* opt52: critical path — map shell, basemap, GOES tip; defer beach/workers/warm */
@@ -8542,22 +8458,8 @@
           timeLabel.textContent = formatFrameLabel(cloudTimes[cloudTimes.length - 1]) + " · …";
         }
       } catch (eLbl) {}
-      resolveGoesLatestIso(origin ? origin.lon : -79).then(function (iso) {
-        applyGoesLatestToTimeline(iso);
-        if (!playMode && !tabHidden && !radarOn()) {
-          var urlNow = gibsTiles(iso || goesLatestIsoSync(), origin ? origin.lon : -79);
-          presentStaticGibs(urlNow);
-          setCloudFrame(cloudIndex);
-        }
-      }).catch(function () {
-        /* probe failed — fall back to conservative wall tip once */
-        if (!playMode && !tabHidden && !radarOn()) {
-          var fb = goesLatestIsoSync();
-          applyGoesLatestToTimeline(fb);
-          presentStaticGibs(gibsTiles(fb, origin ? origin.lon : -79));
-          setCloudFrame(cloudIndex);
-        }
-      });
+      /* opt78: first visit waits (max 1.5 s) for the service worker so it keeps these frames */
+      window.SunnySwReady(1500).then(resolveGoesForOrigin).then(showGoesBootTip).catch(showGoesFallbackTip);
     } else {
       try {
         var isoBoot = cloudTimes[cloudTimes.length - 1];
@@ -8573,15 +8475,11 @@
       restackCloudRasters();
       restackRadar();
     }
-    var lastGps = readLastLocate();
-    var bootLat = lastGps ? lastGps.lat : DEFAULT_WARM_LAT;
-    var bootLon = lastGps ? lastGps.lon : DEFAULT_WARM_LON;
     /* locate stays quiet/async — never blocks map paint */
     locate({ boot: true });
     /* Heavy work after first paint + idle; independent tasks fire in parallel */
     afterMapBasicsReady(function () {
-      preloadRegionsNearLastGps();
-      loadBeachDb({ quiet: true, lat: bootLat, lon: bootLon }).catch(function () {});
+      /* opt78: beach pieces load only when beaches are searched or shown */
       scheduleIdleGoesWarm();
       setTimeout(function () {
         if (!tabHidden) prefetchFlowWorkerScript();
@@ -8591,7 +8489,6 @@
   });
 
   map.on("idle", function () {
-    maybeIdlePrefetchRing();
     /* opt54: glyphs often arrive after first Labels enable — heal once on idle */
     if (labelsIdleHealArmed && overlayVisible()) {
       labelsIdleHealArmed = false;
@@ -8946,7 +8843,6 @@
       if (h === 6 || h === 12 || h === 24) setHoursBack(h);
     });
   })();
-
 
   /* opt12: small FPS meter (rAF, ~4 Hz text, pause when hidden) */
   (function initFpsMeter() {

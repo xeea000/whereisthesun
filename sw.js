@@ -3,14 +3,15 @@
  * - App cache: files carry a content hash (?h=, written by tools/fingerprint.js), so they are
  *   cache-first forever; a new build fetches only files whose hash changed. index.html and
  *   version.json are network-first.
- * - Static cache (kept across deploys, capped): map tiles, fonts, small static data.
+ * - Static cache (kept across deploys, capped): map tiles, fonts, small static data, and
+ *   beach pieces (data/*?h=<hash>, opt78), so each piece is downloaded once.
  * - Frames cache (kept across deploys, capped, aged out after 26 h): settled past satellite
  *   and radar frames. A frame for a fixed past time never changes, so it is fetched once.
  * - Reports bytes it pulled from the network to the page's data meter (postMessage).
  * Real network bytes come from the worker's own timing entries (transferSize is 0 for
  * HTTP-cache hits). Cross-origin servers without the timing header report 0, so those
  * fall back to Content-Length; opaque responses have no size and are only counted. */
-var BUILD = "opt77"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt78"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -44,7 +45,9 @@ var PRECACHE = [
   "side-buttons.js?h=06480df83c",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=2b0f964296",
-  "app.js?h=0ba2f8f2fd",
+  "sw-ready.js?h=66b3059850",
+  "beach-data-v.js?h=6226beb469",
+  "app.js?h=248502ebd0",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
   "data-meter.js?h=688018d308",
@@ -235,6 +238,9 @@ function isStaticData(u) {
   var p = u.pathname;
   return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json";
 }
+function isBeachData(u) {
+  return u.origin === self.location.origin && u.pathname.indexOf("/data/") !== -1 && u.searchParams.has("h");
+}
 function isHashed(u) {
   return u.origin === self.location.origin && u.searchParams.has("h");
 }
@@ -262,7 +268,7 @@ function route(req, u) {
     }
     return cacheFirst(FRAMES, FRAMES_MAX, req);
   }
-  if (isTile(u) || isStaticData(u)) return cacheFirst(STATIC, STATIC_MAX, req);
+  if (isTile(u) || isStaticData(u) || isBeachData(u)) return cacheFirst(STATIC, STATIC_MAX, req);
   if (isHashed(u)) return cacheFirst(CACHE, 9999, req);
   if (u.origin === self.location.origin) return networkFirst(req);
   return netFetch(req);
