@@ -10,8 +10,8 @@ var crypto = require("crypto");
 var root = path.join(__dirname, "..");
 var EXTRA = ["manifest.webmanifest", "icon-192.png", "icon-512.png"];
 /* opt79: the Lag-O-Meter copy must be the pinned one, byte for byte (workspace/lag-o-meter/README.md says how to upgrade). */
-var LAG_DIR = "vendor/lag-o-meter-1.3.0";
-var LAG_PINNED = "lag-o-meter 1.3.0 sha256:917ef6682a041155f6a1292ca7537093f689552951898b2dfcb0dee3a00a9d40";
+var LAG_DIR = "vendor/lag-o-meter-1.4.0";
+var LAG_PINNED = "lag-o-meter 1.4.0 sha256:fe087af33ad67163668c42d8cbe975f8b78517c027e1bdb15857c5bc42efab19";
 /* The fingerprint line of a vendored meter: its version and a sha256 over each file's name, length and bytes, sorted by name. */
 function lagLine(dir) {
   var h = crypto.createHash("sha256");

@@ -80,7 +80,8 @@ export function tooltip(stats, s) {
   if (stats.health === null || stats.health === undefined) lines.push("The bar is dimmed because there is no live connection to judge.");
   let total = "↓ " + formatBytes(stats.downloaded) + " downloaded and ↑ " + formatBytes(stats.uploaded) + " uploaded this session";
   if (stats.demo) total += ".";
-  else total += ", as the browser reports them. The total is an estimate and can miss some traffic, such as streaming and files from other sites.";
+  else total += ", as the browser and the game's service worker report them. The total is an estimate and can miss some traffic, such as streaming and files"
+    + " from other sites.";
   lines.push(total);
   if (stats.hiddenFiles > 0) lines.push(stats.hiddenFiles + (stats.hiddenFiles === 1 ? " file" : " files") + " from other sites came without a size and count 0.");
   if (stats.sizesMissing) lines.push("This browser doesn't report file sizes, so only the game's own traffic is counted.");

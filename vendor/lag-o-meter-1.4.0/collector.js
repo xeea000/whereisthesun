@@ -2,10 +2,15 @@
 // The bandwidth collector. It adds up what the browser reports this page fetched over the network, from Navigation
 // Timing and Resource Timing, counting each entry once, plus the traffic the app reports itself. It keeps the session
 // total across reloads in the same tab through sessionStorage and gives the data rate in bytes per second averaged
-// over this visit to the page. It never makes a request: it only reads the browser's own timing records.
+// over this visit to the page. A page reads a size of 0 for every file its service worker answers, so it also adds what the
+// game's service worker reports it fetched (src/sw-counter.js, loaded in the worker), counting each file once. It never
+// makes a request: it only reads the browser's own timing records and those reports.
 import { DEFAULTS } from "./defaults.js";
 const BUFFER_SIZE = 20000;
 const BUFFER_MARGIN = 1000;
+const WORKER_MESSAGE = "lag-o-meter-bytes";
+const PAIR_MS = 60000;
+const HOLD_MS = 3000;
 const collectors = new WeakMap();
 // True for a finite number of zero or more.
 function isCount(value) {
@@ -51,6 +56,36 @@ export function createCollector(options) {
   let polled = 0;
   let navigationDone = false;
   const listeners = [];
+  // A file the service worker handled can show on both sides. The worker's report is what it really fetched, so a page
+  // timing entry for such a file waits HOLD_MS for a report of the same address and counts only when none comes, as for
+  // a request the worker passed straight to the network. Reports that came first are kept a minute by address.
+  const held = new Map();
+  const reported = new Map();
+  // Adds one item to a list kept under an address.
+  const push = (map, url, item) => {
+    const list = map.get(url);
+    if (list) list.push(item);
+    else map.set(url, [item]);
+  };
+  // Takes the oldest item kept under an address, or null.
+  const shift = (map, url) => {
+    const list = map.get(url);
+    if (!list) return null;
+    const item = list.shift();
+    if (!list.length) map.delete(url);
+    return item;
+  };
+  // Counts the held entries no report claimed in time (all of them with now at Infinity) and forgets reports past a minute.
+  const settle = (now) => {
+    for (const [url, list] of held) {
+      while (list.length && now - list[0].at >= HOLD_MS) down += list.shift().bytes;
+      if (!list.length) held.delete(url);
+    }
+    for (const [url, list] of reported) {
+      while (list.length && now - list[0] > PAIR_MS) list.shift();
+      if (!list.length) reported.delete(url);
+    }
+  };
   // Reads the stored session total, or zeros when there is none or storage throws.
   const readStored = () => {
     const store = sessionStore(win);
@@ -64,10 +99,12 @@ export function createCollector(options) {
   };
   // The bytes one timing entry stands for: its transferSize, which is 0 for a cache hit and the 300 byte header
   // estimate for a revalidated file. Where the browser leaves out transferSize the body size is used and the total is
-  // marked as an estimate. A file from another site reported at 0 is counted for the tooltip.
+  // marked as an estimate. A file from another site reported at 0 is counted for the tooltip, unless a service worker
+  // handled it: the worker reports such files itself.
   const sizeOf = (entry) => {
     if (isCount(entry.transferSize)) {
-      if (entry.transferSize === 0 && entry.encodedBodySize === 0 && entry.decodedBodySize === 0 && otherSite(entry.name, win)) hiddenFiles += 1;
+      const zero = entry.transferSize === 0 && entry.encodedBodySize === 0 && entry.decodedBodySize === 0;
+      if (zero && !(entry.workerStart > 0) && otherSite(entry.name, win)) hiddenFiles += 1;
       return entry.transferSize;
     }
     estimated = true;
@@ -83,7 +120,27 @@ export function createCollector(options) {
     seen.add(id);
     const bytes = sizeOf(entry);
     if (bytes <= 0) return;
+    if (entry.workerStart > 0 && entry.name) {
+      if (shift(reported, entry.name) !== null) return;
+      push(held, entry.name, { bytes, at: clock() });
+      return;
+    }
     down += bytes;
+  };
+  // Adds the files a service worker reports it fetched, except one already counted from the page's own timing entry.
+  const onWorkerMessage = (event) => {
+    const data = event && event.data;
+    if (!data || data.type !== WORKER_MESSAGE) return;
+    const now = clock();
+    settle(now);
+    for (const file of Array.isArray(data.files) ? data.files : []) {
+      const url = Array.isArray(file) ? file[0] : null;
+      const bytes = Array.isArray(file) ? file[1] : 0;
+      if (!isCount(bytes) || bytes === 0) continue;
+      if (typeof url === "string" && shift(held, url) === null) push(reported, url, now);
+      down += bytes;
+    }
+    if (isCount(data.hidden)) hiddenFiles += data.hidden;
   };
   // Reads timing entries of one type, or none when the browser has no such list.
   const entriesOf = (type) => {
@@ -151,6 +208,7 @@ export function createCollector(options) {
   };
   // Writes the session total to sessionStorage, quietly doing nothing when storage is blocked.
   const save = () => {
+    settle(Infinity);
     const total = { down: base.down + down, up: base.up + up };
     const store = sessionStore(win);
     try {
@@ -194,6 +252,7 @@ export function createCollector(options) {
     listen(win, "pagehide", save);
     listen(win, "pageshow", resume);
     listen(win.document, "visibilitychange", onVisibility);
+    listen(win.navigator && win.navigator.serviceWorker, "message", onWorkerMessage);
     return api;
   };
   // Adds bytes the app downloaded that timing cannot see, such as socket messages.
@@ -211,6 +270,7 @@ export function createCollector(options) {
     const now = isCount(at) ? at : clock();
     checkNavigation();
     if (!observer) poll();
+    settle(clock());
     const seconds = Math.max(1, (now - origin) / 1000);
     return {
       downloaded: base.down + down, uploaded: base.up + up, rate: (down + up) / seconds,
