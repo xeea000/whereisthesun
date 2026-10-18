@@ -1,0 +1,3 @@
+# The Lag-O-Meter copy: pin LF so a clone holds the same bytes as GitHub. tools/fingerprint.js pins the copy's fingerprint,
+# a sha256 over those bytes, so a Windows clone with git's default core.autocrlf=true read the copy as edited.
+**/lag-o-meter-*/** text=auto eol=lf
