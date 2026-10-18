@@ -11,6 +11,7 @@ const BUFFER_MARGIN = 1000;
 const WORKER_MESSAGE = "lag-o-meter-bytes";
 const PAIR_MS = 60000;
 const HOLD_MS = 3000;
+const HOLD_PAGE_MS = 15000;
 const collectors = new WeakMap();
 // True for a finite number of zero or more.
 function isCount(value) {
@@ -58,7 +59,8 @@ export function createCollector(options) {
   const listeners = [];
   // A file the service worker handled can show on both sides. The worker's report is what it really fetched, so a page
   // timing entry for such a file waits HOLD_MS for a report of the same address and counts only when none comes, as for
-  // a request the worker passed straight to the network. Reports that came first are kept a minute by address.
+  // a request the worker passed straight to the network; the page's own load waits HOLD_PAGE_MS, the time its report may
+  // take to reach a page that is still starting. Reports that came first are kept a minute by address.
   const held = new Map();
   const reported = new Map();
   // Adds one item to a list kept under an address.
@@ -78,7 +80,7 @@ export function createCollector(options) {
   // Counts the held entries no report claimed in time (all of them with now at Infinity) and forgets reports past a minute.
   const settle = (now) => {
     for (const [url, list] of held) {
-      while (list.length && now - list[0].at >= HOLD_MS) down += list.shift().bytes;
+      while (list.length && now - list[0].at >= list[0].hold) down += list.shift().bytes;
       if (!list.length) held.delete(url);
     }
     for (const [url, list] of reported) {
@@ -122,7 +124,7 @@ export function createCollector(options) {
     if (bytes <= 0) return;
     if (entry.workerStart > 0 && entry.name) {
       if (shift(reported, entry.name) !== null) return;
-      push(held, entry.name, { bytes, at: clock() });
+      push(held, entry.name, { bytes, at: clock(), hold: entry.entryType === "navigation" ? HOLD_PAGE_MS : HOLD_MS });
       return;
     }
     down += bytes;

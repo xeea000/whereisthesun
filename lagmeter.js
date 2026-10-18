@@ -1,9 +1,9 @@
 // workspace/whereisthesun/lagmeter.js
-/* SUNNY Lag-O-Meter (opt79): the classic network meter from vendor/lag-o-meter-1.4.0, top right where the data usage line
+/* SUNNY Lag-O-Meter (opt79): the classic network meter from vendor/lag-o-meter-1.4.1, top right where the data usage line
  * was. Its ticks, ping and bar colour come from reading version.json every 5 seconds, which the service worker always
  * fetches from the network, so each reading is a real round trip to the site. On by default; the Settings switch
  * "Show Lag-O-Meter" turns it off (saved). */
-import { mountLagOMeter } from "./vendor/lag-o-meter-1.4.0/lag-o-meter.js";
+import { mountLagOMeter } from "./vendor/lag-o-meter-1.4.1/lag-o-meter.js";
 var KEY = "sunny-lag-meter";
 var CHECK_MS = 5000;
 var sw = document.getElementById("toggle-lag-meter");
