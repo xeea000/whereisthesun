@@ -11,7 +11,7 @@
  * Real network bytes come from the worker's own timing entries (transferSize is 0 for
  * HTTP-cache hits). Cross-origin servers without the timing header report 0, so those
  * fall back to Content-Length; opaque responses have no size and are only counted. */
-var BUILD = "opt78"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt79"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -25,9 +25,10 @@ var FRAME_SETTLE_MS = 45 * 60 * 1000;
 var PRECACHE = [
   "./",
   "index.html",
+  "vendor/lag-o-meter-1.3.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
   "styles.css?h=78f082975a",
-  "settings-panel.css?h=a8d0a7ccc0",
+  "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=5ab83bde0d",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "cloud-key.js?h=5d5b626b3c",
@@ -50,7 +51,7 @@ var PRECACHE = [
   "app.js?h=05a78bdfaf",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
-  "data-meter.js?h=688018d308",
+  "lagmeter.js?h=e229a4b5e6",
   "manifest.webmanifest?h=3122f023bd",
   "icon-192.png?h=737599b667",
   "icon-512.png?h=52a83ea426"
