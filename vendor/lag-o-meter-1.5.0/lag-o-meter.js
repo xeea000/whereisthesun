@@ -41,7 +41,7 @@ function writeRemembered(win, key, visible) {
 // to use instead of a new one), onRecheck
 // (called when the browser says it is online again), source (an object with stats(now), such as the demo simulator,
 // used instead of the collector and the connection), storageKey (the sessionStorage key for the session total),
-// settings (overrides for DEFAULTS) and window.
+// settings (overrides for DEFAULTS), window, and bright (true starts in high visibility; setBright(on) changes it).
 export function mountLagOMeter(options) {
   const opts = options || {};
   const win = opts.window || globalThis;
@@ -136,8 +136,10 @@ export function mountLagOMeter(options) {
     element: meter.host, connection, collector, version: VERSION,
     show: () => setVisible(true), hide: () => setVisible(false), toggle: () => setVisible(!visible),
     isVisible: () => visible, setPlace, update: tick, destroy,
+    setBright: (on) => { meter.setBright(on); return api; }, isBright: () => meter.isBright(),
   };
   setPlace(opts.corner, opts.x, opts.y);
+  if (opts.bright) meter.setBright(true);
   meter.host.style.setProperty("display", visible ? "block" : "none");
   if (visible && !pageHidden()) sync();
   else tick();

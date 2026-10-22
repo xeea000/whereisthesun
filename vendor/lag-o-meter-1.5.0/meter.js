@@ -129,6 +129,8 @@ function sheet(s, scope) {
     p + ".t{" + reset + "top:" + (s.barTop - s.tickHeight) + "px;width:" + s.tickWidth + "px;height:" + s.tickHeight + "px}",
     p + ".k{" + reset + "top:" + s.barTop + "px;width:" + s.markWidth + "px;height:" + s.barHeight + "px;left:" +
       Math.round(s.width / 2 - s.markWidth / 2) + "px}",
+    p + ".b{" + reset + "display:none;left:-" + s.brightPad + "px;top:-" + s.brightPad + "px;height:" + (s.height + 2 * s.brightPad) +
+      "px;background:" + s.brightBack + ";border-radius:3px}",
     p + ".l{" + reset + text + "font-weight:bold;left:0;width:" + s.width + "px;text-align:center;top:" + s.lineTop + "px;font-size:" + s.lineFontSize +
       "px;line-height:" + s.lineFontSize + "px;pointer-events:auto}",
   ].join("\n");
@@ -150,6 +152,9 @@ export function createMeter(doc, settings) {
   }
   const root = shadow || host;
   const frame = part(doc, root, "div", "m");
+  const back = part(doc, frame, "div", "b");
+  let bright = false;
+  const scales = {};
   const style = doc.createElement("style");
   style.textContent = sheet(s, !shadow);
   root.appendChild(style);
@@ -157,6 +162,7 @@ export function createMeter(doc, settings) {
   const rooms = {};
   TEXT_FIELDS.forEach((name, i) => {
     fields[name] = part(doc, frame, "span", "f", { left: Math.round((s.width * i) / 4) + "px" });
+    fields[name].dataset.name = name;
     rooms[name] = i < TEXT_FIELDS.length - 1 ? s.width / 4 - CLEAR_EM * s.fontSize : s.width / 4 + s.reserveRight - 1;
   });
   const bar = part(doc, frame, "div", "s", { left: "0px", width: s.width + "px" });
@@ -189,6 +195,7 @@ export function createMeter(doc, settings) {
       const scale = fitScale(texts[name], rooms[name], s);
       put(fields[name], "text", texts[name]);
       put(fields[name], "color", inks[name]);
+      scales[name] = scale;
       put(fields[name], "transform", scale === 1 ? "none" : "scaleX(" + scale.toFixed(3) + ")");
     }
     put(line, "text", downloadLine(st));
@@ -204,16 +211,30 @@ export function createMeter(doc, settings) {
       put(el, "background", colors.edge);
     });
     put(mark, "background", colors.mark);
+    if (bright) put(back, "width", contentWidth() + 2 * s.brightPad + "px");
     const next = tooltip(st, s);
     if (next !== title) {
       title = next;
       host.setAttribute("title", next);
     }
   };
+  // The width the numbers and the bar take up: the bar's width, or the end of the last number when it runs past the bar.
+  const contentWidth = () => {
+    const el = fields[TEXT_FIELDS[TEXT_FIELDS.length - 1]];
+    const end = el.offsetLeft + el.offsetWidth * (scales[el.dataset.name] || 1);
+    return Math.ceil(Math.max(s.width, end || 0));
+  };
+  // Turns high visibility on or off: brighter text, bar and ticks on a solid dark box that fits the meter.
+  const setBright = (on) => {
+    bright = Boolean(on);
+    host.style.setProperty("filter", bright ? s.brightFilter : "none");
+    back.style.setProperty("display", bright ? "block" : "none");
+    if (bright) back.style.setProperty("width", contentWidth() + 2 * s.brightPad + "px");
+  };
   // Removes the meter from the page.
   const destroy = () => {
     if (host.parentNode) host.parentNode.removeChild(host);
     last.clear();
   };
-  return { host, shadow, update, destroy, settings: s };
+  return { host, shadow, update, destroy, setBright, isBright: () => bright, settings: s };
 }

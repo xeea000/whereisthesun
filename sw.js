@@ -8,10 +8,10 @@
  * - Frames cache (kept across deploys, capped, aged out after 26 h): settled past satellite
  *   and radar frames. A frame for a fixed past time never changes, so it is fetched once.
  * - Counts the bytes it pulls from the network for the page's Lag-O-Meter (opt80, opt81):
- *   vendor/lag-o-meter-1.4.1/sw-counter.js reads the worker's own timing entries and
+ *   vendor/lag-o-meter-1.5.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page, since the page reads 0 for every file this worker answers. */
-importScripts("vendor/lag-o-meter-1.4.1/sw-counter.js");
-var BUILD = "opt83"; /* deploy name, read by tools/write-version.js */
+importScripts("vendor/lag-o-meter-1.5.0/sw-counter.js");
+var BUILD = "opt84"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -25,7 +25,7 @@ var FRAME_SETTLE_MS = 45 * 60 * 1000;
 var PRECACHE = [
   "./",
   "index.html",
-  "vendor/lag-o-meter-1.4.1/start.js?h=00de626178&key=sunny-lag",
+  "vendor/lag-o-meter-1.5.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
   "styles.css?h=78f082975a",
   "settings-panel.css?h=5ab8872727",
@@ -51,7 +51,7 @@ var PRECACHE = [
   "app.js?h=05a78bdfaf",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
-  "lagmeter.js?h=321ff45321",
+  "lagmeter.js?h=88072ad302",
   "manifest.webmanifest?h=3122f023bd",
   "icon-192.png?h=737599b667",
   "icon-512.png?h=52a83ea426"
