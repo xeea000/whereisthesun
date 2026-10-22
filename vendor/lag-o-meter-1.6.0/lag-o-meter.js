@@ -12,6 +12,8 @@ export { VERSION, DEFAULTS };
 export { createMeter } from "./meter.js";
 export { createCollector, getCollector } from "./collector.js";
 export { createConnection } from "./connection.js";
+export { mountLagControls, loadLagPrefs, saveLagPrefs, applyLagPrefs, LAG_PREF_DEFAULTS } from "./controls.js";
+const PINS = { left: "0%", center: "50%", right: "100%" };
 const CORNERS = ["bottom-right", "bottom-left", "top-right", "top-left"];
 // Reads a remembered visible flag from localStorage: true, false, or null when there is none or storage throws.
 function readRemembered(win, key) {
@@ -41,7 +43,8 @@ function writeRemembered(win, key, visible) {
 // to use instead of a new one), onRecheck
 // (called when the browser says it is online again), source (an object with stats(now), such as the demo simulator,
 // used instead of the collector and the connection), storageKey (the sessionStorage key for the session total),
-// settings (overrides for DEFAULTS), window, and bright (true starts in high visibility; setBright(on) changes it).
+// settings (overrides for DEFAULTS), window, bright (true starts in high visibility; setBright(on) changes it), scale
+// (0.5 to 1, setScale) and pin ("left", "center" or "right": the side that stays put when scaled down, setPin).
 export function mountLagOMeter(options) {
   const opts = options || {};
   const win = opts.window || globalThis;
@@ -100,9 +103,10 @@ export function mountLagOMeter(options) {
     }
   };
   if (doc && typeof doc.addEventListener === "function") doc.addEventListener("visibilitychange", sync);
+  let where = s.corner;
   // Moves the meter to a corner with pixel offsets; the safe-area insets are added to the offsets.
   const setPlace = (corner, x, y) => {
-    const where = CORNERS.includes(corner) ? corner : s.corner;
+    where = CORNERS.includes(corner) ? corner : s.corner;
     const dx = typeof x === "number" && Number.isFinite(x) ? x : s.offsetX;
     const dy = typeof y === "number" && Number.isFinite(y) ? y : s.offsetY;
     const [vertical, horizontal] = where.split("-");
@@ -112,7 +116,15 @@ export function mountLagOMeter(options) {
     style.setProperty(horizontal, "calc(" + dx + "px + env(safe-area-inset-" + horizontal + ", 0px))");
     if (!style.getPropertyValue(vertical)) style.setProperty(vertical, dy + "px");
     if (!style.getPropertyValue(horizontal)) style.setProperty(horizontal, dx + "px");
+    reshape();
     return api;
+  };
+  let scale = 1;
+  let pin = "center";
+  // Applies the scale and the pinned side: the left edge, the middle or the right edge stays put, on the corner's side.
+  const reshape = () => {
+    const vertical = String(where).startsWith("top") ? "0%" : "100%";
+    scale = meter.setScale(scale, PINS[pin], vertical);
   };
   // Shows or hides the meter, remembering the choice when a rememberKey was given.
   const setVisible = (next) => {
@@ -137,9 +149,13 @@ export function mountLagOMeter(options) {
     show: () => setVisible(true), hide: () => setVisible(false), toggle: () => setVisible(!visible),
     isVisible: () => visible, setPlace, update: tick, destroy,
     setBright: (on) => { meter.setBright(on); return api; }, isBright: () => meter.isBright(),
+    setScale: (k) => { scale = Number(k) || 1; reshape(); return api; }, getScale: () => scale,
+    setPin: (side) => { pin = PINS[side] ? side : "center"; reshape(); return api; }, getPin: () => pin,
   };
   setPlace(opts.corner, opts.x, opts.y);
   if (opts.bright) meter.setBright(true);
+  if (opts.scale !== undefined) api.setScale(opts.scale);
+  if (opts.pin !== undefined) api.setPin(opts.pin);
   meter.host.style.setProperty("display", visible ? "block" : "none");
   if (visible && !pageHidden()) sync();
   else tick();

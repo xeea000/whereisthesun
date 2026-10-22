@@ -231,10 +231,18 @@ export function createMeter(doc, settings) {
     back.style.setProperty("display", bright ? "block" : "none");
     if (bright) back.style.setProperty("width", contentWidth() + 2 * s.brightPad + "px");
   };
+  // Draws the meter at scale (0.5 to 1 of its size) inside its box, keeping the point at originX and originY (CSS
+  // percentages such as "0%", "50%" or "100%") where it is.
+  const setScale = (scale, originX, originY) => {
+    const k = Math.min(1, Math.max(0.5, Number(scale) || 1));
+    frame.style.setProperty("transform-origin", originX + " " + originY);
+    frame.style.setProperty("transform", k === 1 ? "none" : "scale(" + k + ")");
+    return k;
+  };
   // Removes the meter from the page.
   const destroy = () => {
     if (host.parentNode) host.parentNode.removeChild(host);
     last.clear();
   };
-  return { host, shadow, update, destroy, setBright, isBright: () => bright, settings: s };
+  return { host, shadow, update, destroy, setBright, isBright: () => bright, setScale, settings: s };
 }
