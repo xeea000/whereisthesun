@@ -27,5 +27,30 @@ if (sw) {
   sw.checked = on;
   sw.addEventListener("change", onSwitch);
 }
+/* High visibility (owner 2026-10-22): off by default, saved; brightens the whole meter on a solid dark background. */
+var BRIGHT_KEY = "sunny-lag-bright";
+var BRIGHT_PROPS = ["background", "filter", "outline", "border-radius"];
+/* Clears one style property; this is the element's style. */
+function dropProp(k) {
+  this.removeProperty(k);
+}
+var brightSw = document.getElementById("toggle-lag-bright");
+function setBright(on) {
+  var el = meter.element;
+  if (on) { el.style.setProperty("background", "rgba(0,0,0,.9)"); el.style.setProperty("filter", "brightness(2.4) saturate(1.5) contrast(1.2)");
+    el.style.setProperty("outline", "2px solid rgba(0,0,0,.9)"); el.style.setProperty("border-radius", "3px"); }
+  else BRIGHT_PROPS.forEach(dropProp, el.style);
+}
+function onBright() {
+  try { localStorage.setItem(BRIGHT_KEY, brightSw.checked ? "1" : "0"); } catch (eB2) {}
+  setBright(brightSw.checked);
+}
+var bright = false;
+try { bright = localStorage.getItem(BRIGHT_KEY) === "1"; } catch (eB) {}
+setBright(bright);
+if (brightSw) {
+  brightSw.checked = bright;
+  brightSw.addEventListener("change", onBright);
+}
 check();
 setInterval(check, CHECK_MS);
