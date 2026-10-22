@@ -52,5 +52,14 @@ if (brightSw) {
   brightSw.checked = bright;
   brightSw.addEventListener("change", onBright);
 }
+/* The build under the settings (2026-10-22): the opt name and hash that tools/write-version.js stamps into version.json. */
+var buildLine = document.getElementById("set-build");
+function showBuild(v) {
+  if (buildLine && v && v.build) buildLine.textContent = "Build " + v.build + (v.hash ? " · " + v.hash.slice(0, 7) : "") + (v.at ? " · " + v.at : "");
+}
+function readJson(r) {
+  return r.ok ? r.json() : null;
+}
+fetch("version.json?b=" + Date.now(), { cache: "no-store" }).then(readJson).then(showBuild).catch(noop);
 check();
 setInterval(check, CHECK_MS);

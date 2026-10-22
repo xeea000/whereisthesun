@@ -23,6 +23,6 @@ function addFile(name) {
   if (fs.existsSync(file)) hash.update(name + "\n").update(fs.readFileSync(file));
 }
 FILES.forEach(addFile);
-var out = { build: match[1], hash: hash.digest("hex").slice(0, 12) };
+var out = { build: match[1], hash: hash.digest("hex").slice(0, 12), at: new Date().toISOString().slice(0, 10) };
 fs.writeFileSync(path.join(root, "version.json"), JSON.stringify(out) + "\n");
 console.log("version.json", JSON.stringify(out));
