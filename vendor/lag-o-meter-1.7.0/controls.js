@@ -3,7 +3,7 @@
 // Right), kept in localStorage under one key per game. loadLagPrefs and saveLagPrefs read and write them for games that
 // draw these settings in their own menu; applyLagPrefs puts them on a mounted meter; mountLagControls draws the four
 // controls as a small group in plain elements and keeps the meter and the saved copy in step.
-export const LAG_PREF_DEFAULTS = Object.freeze({ show: true, bright: false, scale: 1, pin: "center" });
+export const LAG_PREF_DEFAULTS = Object.freeze({ show: true, bright: false, scale: 0.75, pin: "center" });
 const PIN_CHOICES = [["left", "Left"], ["center", "Center"], ["right", "Right"]];
 // The saved settings under key, each one checked, with the defaults (or the given fallback values) for anything missing.
 export function loadLagPrefs(win, key, fallback) {
@@ -18,7 +18,7 @@ export function loadLagPrefs(win, key, fallback) {
 }
 // The settings with every value in range.
 function tidy(p) {
-  const scale = Math.min(1, Math.max(0.5, Number(p.scale) || 1));
+  const scale = Math.min(1, Math.max(0.5, Number(p.scale) || 0.75));
   const pin = PIN_CHOICES.some((c) => c[0] === p.pin) ? p.pin : "center";
   return { show: p.show !== false, bright: p.bright === true, scale, pin };
 }

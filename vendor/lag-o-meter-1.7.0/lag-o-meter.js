@@ -119,7 +119,7 @@ export function mountLagOMeter(options) {
     reshape();
     return api;
   };
-  let scale = 1;
+  let scale = 0.75;
   let pin = "center";
   // Applies the scale and the pinned side: the left edge, the middle or the right edge stays put, on the corner's side.
   const reshape = () => {
@@ -149,7 +149,7 @@ export function mountLagOMeter(options) {
     show: () => setVisible(true), hide: () => setVisible(false), toggle: () => setVisible(!visible),
     isVisible: () => visible, setPlace, update: tick, destroy,
     setBright: (on) => { meter.setBright(on); return api; }, isBright: () => meter.isBright(),
-    setScale: (k) => { scale = Number(k) || 1; reshape(); return api; }, getScale: () => scale,
+    setScale: (k) => { scale = Number(k) || 0.75; reshape(); return api; }, getScale: () => scale,
     setPin: (side) => { pin = PINS[side] ? side : "center"; reshape(); return api; }, getPin: () => pin,
   };
   setPlace(opts.corner, opts.x, opts.y);

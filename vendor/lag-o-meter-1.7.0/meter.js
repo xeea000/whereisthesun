@@ -129,8 +129,6 @@ function sheet(s, scope) {
     p + ".t{" + reset + "top:" + (s.barTop - s.tickHeight) + "px;width:" + s.tickWidth + "px;height:" + s.tickHeight + "px}",
     p + ".k{" + reset + "top:" + s.barTop + "px;width:" + s.markWidth + "px;height:" + s.barHeight + "px;left:" +
       Math.round(s.width / 2 - s.markWidth / 2) + "px}",
-    p + ".b{" + reset + "display:none;left:-" + s.brightPad + "px;top:-" + s.brightPad + "px;height:" + (s.height + 2 * s.brightPad) +
-      "px;background:" + s.brightBack + ";border-radius:3px}",
     p + ".l{" + reset + text + "font-weight:bold;left:0;width:" + s.width + "px;text-align:center;top:" + s.lineTop + "px;font-size:" + s.lineFontSize +
       "px;line-height:" + s.lineFontSize + "px;pointer-events:auto}",
   ].join("\n");
@@ -152,7 +150,6 @@ export function createMeter(doc, settings) {
   }
   const root = shadow || host;
   const frame = part(doc, root, "div", "m");
-  const back = part(doc, frame, "div", "b");
   let bright = false;
   const scales = {};
   const style = doc.createElement("style");
@@ -211,7 +208,6 @@ export function createMeter(doc, settings) {
       put(el, "background", colors.edge);
     });
     put(mark, "background", colors.mark);
-    if (bright) put(back, "width", contentWidth() + 2 * s.brightPad + "px");
     const next = tooltip(st, s);
     if (next !== title) {
       title = next;
@@ -224,17 +220,16 @@ export function createMeter(doc, settings) {
     const end = el.offsetLeft + el.offsetWidth * (scales[el.dataset.name] || 1);
     return Math.ceil(Math.max(s.width, end || 0));
   };
-  // Turns high visibility on or off: brighter text, bar and ticks on a solid dark box that fits the meter.
+  // Turns high visibility on or off: brighter text, bar and ticks with a thin dark outline, straight over the page.
   const setBright = (on) => {
     bright = Boolean(on);
     host.style.setProperty("filter", bright ? s.brightFilter : "none");
-    back.style.setProperty("display", bright ? "block" : "none");
-    if (bright) back.style.setProperty("width", contentWidth() + 2 * s.brightPad + "px");
+    host.style.setProperty("background", "none");
   };
   // Draws the meter at scale (0.5 to 1 of its size) inside its box, keeping the point at originX and originY (CSS
   // percentages such as "0%", "50%" or "100%") where it is.
   const setScale = (scale, originX, originY) => {
-    const k = Math.min(1, Math.max(0.5, Number(scale) || 1));
+    const k = Math.min(1, Math.max(0.5, Number(scale) || 0.75));
     frame.style.setProperty("transform-origin", originX + " " + originY);
     frame.style.setProperty("transform", k === 1 ? "none" : "scale(" + k + ")");
     return k;
