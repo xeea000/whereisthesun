@@ -1,3 +1,4 @@
+// workspace/whereisthesun/motion-worker.js
 /* SUNNY opt60 — regularized coarse motion estimate between two frames (A→B).
  *
  * Pyramidal Lucas-Kanade ported from jpettitt/weather-radar-card src/lk.ts
@@ -14,7 +15,7 @@
  * Interpolation itself (bidirectional semi-Lagrangian, pySTEPS-style advection
  * correction) runs on the GPU in frame-tween.js.
  *
- * ---- weather-radar-card license (for the ported Lucas-Kanade code) ----
+ * weather-radar-card license (for the ported Lucas-Kanade code):
  * MIT License
  * Copyright (c) 2019 Custom cards for Home Assistant
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -34,7 +35,6 @@
  * SOFTWARE.
  */
 "use strict";
-
 function buildPyramid(img, w, h, levels) {
   var pyr = [{ d: img, w: w, h: h }];
   for (var i = 1; i < levels; i++) {
@@ -52,7 +52,6 @@ function buildPyramid(img, w, h, levels) {
   }
   return pyr;
 }
-
 function sobel(img, w, h) {
   var Ix = new Float32Array(w * h), Iy = new Float32Array(w * h);
   for (var y = 1; y < h - 1; y++) {
@@ -67,7 +66,6 @@ function sobel(img, w, h) {
   }
   return { Ix: Ix, Iy: Iy };
 }
-
 function sampleBilinear(img, w, h, x, y) {
   if (x < 0 || y < 0 || x > w - 1 || y > h - 1) return -1; /* outside marker */
   var x0 = Math.floor(x), y0 = Math.floor(y);
@@ -76,7 +74,6 @@ function sampleBilinear(img, w, h, x, y) {
   return img[y0 * w + x0] * (1 - fx) * (1 - fy) + img[y0 * w + x1] * fx * (1 - fy) +
          img[y1 * w + x0] * (1 - fx) * fy + img[y1 * w + x1] * fx * fy;
 }
-
 /* LK on a rectangle [x0,x1)×[y0,y1) of one level; gradients precomputed. */
 function lkRect(I0, I1, g, w, h, rx0, ry0, rx1, ry1, vx, vy, iters) {
   var sxx = 0, sxy = 0, syy = 0, n = 0, x, y, i;
@@ -112,7 +109,6 @@ function lkRect(I0, I1, g, w, h, rx0, ry0, rx1, ry1, vx, vy, iters) {
   }
   return { vx: vx, vy: vy, conf: conf };
 }
-
 /* Coarse exhaustive search (zero-mean SSD) over integer shifts within radius R on a
    low-res level, softly penalised by distance from the wind prior. Robust global
    initialisation for LK (LK alone can lock onto a local minimum in low-texture cloud). */
@@ -135,7 +131,7 @@ function coarseSearch(A, B, w, h, R, pdx, pdy, lam) {
       if (sc < best) { best = sc; bx = dx; by = dy; }
     }
   }
-  scores.sort(function (a, b) { return a - b; });
+  scores.sort((a, b) => { return a - b; });
   var med = scores[scores.length >> 1] || 1;
   var raw = grid[bx + "," + by];
   /* sub-pixel parabola fit on the penalised score */
@@ -146,7 +142,6 @@ function coarseSearch(A, B, w, h, R, pdx, pdy, lam) {
   return { dx: bx + Math.max(-0.5, Math.min(0.5, fx)), dy: by + Math.max(-0.5, Math.min(0.5, fy)),
            q: med > 0 ? Math.max(0, 1 - best / med) : 0, edge: Math.abs(bx) === R || Math.abs(by) === R };
 }
-
 function estimate(msg) {
   var w = msg.w, h = msg.h;
   var A = new Float32Array(msg.a), B = new Float32Array(msg.b);
@@ -195,7 +190,6 @@ function estimate(msg) {
   var maxMag = msg.maxMag || (0.12 * w);
   var gm = Math.sqrt(gx * gx + gy * gy);
   if (gm > maxMag) { gx *= maxMag / gm; gy *= maxMag / gm; }
-
   /* Coarse cells: local refinement, clamped deviation, confidence-weighted */
   var cols = msg.cols || 4, rows = msg.rows || 3;
   var cw = w / cols, ch = h / rows;
@@ -239,8 +233,7 @@ function estimate(msg) {
   }
   return { ok: true, cols: cols, rows: rows, v: v, w: w, h: h, conf: conf, q: cs ? cs.q : 0, wObs: wObs, global: [gx, gy], lk: [vx, vy] };
 }
-
-self.onmessage = function (ev) {
+self.onmessage = (ev) => {
   var msg = ev.data || {};
   if (msg.type !== "motion") return;
   try {

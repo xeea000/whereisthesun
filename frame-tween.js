@@ -1,3 +1,4 @@
+// workspace/whereisthesun/frame-tween.js
 /* SUNNY opt60 — shared, layer-agnostic frame-tween engine.
  *
  *   SunnyTween.createRenderer(canvas)          GPU (WebGL) warp+blend, 2D linear fallback
@@ -13,18 +14,15 @@
  * A layer plugs in with a small "source" adapter: count, images(i), kick(i),
  * pairKey(i0,i1), prior(i0,i1), channel. No per-layer animation code.
  */
-(function (root) {
+((root) => {
   "use strict";
-
   var MAX_FLOW_CELLS = 20; /* shader uniform array size (e.g. 5×4) */
-
   var VS = [
     "attribute vec2 aPos;",
     "varying vec2 vUv;",
     "void main(){ vUv = vec2((aPos.x + 1.0) * 0.5, 1.0 - (aPos.y + 1.0) * 0.5);",
     "  gl_Position = vec4(aPos, 0.0, 1.0); }"
   ].join("\n");
-
   /* Flow bilinear via tent weights over a small uniform grid — constant-index loop,
      so it is valid GLSL ES 1.0 (WebGL1) with no float-texture extensions. */
   var FS = [
@@ -60,7 +58,6 @@
     "    c = vec4(rgb * k, k) * c.a; }",
     "  gl_FragColor = c * uAlpha; }"
   ].join("\n");
-
   function displaySize(canvas, maxSide, maxPixels) {
     var cw = canvas.clientWidth || (canvas.parentNode && canvas.parentNode.clientWidth) || 800;
     var ch = canvas.clientHeight || (canvas.parentNode && canvas.parentNode.clientHeight) || 600;
@@ -71,7 +68,6 @@
     if (w * h * s * s > maxPixels) s = Math.sqrt(maxPixels / (w * h));
     return { w: Math.max(64, Math.round(w * s)), h: Math.max(48, Math.round(h * s)) };
   }
-
   function createRenderer(canvas, opts) {
     opts = opts || {};
     var maxSide = opts.maxSide || 2560, maxPixels = opts.maxPixels || 2560 * 1600;
@@ -109,7 +105,7 @@
         gl.uniform1i(loc.uA, 0);
         gl.uniform1i(loc.uB, 1);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-        canvas.addEventListener("webglcontextlost", function (ev) { ev.preventDefault(); lost = true; texCache.clear(); }, false);
+        canvas.addEventListener("webglcontextlost", (ev) => { ev.preventDefault(); lost = true; texCache.clear(); }, false);
       } catch (eGl) {
         try { console.warn("SUNNY tween: WebGL init failed, 2D fallback", eGl); } catch (e2) {}
         gl = null;
@@ -118,13 +114,11 @@
     if (!gl) {
       try { ctx2d = canvas.getContext("2d", { alpha: true }); } catch (e3) { ctx2d = null; }
     }
-
     function fit() {
       var d = displaySize(canvas, maxSide, maxPixels);
       if (canvas.width !== d.w || canvas.height !== d.h) { canvas.width = d.w; canvas.height = d.h; }
       return d;
     }
-
     function texFor(img) {
       var rec = texCache.get(img);
       var ver = (img.naturalWidth || img.width) + "x" + (img.naturalHeight || img.height) + "|" + (img.__sunnyVer || 0);
@@ -151,11 +145,9 @@
       texCache.set(img, rec);
       return rec.tex;
     }
-
     function ready(img) {
       return !!(img && ((img.naturalWidth || img.width) > 0) && (img.complete !== false));
     }
-
     /* passes: [{a, b, alpha}], t in [0,1], flow: {cols, rows, v(Float32 UV)} | null */
     /* A canvas can hold one context type: to fall back from WebGL (tainted image,
        lost context) swap in a fresh clone of the element and use 2D linear blend. */
@@ -170,7 +162,6 @@
       try { ctx2d = canvas.getContext("2d", { alpha: true }); } catch (e3) { ctx2d = null; }
       api.mode = ctx2d ? "2d" : "none";
     }
-
     function keyCanvas2d(ctx, d) {
       var ck = root.SunnyCloudKey;
       try {
@@ -256,21 +247,19 @@
         return false;
       }
     }
-
     var api = {
       mode: gl ? "webgl" : (ctx2d ? "2d" : "none"),
       render: render,
-      canvas: function () { return canvas; },
-      isLost: function () { return lost; },
-      dropTextures: function () {
-        if (gl) texCache.forEach(function (r) { try { gl.deleteTexture(r.tex); } catch (e) {} });
+      canvas: () => { return canvas; },
+      isLost: () => { return lost; },
+      dropTextures: () => {
+        if (gl) texCache.forEach((r) => { try { gl.deleteTexture(r.tex); } catch (e) {} });
         texCache.clear();
       }
     };
     return api;
   }
-
-  /* ---- motion estimator (worker) ---- */
+  /* Motion estimator (worker). */
   function createMotionEstimator(opts) {
     opts = opts || {};
     var worker = null, seq = 0, pending = {}, cache = new Map(), inflight = {};
@@ -281,12 +270,12 @@
       if (worker || worker === false) return worker || null;
       try {
         worker = new Worker(opts.workerUrl || "motion-worker.js");
-        worker.onmessage = function (ev) {
+        worker.onmessage = (ev) => {
           var m = ev.data || {};
           var p = pending[m.id];
           if (p) { delete pending[m.id]; p(m); }
         };
-        worker.onerror = function () { worker = false; };
+        worker.onerror = () => { worker = false; };
       } catch (e) { worker = false; }
       return worker || null;
     }
@@ -323,7 +312,7 @@
       o = o || {};
       if (cache.has(key)) return Promise.resolve(get(key));
       if (inflight[key]) return inflight[key];
-      var p = new Promise(function (resolve) {
+      var p = new Promise((resolve) => {
         var nw = imgA.naturalWidth || imgA.width, nh = imgA.naturalHeight || imgA.height;
         if (!nw || !nh) { resolve(null); return; }
         var w = Math.min(EST_W, nw), h = Math.max(16, Math.round(w * nh / nw));
@@ -343,9 +332,9 @@
         };
         var wk = getWorker();
         if (!wk) { resolve(o.prior ? windOnly() : null); return; }
-        pending[msg.id] = function (m) {
+        pending[msg.id] = (m) => {
           if (!m || !m.ok || !m.v) {
-            /* no confident estimate: wind-only field if we have a prior */
+            /* no confident estimate: wind-only field when a prior exists */
             resolve(prior ? windOnly() : null);
             return;
           }
@@ -355,7 +344,7 @@
                     global: [m.global[0] / w, m.global[1] / h] });
         };
         try { wk.postMessage(msg, [msg.a, msg.b]); } catch (eP) { delete pending[msg.id]; resolve(o.prior ? windOnly() : null); }
-      }).then(function (rec) {
+      }).then((rec) => {
         delete inflight[key];
         if (rec) put(key, rec);
         else put(key, { none: true });
@@ -364,9 +353,8 @@
       inflight[key] = p;
       return p;
     }
-    return { estimate: estimate, get: get, clear: function () { cache.clear(); } };
+    return { estimate: estimate, get: get, clear: () => { cache.clear(); } };
   }
-
   function blendFlows(list) {
     /* weighted average of same-shape flows: [{f, w}] */
     var base = null, i, k, ws = 0;
@@ -382,8 +370,7 @@
     for (k = 0; k < out.length; k++) out[k] /= ws;
     return { cols: base.cols, rows: base.rows, v: out };
   }
-
-  /* ---- generic animated raster layer ---- */
+  /* Generic animated raster layer. */
   function createAnimatedRasterLayer(o) {
     var renderer = createRenderer(o.canvas, o.renderer || {});
     var estimator = o.estimator || createMotionEstimator(o.estimatorOpts || {});
@@ -391,14 +378,12 @@
     var locks = new Map(); /* pairKey → flow|null, frozen for the whole interval */
     var lastPair = "";
     var stats = { frames: 0, flowFrames: 0, mode: renderer.mode, lastSource: "" };
-    Object.defineProperty(stats, "mode", { get: function () { return renderer.mode; }, enumerable: true });
-
+    Object.defineProperty(stats, "mode", { get: () => { return renderer.mode; }, enumerable: true });
     function flowRec(i0, i1) {
       var k = src.pairKey(i0, i1);
       var r = k ? estimator.get(k) : null;
       return r && !r.none ? r : null;
     }
-
     function requestFlow(i0, i1) {
       if (!o.motion || renderer.mode !== "webgl" || i1 === i0) return;
       var k = src.pairKey(i0, i1);
@@ -410,7 +395,6 @@
         cols: src.cols || 4, rows: src.rows || 3, maxMagUv: src.maxMagUv || 0.12
       });
     }
-
     /* Temporal consistency: V is decided once per interval (at its first rendered
        frame) and frozen; neighbours' fields are blended in for smooth velocity
        changes across intervals. If no field is ready at interval start, the whole
@@ -446,7 +430,6 @@
       while (locks.size > 64) locks.delete(locks.keys().next().value);
       return f;
     }
-
     function nearestLoaded(c, max) {
       for (var r = 1; r <= max; r++) {
         if (c - r >= 0 && src.images(c - r) && src.images(c - r).base) return c - r;
@@ -505,24 +488,21 @@
       lastPair = pairNow;
       return ok;
     }
-
     /* one-shot pair blend through the SAME renderer (scrub / bootstrap / radar step) */
     function paintImages(a, b, t) {
       if (!a) return false;
       return renderer.render([{ a: a, b: b || null, alpha: 1 }], b ? Math.max(0, Math.min(1, t)) : 0, null);
     }
-
     return {
       paintAt: paintAt,
       paintImages: paintImages,
       renderer: renderer,
       estimator: estimator,
       stats: stats,
-      resetLocks: function () { locks.clear(); },
-      clearFlows: function () { locks.clear(); estimator.clear(); }
+      resetLocks: () => { locks.clear(); },
+      clearFlows: () => { locks.clear(); estimator.clear(); }
     };
   }
-
   root.SunnyTween = {
     createRenderer: createRenderer,
     createMotionEstimator: createMotionEstimator,

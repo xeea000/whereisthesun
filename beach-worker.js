@@ -1,6 +1,6 @@
+// workspace/whereisthesun/beach-worker.js
 /* SUNNY beach-worker — gunzip + parse JSON or SNY1 binary; posts beach arrays. No deps. */
 /* global self, DecompressionStream */
-
 function gunzipToU8(buf) {
   var u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   if (u8.length >= 2 && u8[0] === 0x1f && u8[1] === 0x8b) {
@@ -8,17 +8,15 @@ function gunzipToU8(buf) {
       return Promise.reject(new Error("no decompress"));
     }
     var stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
-    return new Response(stream).arrayBuffer().then(function (ab) {
+    return new Response(stream).arrayBuffer().then((ab) => {
       return new Uint8Array(ab);
     });
   }
   return Promise.resolve(u8);
 }
-
 function decodeUtf8(u8, start, len) {
   return new TextDecoder().decode(u8.subarray(start, start + len));
 }
-
 function parseBin1(u8) {
   if (u8.length < 8) throw new Error("short bin");
   if (u8[0] !== 0x53 || u8[1] !== 0x4e || u8[2] !== 0x59 || u8[3] !== 0x31) {
@@ -46,7 +44,6 @@ function parseBin1(u8) {
   out.length = n;
   return out;
 }
-
 function parseJsonBytes(u8) {
   var text = new TextDecoder().decode(u8);
   var data = JSON.parse(text);
@@ -54,8 +51,7 @@ function parseJsonBytes(u8) {
   if (data && Array.isArray(data.beaches)) return data.beaches;
   throw new Error("beach list");
 }
-
-self.onmessage = function (ev) {
+self.onmessage = (ev) => {
   var msg = ev.data || {};
   var id = msg.id;
   var url = msg.url;
@@ -65,14 +61,14 @@ self.onmessage = function (ev) {
     return;
   }
   fetch(url)
-    .then(function (res) {
+    .then((res) => {
       if (!res.ok) throw new Error("beach list");
       return res.arrayBuffer();
     })
-    .then(function (ab) {
+    .then((ab) => {
       return gunzipToU8(ab);
     })
-    .then(function (u8) {
+    .then((u8) => {
       var rows;
       var looksBin = u8.length >= 4 && u8[0] === 0x53 && u8[1] === 0x4e && u8[2] === 0x59 && u8[3] === 0x31;
       if (format === "bin1" || (format === "auto" && looksBin)) {
@@ -82,7 +78,7 @@ self.onmessage = function (ev) {
       }
       self.postMessage({ id: id, ok: true, rows: rows });
     })
-    .catch(function (err) {
+    .catch((err) => {
       self.postMessage({ id: id, ok: false, error: (err && err.message) || "fail" });
     });
 };

@@ -9,9 +9,9 @@
  *   and radar frames. A frame for a fixed past time never changes, so it is fetched once.
  * - Counts the bytes it pulls from the network for the page's Lag-O-Meter (opt80, opt81):
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
- *   posts them to the page, since the page reads 0 for every file this worker answers. */
+ *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt86"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt87"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -27,7 +27,7 @@ var PRECACHE = [
   "index.html",
   "vendor/lag-o-meter-1.7.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
-  "styles.css?h=78f082975a",
+  "styles.css?h=77c4d1a79b",
   "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=5ab83bde0d",
   "vendor/maplibre-gl.js?h=be9633c4d8",
@@ -45,10 +45,24 @@ var PRECACHE = [
   "crown-land.js?h=066064dd81",
   "side-buttons.js?h=06480df83c",
   "wind-play-fade.js?h=e342e19b7e",
-  "frame-tween.js?h=2b0f964296",
+  "frame-tween.js?h=e39979d0d2",
   "sw-ready.js?h=66b3059850",
   "beach-data-v.js?h=6226beb469",
-  "app.js?h=05a78bdfaf",
+  "app-core.js?h=43d9f2bf1f",
+  "app-timeline.js?h=cfc2a3086a",
+  "app-cloud-layers.js?h=dbc443148c",
+  "app-play-buffers.js?h=d83595b190",
+  "app-play-blend.js?h=fad57c2838",
+  "app-cloud-frames.js?h=3c59221d54",
+  "app-beach-store.js?h=2f443c94e4",
+  "app-beach-fetch.js?h=11a99d046c",
+  "app-beach-search.js?h=790ea124a1",
+  "app-wind-data.js?h=86668761f0",
+  "app-wind-draw.js?h=f8483c2264",
+  "app-radar.js?h=effbbece48",
+  "app-play-clock.js?h=d1d1326823",
+  "app-scrub.js?h=363c69d080",
+  "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
   "lagmeter.js?h=1da2e674c3",

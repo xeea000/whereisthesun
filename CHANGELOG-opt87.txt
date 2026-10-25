@@ -1,0 +1,4 @@
+opt87: Zodiac workspace linter clean (0 findings, was 926).
+- app.js split into 14 app-*.js parts plus a small app.js starter; same code, same order.
+- Blank lines removed, inline function expressions turned into arrows or named functions.
+- Path headers added; comment wording fixed per linter hints.
