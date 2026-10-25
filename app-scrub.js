@@ -154,6 +154,7 @@ function sunnyStep14() {
   if (window.SunnyObservatories) window.SunnyObservatories.attach(map); /* opt90 */
   if (window.SunnySkyGlow) window.SunnySkyGlow.attach(map); /* opt91: light pollution */
   if (window.SunnyCrownLand) window.SunnyCrownLand.attach(map); /* opt75: Ontario Crown land overlay */
+  if (window.SunnyLayers) window.SunnyLayers.attach(map); /* opt94: layers sidebar and new layers */
   map.on("click", (e) => {
     if (!waitingForTap) return;
     saveLastLocate(e.lngLat.lat, e.lngLat.lng);

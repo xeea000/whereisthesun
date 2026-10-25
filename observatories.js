@@ -32,7 +32,7 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/observatories.json?d=opt93").then(readJson).then(keep);
+    if (!loading) loading = fetch("data/observatories.json?d=opt94").then(readJson).then(keep);
     return loading;
   }
   /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */

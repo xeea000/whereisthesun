@@ -87,7 +87,7 @@
     if (skip && skip()) return;
     var pop = document.getElementById("settings-pop");
     if (pop && !pop.hidden) return;
-    var layers = BEACH_LAYERS.filter(map.getLayer.bind(map));
+    var layers = BEACH_LAYERS.concat(window.SunnyLayers ? window.SunnyLayers.tapIds() : []).filter(map.getLayer.bind(map));
     if (layers.length && map.queryRenderedFeatures(e.point, { layers: layers }).length) return;
     var my = ++gen;
     var k = e.lngLat.lat.toFixed(2) + "," + e.lngLat.lng.toFixed(2);
