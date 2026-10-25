@@ -11,12 +11,13 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt94"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt95"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
 var FRAMES = "sunny-frames-1";
-var KEEP = [CACHE, STATIC, FRAMES];
+var OFFLINE = "sunny-offline-1"; /* opt95: regions saved from "Save for offline", never pruned here */
+var KEEP = [CACHE, STATIC, FRAMES, OFFLINE];
 var STATIC_MAX = 900;
 var FRAMES_MAX = 400;
 var FRAME_MAX_AGE_MS = 26 * 3600 * 1000;
@@ -30,8 +31,11 @@ var PRECACHE = [
   "styles.css?h=468e6b0212",
   "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=de1efe43ac",
-  "layers-panel.css?h=bb7c7c4627",
+  "layers-panel.css?h=22dafdb7c6",
+  "info-panel.css?h=07ad7014ed",
   "vendor/maplibre-gl.js?h=be9633c4d8",
+  "info-panel.js?h=cc748fd062",
+  "beach-icons.js?h=b08e97bda4",
   "data-saver.js?h=9b7caac8c2",
   "vector-base.js?h=4d1c85b8fd",
   "light-clouds.js?h=b3980fe855",
@@ -44,22 +48,25 @@ var PRECACHE = [
   "radar-legend.js?h=82ca8259a4",
   "wind-field.js?h=a95511e1dc",
   "wind-gl.js?h=cbb13e67c4",
-  "point-forecast.js?h=6cee7eab72",
-  "craters.js?h=e36d68f681",
+  "point-forecast.js?h=faf1994fb8",
+  "craters.js?h=5145d0d840",
   "sky-glow.js?h=67ea06339b",
   "beach-toggle.js?h=29ef62a7e1",
-  "observatories.js?h=3c0ddece15",
-  "crown-land.js?h=76409d2bb9",
+  "observatories.js?h=00d5442db7",
+  "crown-land.js?h=4f17ab26f8",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
-  "layer-kit.js?h=420027e3c2",
+  "layer-kit.js?h=75ee7a2b2e",
   "layers-panel.js?h=f6dc3d4033",
   "existing-layers.js?h=9f6ba55b3e",
-  "sky-layers.js?h=3b1cf5d74d",
-  "earth-layers.js?h=20c5c08c3e",
-  "outdoor-layers.js?h=540824cca6",
-  "sky-card.js?h=494dbe5b61",
+  "sky-layers.js?h=adfaed2f60",
+  "earth-layers.js?h=0b15f41f97",
+  "outdoor-layers.js?h=819f426616",
+  "sky-card.js?h=7e841a5414",
+  "sky-draw.js?h=e97d615995",
+  "offline.js?h=ecb2c8df32",
+  "beach-ref.js?h=2da9abd59c",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=f2cd6bfd0b",
   "sw-ready.js?h=66b3059850",
@@ -71,8 +78,8 @@ var PRECACHE = [
   "app-play-blend.js?h=38be458b77",
   "app-cloud-frames.js?h=c1f1afe3e7",
   "app-beach-store.js?h=2f443c94e4",
-  "app-beach-fetch.js?h=11a99d046c",
-  "app-beach-search.js?h=790ea124a1",
+  "app-beach-fetch.js?h=7461979134",
+  "app-beach-search.js?h=953df5657c",
   "app-wind-data.js?h=86668761f0",
   "app-wind-draw.js?h=f8483c2264",
   "app-radar.js?h=42414e10ae",
@@ -251,13 +258,28 @@ function route(req, u) {
   if (u.origin === self.location.origin) return networkFirst(req);
   return netFetch(req);
 }
+/* opt95: the network (or the usual caches) first; a region saved for offline fills in when that fails. */
+function withSaved(req, u) {
+  var mine = u.origin === self.location.origin;
+  if (!(mine && u.pathname.indexOf("/data/") !== -1) && u.host !== "tiles.openfreemap.org") return route(req, u);
+  function saved(res) {
+    function pick(hit) {
+      return hit || res || Response.error();
+    }
+    return caches.open(OFFLINE).then((c) => { return c.match(req, { ignoreSearch: mine }); }).then(pick).catch(() => { return res || Response.error(); });
+  }
+  function check(res) {
+    return res && res.ok ? res : saved(res);
+  }
+  return route(req, u).then(check, () => { return saved(null); });
+}
 function onFetch(event) {
   var req = event.request;
   if (req.method !== "GET") return;
   var u;
   try { u = new URL(req.url); } catch (eUrl) { return; }
   if (u.protocol !== "https:" && u.protocol !== "http:") return;
-  event.respondWith(route(req, u));
+  event.respondWith(withSaved(req, u));
 }
 /* opt61: the update banner asks a waiting worker to take over now. */
 function onSwMessage(event) {

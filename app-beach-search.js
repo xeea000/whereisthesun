@@ -87,10 +87,13 @@
     }).then((data) => {
       var line = sunForecast(data);
       var cloud = b.cloud != null ? Math.round(b.cloud) + "% cloudy · " : "";
-      setStatus(prefix + b.name + " · " + formatKm(b.dist) + " · " + cloud + line);
+      setStatus(prefix + b.name + " · " + formatKm(b.dist) + refWords() + " · " + cloud + line);
     }).catch(() => {
-      setStatus(prefix + b.name + " · " + formatKm(b.dist));
+      setStatus(prefix + b.name + " · " + formatKm(b.dist) + refWords());
     });
+  }
+  function refWords() {
+    return window.SunnyBeachRef ? " " + window.SunnyBeachRef.words() : "";
   }
   function unlockSearch() {
     searchingSunny = false;

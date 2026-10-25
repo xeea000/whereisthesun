@@ -70,7 +70,7 @@
     return '<div class="pf-now"><span class="pf-temp">' + Math.round(h.temperature_2m[0]) + "°</span>" +
       '<span class="pf-facts">Cloud ' + Math.round(h.cloud_cover[0]) + "%<br>Wind " + Math.round(h.wind_speed_10m[0]) + " " +
       esc((u.wind_speed_10m || "").replace("mp/h", "mph")) + " " + compass(h.wind_direction_10m[0]) + "<br>Rain chance up to " + rain + "% (24 h)</span></div>" +
-      chart(h) + '<div class="pf-src">Open-Meteo</div>';
+      chart(h) + '<div class="pf-src">Source: <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Open-Meteo forecast</a></div>';
   }
   function show(lngLat, html) {
     popup.setLngLat(lngLat).setHTML(html);

@@ -62,7 +62,7 @@
     if (!r) return;
     var a = r.attributes || {};
     var html = '<div class="pf-now"><span class="pf-facts"><b>' + esc(a.NAME_ENG) + "</b><br>" + esc(a.DESIGNATION_ENG) +
-      (a.POLICY_IDENT ? "<br>Policy " + esc(a.POLICY_IDENT) : "") + '</span></div><div class="pf-src">Ontario CLUPA (LIO), OGL-Ontario</div>';
+      (a.POLICY_IDENT ? "<br>Policy " + esc(a.POLICY_IDENT) : "") + '</span></div><div class="pf-src">Source: <a href="https://geohub.lio.gov.on.ca/datasets/crown-land-use-policy-area" target="_blank" rel="noopener">Ontario CLUPA (LIO), OGL-Ontario</a></div>';
     if (!popup) popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 8 });
     popup.setLngLat(lngLat).setHTML(html).addTo(map);
   }

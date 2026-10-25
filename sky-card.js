@@ -18,12 +18,11 @@
     ["Leonids", 11, 17, 15], ["Geminids", 12, 14, 150], ["Ursids", 12, 22, 10]];
   var SATS = [[25544, "ISS"], [48274, "Tiangong"], [20580, "Hubble"]];
   var map = null;
-  var card = null;
   var here = null;
   var sats = [];
   var passes = [];
   var score = null;
-  var collapsed = false;
+  var tileImg = {};
   function fmtTime(d) {
     return d ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—";
   }
@@ -138,13 +137,32 @@
       return a ? { type: "Feature", properties: { n: s.name }, geometry: { type: "Point", coordinates: [a.lng, a.lat] } } : null;
     }).filter(Boolean));
   }
+  /* small satellite picture: body with two solar panels, dark outline for satellite imagery */
+  function satIcon() {
+    var c = document.createElement("canvas");
+    c.width = c.height = 48;
+    var g = c.getContext("2d");
+    g.lineWidth = 2;
+    g.strokeStyle = "#0b1020";
+    g.fillStyle = "#3d7bff";
+    [[3, 18, 14, 12], [31, 18, 14, 12]].forEach((r) => { g.fillRect(r[0], r[1], r[2], r[3]); g.strokeRect(r[0], r[1], r[2], r[3]); });
+    g.fillStyle = "#f4f4f4";
+    g.fillRect(17, 15, 14, 18);
+    g.strokeRect(17, 15, 14, 18);
+    g.beginPath();
+    g.moveTo(24, 15);
+    g.lineTo(24, 7);
+    g.stroke();
+    return g.getImageData(0, 0, 48, 48);
+  }
   function satDraw() {
     if (!map || !L.isOn("sats") || !sats.length) return;
     try {
       if (!map.getSource("sats")) map.addSource("sats", { type: "geojson", data: satGeo(), attribution: 'Orbits: <a href="https://celestrak.org/" target="_blank" rel="noopener">CelesTrak</a>' });
       else map.getSource("sats").setData(satGeo());
+      if (!map.hasImage("sat-ico")) map.addImage("sat-ico", satIcon(), { pixelRatio: 2 });
       if (!map.getLayer("sat-dot")) {
-        map.addLayer({ id: "sat-dot", type: "circle", source: "sats", paint: { "circle-radius": 6, "circle-color": "#fff", "circle-stroke-color": "#1e6bff", "circle-stroke-width": 2.5 } });
+        map.addLayer({ id: "sat-dot", type: "symbol", source: "sats", layout: { "icon-image": "sat-ico", "icon-allow-overlap": true, "icon-ignore-placement": true } });
       }
     } catch (e) {}
   }
@@ -166,7 +184,8 @@
     var r = lat * Math.PI / 180;
     var y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
     var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/" + z + "/" + Math.floor(y) + "/" + Math.floor(x) + ".png";
-    return new Promise((res, rej) => {
+    var tk = Math.floor(x) + "/" + Math.floor(y);
+    if (!tileImg[tk]) tileImg[tk] = new Promise((res, rej) => {
       var img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
@@ -174,13 +193,16 @@
         cv.width = cv.height = 256;
         var g = cv.getContext("2d");
         g.drawImage(img, 0, 0);
-        var px = g.getImageData(Math.floor((x % 1) * 256), Math.floor((y % 1) * 256), 1, 1).data;
-        var lum = Math.round(0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]);
-        K.putStore(key, lum, 365 * 864e5);
-        res(lum);
+        res(g);
       };
       img.onerror = rej;
       img.src = url;
+    });
+    return tileImg[tk].then((g) => {
+      var px = g.getImageData(Math.floor((x % 1) * 256), Math.floor((y % 1) * 256), 1, 1).data;
+      var lum = Math.round(0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]);
+      K.putStore(key, lum, 365 * 864e5);
+      return lum;
     });
   }
   function clouds(lat, lng) {
@@ -228,35 +250,34 @@
     if (!score) return ["⭐ Night-sky score: working…"];
     return ["⭐ Night-sky score " + score.v + "/10 from " + fmtTime(score.at) + " · " + score.cloud + " % cloud · " + score.moon + (score.dark ? " · " + score.dark : "")];
   }
-  /* card */
-  function render() {
-    if (!card) return;
-    var lines = [];
-    if (L.isOn("moon")) lines = lines.concat(moonLines());
-    if (L.isOn("nightscore")) lines = lines.concat(scoreLines());
-    if (L.isOn("sats")) lines = lines.concat(satLines());
-    card.hidden = !lines.length || !here;
-    var body = card.querySelector(".sky-body");
-    body.textContent = "";
-    lines.forEach((l) => {
-      var d = document.createElement("div");
-      d.textContent = l;
-      body.appendChild(d);
-    });
-    card.classList.toggle("is-collapsed", collapsed);
+  /* Tonight block in the right info panel; every line ends with its source link */
+  function a(u, t) {
+    return '<a href="' + u + '" target="_blank" rel="noopener">' + t + "</a>";
   }
-  function makeCard() {
-    card = document.createElement("div");
-    card.id = "sky-card";
-    card.hidden = true;
-    card.innerHTML = '<button type="button" class="sky-head" aria-label="Tonight: show or hide">Tonight <span class="sky-arrow">▾</span></button><div class="sky-body"></div>';
-    try { collapsed = localStorage.getItem("sunny-sky-collapsed") === "1"; } catch (e) {}
-    card.querySelector(".sky-head").addEventListener("click", () => {
-      collapsed = !collapsed;
-      try { localStorage.setItem("sunny-sky-collapsed", collapsed ? "1" : "0"); } catch (e) {}
-      render();
-    });
-    document.body.appendChild(card);
+  function render() {
+    var I = window.SunnyInfo;
+    if (!I) return;
+    var parts = [];
+    var srcs = [];
+    if (L.isOn("moon")) {
+      parts = parts.concat(moonLines());
+      srcs.push(a("https://github.com/mourner/suncalc", "SunCalc"), a("https://www.imo.net/", "IMO shower calendar"));
+    }
+    if (L.isOn("nightscore")) {
+      parts = parts.concat(scoreLines());
+      srcs.push(a("https://open-meteo.com/en/docs", "Open-Meteo clouds"), a("https://earthobservatory.nasa.gov/features/NightLights", "NASA Black Marble"));
+    }
+    if (L.isOn("sats")) {
+      parts = parts.concat(satLines());
+      srcs.push(a("https://celestrak.org/NORAD/elements/", "CelesTrak orbits"));
+    }
+    if (!parts.length || !here) {
+      I.section("tonight", "", "");
+      return;
+    }
+    var html = parts.map((l) => { return "<div>" + K.esc(l) + "</div>"; }).join("") + '<div class="pf-src">Source: ' + srcs.join(" · ") + "</div>";
+    I.section("tonight", "Tonight here (map centre)", html);
+    if (window.SunnySkyDraw) window.SunnySkyDraw.redraw();
   }
   function moved() {
     var c = map.getCenter();
@@ -273,6 +294,7 @@
     else if (L.isOn("sats")) satDraw();
     if (L.isOn("nightscore") && !score) computeScore();
     render();
+    if (window.SunnySkyDraw) window.SunnySkyDraw.apply();
   }
   function def(id, name, icon, tip) {
     L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, taps: id === "sats" ? ["sat-dot"] : null, apply: applyAll });
@@ -280,9 +302,10 @@
   def("moon", "Moon & meteor showers", "🌙", "Moon phase, moonrise and moonset here, and the next meteor shower peak (IMO)");
   def("sats", "ISS & satellite passes", "🛰️", "Live ISS, Tiangong and Hubble positions and their next visible passes over you (CelesTrak)");
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data");
+  window.SunnySky = { sats: () => { return sats; }, look: look, here: () => { return here; }, passes: () => { return passes; },
+    nextShower: nextShower, clouds: clouds, darkness: darkness, compass: compass, fmtTime: fmtTime };
   L.add({ id: "skycard-attach", group: "none", attach: (m) => {
     map = m;
-    makeCard();
     map.on("moveend", () => { setTimeout(moved, 400); });
     map.on("idle", () => { if (L.isOn("sats") && !map.getLayer("sat-dot") && sats.length) satDraw(); });
     map.on("click", "sat-dot", (e) => {
@@ -290,7 +313,9 @@
       var a = sats.filter((s) => { return s.name === n; })[0];
       var pos = a ? window.satellite.propagate(a.rec, new Date()) : null;
       var gd = pos && pos.position ? window.satellite.eciToGeodetic(pos.position, window.satellite.gstime(new Date())) : null;
-      K.show(map, e.lngLat, n, [gd ? Math.round(gd.height) + " km up" : "", "Moving at about 7.6 km every second"], "CelesTrak orbits, satellite.js");
+      var cat = SATS.filter((x) => { return x[1] === n; })[0];
+      K.show(map, e.lngLat, n, [gd ? Math.round(gd.height) + " km up" : "", "Moving at about 7.6 km every second", "Line: where it has been (faint) and is going (bright)"],
+        ["CelesTrak record " + (cat ? cat[0] : ""), "https://celestrak.org/satcat/table-satcat.php?CATNR=" + (cat ? cat[0] : "25544")]);
     });
     setInterval(() => { if (L.isOn("sats")) satDraw(); }, 5000);
     setInterval(render, 60000);

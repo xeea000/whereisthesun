@@ -189,6 +189,7 @@
   function putCachedCurrentWx(lat, lon, wx) {
     currentWxCache[wxCacheKey(lat, lon)] = { t: Date.now(), wx: wx };
   }
+  window.sunnyCachedWx = getCachedCurrentWx;
   function fetchWithTimeout(url, ms, outerSignal) {
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = null;
@@ -440,6 +441,7 @@
     var z = 3;
     try { z = map.getZoom(); } catch (eZ) {}
     var usePoint = z < 9;
+    if (window.SunnyBeachIcons) window.SunnyBeachIcons.paint(vis);
     var key = paintCullKey(vis, usePoint);
     if (key === lastPaintKey) return;
     lastPaintKey = key;
@@ -460,16 +462,26 @@
     }
     map.getSource("beaches").setData({ type: "FeatureCollection", features: features });
   }
+  function wikiLink(b) {
+    if (!b.wiki) return "";
+    var m = /^([a-z-]{2,12}):(.+)$/.exec(String(b.wiki));
+    var lang = m ? m[1] : "en";
+    var t = m ? m[2] : String(b.wiki);
+    return ' · <a href="https://' + lang + ".wikipedia.org/wiki/" + encodeURIComponent(t.replace(/ /g, "_")) + '" target="_blank" rel="noopener">Wikipedia</a>';
+  }
   function popupHtml(b, extra, imgUrl) {
     var lines = [];
     lines.push("<div class=\"popup\"><h2>" + escapeHtml(b.name) + "</h2>");
-    if (b.dist != null) lines.push("<p>" + formatKm(b.dist) + "</p>");
+    if (b.dist != null) lines.push("<p>" + formatKm(b.dist) + (window.SunnyBeachRef ? " " + window.SunnyBeachRef.words() : "") + "</p>");
     if (b.brief) lines.push("<p>" + escapeHtml(b.brief) + "</p>");
     if (b.cloud != null && b.cloud >= 0) {
       lines.push("<p>" + Math.round(b.cloud) + "% cloudy" + (b.isDay ? "" : ", and it's night") + "</p>");
     }
     if (extra) lines.push("<p class=\"sunline\">" + escapeHtml(extra) + "</p>");
     if (imgUrl) lines.push("<img class=\"thumb\" alt=\"\" src=\"" + escapeHtml(imgUrl) + "\">");
+    var osm = /^(node|way|relation)\/\d+$/.test(String(b.id)) ? "https://www.openstreetmap.org/" + b.id : "https://www.openstreetmap.org/";
+    lines.push('<div class="pf-src">Source: <a href="' + osm + '" target="_blank" rel="noopener">OpenStreetMap</a>' +
+      ' · cloud <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>' + wikiLink(b) + "</div>");
     lines.push("</div>");
     return lines.join("");
   }

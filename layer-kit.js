@@ -12,11 +12,17 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
     });
   }
+  /* src is "text" or ["text", "https://record-or-dataset-page"]; every card ends with a link */
+  function srcHtml(src) {
+    var s = Array.isArray(src) ? src : [src, ""];
+    var a = s[1] ? '<a href="' + esc(s[1]) + '" target="_blank" rel="noopener">' + esc(s[0]) + "</a>" : esc(s[0]);
+    return '<div class="pf-src">Source: ' + a + "</div>";
+  }
   function show(map, lngLat, title, lines, src) {
     var html = '<div class="pf-now"><span class="pf-facts"><b>' + esc(title) + "</b>" +
       lines.filter(Boolean).map((l) => { return "<br>" + l; }).join("") +
-      '</span></div><div class="pf-src">' + esc(src) + "</div>";
-    if (!popup) popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "280px", className: "pf-popup", offset: 8 });
+      '</span></div>' + srcHtml(src);
+    popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "280px", className: "pf-popup", offset: 8 });
     popup.setLngLat(lngLat).setHTML(html).addTo(map);
   }
   function before(map) {

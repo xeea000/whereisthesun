@@ -65,7 +65,7 @@
       setInterval(() => { if (L.isOn("aurora")) aurApply(map, true); }, 30 * 60000);
       map.on("click", "aurora-dot", (e) => {
         var f = e.features[0];
-        K.show(map, e.lngLat, "Aurora chance " + f.properties.v + " %", ["Chance of aurora overhead", aurTime ? "Forecast for " + K.esc(aurTime) + " UTC" : ""], "NOAA SWPC OVATION");
+        K.show(map, e.lngLat, "Aurora chance " + f.properties.v + " %", ["Chance of aurora overhead", aurTime ? "Forecast for " + K.esc(aurTime) + " UTC" : ""], ["NOAA SWPC OVATION aurora forecast", "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast"]);
       });
       aurApply(map, on);
     } });
@@ -80,6 +80,11 @@
       feats.push({ type: "Feature", properties: p, geometry: { type: "LineString", coordinates: e.centre } });
     });
     return K.fc(feats);
+  }
+  function eclUrl(date) {
+    var M = { Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06", Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12" };
+    var m = /(\d{4}) (\w{3}) (\d{1,2})/.exec(date || "");
+    return m ? "https://eclipse.gsfc.nasa.gov/SEsearch/SEsearchmap.php?Ecl=" + m[1] + M[m[2]] + ("0" + m[3]).slice(-2) : "https://eclipse.gsfc.nasa.gov/solar.html";
   }
   function eclApply(map, on) {
     K.vis(map, ECL_IDS, on);
@@ -104,7 +109,7 @@
         var fs = e.features.slice(0, 3).map((f) => { return f.properties; });
         var p = fs[0];
         K.show(map, e.lngLat, p.kind + " solar eclipse", [K.esc(p.date), "Longest " + K.esc(p.dur) + " on the centre line",
-          fs.length > 1 ? "Also here: " + fs.slice(1).map((q) => { return K.esc(q.date); }).join(", ") : ""], "NASA GSFC eclipse paths");
+          fs.length > 1 ? "Also here: " + fs.slice(1).map((q) => { return K.esc(q.date); }).join(", ") : ""], ["NASA GSFC eclipse page", eclUrl(p.date)]);
       });
       eclApply(map, on);
     } });

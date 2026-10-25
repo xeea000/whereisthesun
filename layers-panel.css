@@ -22,14 +22,26 @@
 .lp-ov.is-on { background: #f5b301; color: #111; }
 .lp-tab { position: absolute; right: -30px; top: 50%; transform: translateY(-50%); width: 30px; height: 64px; border: 0; border-radius: 0 10px 10px 0; background: rgba(18, 22, 30, 0.92); color: #ffd34d; font: 800 22px/1 system-ui, sans-serif; cursor: pointer; box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3); }
 .lp-inscr { display: block; margin-top: 4px; font-size: 11px; max-height: 120px; overflow: auto; }
-#sky-card { position: fixed; right: 12px; top: 64px; z-index: 6; max-width: min(320px, 70vw); background: rgba(10, 14, 30, 0.8); color: #fff; border-radius: 10px; font: 11.5px/1.35 system-ui, sans-serif; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
-#sky-card[hidden] { display: none; }
-.sky-head { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: #ffd34d; font: 800 11px system-ui, sans-serif; letter-spacing: 0.05em; text-transform: uppercase; padding: 6px 10px 2px; cursor: pointer; }
-.sky-body { padding: 0 10px 7px; }
-.sky-body div { margin-top: 2px; }
-#sky-card.is-collapsed .sky-body { display: none; }
-#sky-card.is-collapsed .sky-arrow { display: inline-block; transform: rotate(-90deg); }
 @media (max-width: 700px) {
   .lp-panel { top: 48px; bottom: 120px; }
-  #sky-card { top: auto; bottom: 128px; right: 8px; max-width: 64vw; font-size: 10.5px; }
-}
+  }
+.lp-off { border-top: 1px solid rgba(255, 255, 255, 0.12); padding: 6px 10px 8px; max-height: 45vh; overflow-y: auto; flex-shrink: 0; }
+.lp-off summary { cursor: pointer; font-weight: 700; color: #ffd34d; }
+.off-tip { font-size: 11px; color: rgba(255, 255, 255, 0.6); margin: 4px 0; }
+.off-tip a { color: #8fc4ff; }
+.off-map { display: block; font-size: 11.5px; margin: 4px 0 6px; }
+.off-row { display: grid; grid-template-columns: 1fr auto; gap: 1px 6px; padding: 4px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); align-items: center; }
+.off-name { font-weight: 600; }
+.off-prog { grid-column: 1; font-size: 11px; color: rgba(255, 255, 255, 0.65); }
+.off-btn { grid-column: 2; grid-row: 1 / span 2; border: 0; border-radius: 8px; padding: 5px 9px; background: #2b3a55; color: #fff; font: 600 11.5px system-ui, sans-serif; cursor: pointer; }
+.dist-ref { padding: 4px 12px 6px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.dist-ref select { font: inherit; border-radius: 6px; padding: 2px 4px; }
+.dist-help { flex-basis: 100%; color: #ffd34d; }
+.dist-help[hidden], .dist-clear[hidden] { display: none; }
+.dist-clear { border: 0; border-radius: 6px; padding: 2px 8px; background: #5a2b2b; color: #fff; font: 600 11px system-ui, sans-serif; cursor: pointer; }
+#sunny-sheet-sub { display: none; }
+.sheet-item .dist small { display: block; font-size: 9.5px; font-weight: 500; opacity: 0.75; text-align: right; }
+.sky-lbl { background: rgba(10, 14, 30, 0.75); color: #fff; font: 600 10.5px/1.25 system-ui, sans-serif; padding: 2px 5px; border-radius: 5px; white-space: nowrap; pointer-events: none; }
+.sky-pass { color: #ffd34d; }
+.sky-met { color: #ff8fd0; }
+.lp-bicon{display:block;padding:4px 12px 8px 40px;font-size:13px}.set-credits{margin:6px 0 0;font-size:10px;opacity:.7}

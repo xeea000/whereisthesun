@@ -3,10 +3,10 @@
  *   Provincial parks  Ontario "Provincial Park Regulated" (LIO, OGL-Ontario), operating parks
  *                     solid green, non-operating parks hatched-look orange outline. Picture
  *                     tiles from 256 px server renders, zoom 6 and closer, Ontario only.
- *   Campsites         OpenStreetMap (ODbL) tourism=camp_site and fire lookout towers,
- *                     zoom 10 and closer, loaded per zoom-10 tile and kept 14 days.
- *   Plaques           OpenStreetMap historic plaques, memorials, monuments and history boards,
- *                     zoom 12 and closer, per tile, kept 14 days. Tap for name and inscription. */
+ *   Campsites         OpenStreetMap (ODbL) tourism=camp_site and fire lookout towers, zoom 7+.
+ *   Plaques           OpenStreetMap plaques, memorials, monuments and history boards, plus Ontario
+ *                     Heritage Trust plaques and Parks Canada national historic sites, zoom 9+.
+ *                     Both come from prebuilt packs per province or USA region (opt95). */
 (() => {
   "use strict";
   var K = window.SunnyKit;
@@ -44,7 +44,7 @@
       if (!a) return;
       var op = a.OPERATING_STATUS_IND === "Yes";
       K.show(map, e.lngLat, a.PROTECTED_AREA_NAME_ENG, [K.esc(a.PROVINCIAL_PARK_CLASS_ENG) + " class provincial park",
-        op ? "Operating park (facilities, fees)" : "Non-operating park (no facilities, open to low-impact use)"], "Ontario LIO, OGL-Ontario");
+        op ? "Operating park (facilities, fees)" : "Non-operating park (no facilities, open to low-impact use)"], ["Ontario GeoHub, Provincial Park Regulated (OGL-Ontario)", "https://geohub.lio.gov.on.ca/datasets/provincial-park-regulated"]);
     }).catch(() => {});
   }
   L.add({ id: "parks", name: "Provincial parks (Ontario)", icon: "🏞️", group: "Outdoors", apply: parkApply,
@@ -55,83 +55,105 @@
       map.on("click", parkClick.bind(null, map));
       parkApply(map, on);
     } });
-  /* OSM point layers, tiled */
-  function osmLayer(o) {
-    var src = "osm-" + o.id;
+  /* Pack point layers (opt95): data/packs/<region>/<layer>.json built by tools/build-packs.js.
+   * Only regions overlapping the view are fetched; the service worker keeps them (cache-first),
+   * so a region downloads once and then works offline. */
+  var index = null;
+  function packIndex() {
+    if (!index) index = fetch("data/packs/index.json").then((r) => { if (!r.ok) throw new Error("packs"); return r.json(); }).catch((e) => { index = null; throw e; });
+    return index;
+  }
+  function packUrl(ix, id, layer) {
+    return "data/packs/" + id + "/" + layer + ".json?h=" + ix.built;
+  }
+  function overlaps(b, v) {
+    return !(b[2] < v.getWest() || b[0] > v.getEast() || b[3] < v.getSouth() || b[1] > v.getNorth());
+  }
+  function packLayer(o) {
+    var src = "pack-" + o.id;
     var ids = [src + "-dot"];
-    var loader = null;
-    var last = K.fc();
-    function feats(items) {
-      return K.fc(items.map((it) => {
-        return { type: "Feature", properties: it.p, geometry: { type: "Point", coordinates: [it.x, it.y] } };
-      }));
-    }
+    var mem = {};
+    var loading = {};
+    var shown = "";
     function ensure(map) {
-      if (!map.getSource(src)) map.addSource(src, { type: "geojson", data: last, attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>' });
+      if (!map.getSource(src)) map.addSource(src, { type: "geojson", data: K.fc(), attribution: o.attr });
       if (!map.getLayer(ids[0])) map.addLayer({ id: ids[0], type: "circle", source: src, minzoom: o.minZoom, paint: o.paint }, K.before(map));
     }
-    function fetchTile(box) {
-      var bb = [box[1], box[0], box[3], box[2]].map((v) => { return v.toFixed(4); }).join(",");
-      var ql = "[out:json][timeout:25];(" + o.query.map((q) => { return "nwr" + q + "(" + bb + ");"; }).join("") + ");out center tags 400;";
-      return K.overpass(ql).then((j) => {
-        return (j.elements || []).map((el) => {
-          var c = el.center || el;
-          return { x: Math.round(c.lon * 1e5) / 1e5, y: Math.round(c.lat * 1e5) / 1e5, p: o.keep(el.tags || {}) };
-        }).filter((it) => { return it.p; });
+    function draw(map, want) {
+      var have = want.filter((id) => { return mem[id]; });
+      var key = have.join(",");
+      if (key === shown || !map.getSource(src)) return;
+      shown = key;
+      var feats = [];
+      have.forEach((id) => { feats = feats.concat(mem[id]); });
+      map.getSource(src).setData(K.fc(feats));
+    }
+    function toFeats(j) {
+      var cols = j.cols.split(",");
+      return j.rows.map((r) => {
+        var p = {};
+        for (var i = 2; i < cols.length; i++) p[cols[i]] = r[i];
+        return { type: "Feature", properties: p, geometry: { type: "Point", coordinates: [r[0], r[1]] } };
       });
+    }
+    function refresh(map) {
+      if (!L.isOn(o.id) || map.getZoom() < o.minZoom) return;
+      packIndex().then((ix) => {
+        var v = map.getBounds();
+        var want = ix.regions.filter((r) => { return overlaps(r.bbox, v); }).map((r) => { return r.id; });
+        if (want.length > 4) return;
+        draw(map, want);
+        want.forEach((id) => {
+          if (mem[id] || loading[id]) return;
+          loading[id] = fetch(packUrl(ix, id, o.id)).then((r) => { return r.json(); }).then((j) => {
+            mem[id] = toFeats(j);
+            draw(map, want);
+          }).catch(() => {}).then(() => { delete loading[id]; });
+        });
+      }).catch(() => {});
     }
     function apply(map, on) {
       K.vis(map, ids, on);
       if (!on) return;
       try { ensure(map); } catch (e) {}
       K.vis(map, ids, L.isOn(o.id));
-      if (loader) loader.refresh(0);
+      refresh(map);
     }
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: ids, apply: apply,
       note: (map, on) => { return on && map && map.getZoom() < o.minZoom ? "zoom in" : ""; },
       attach: (map, on) => {
-        loader = K.tiles(map, { key: o.id, minZoom: o.minZoom, maxTiles: 6, ttlMs: 14 * 864e5,
-          isOn: () => { return L.isOn(o.id); }, fetchTile: fetchTile,
-          onData: (items) => {
-            last = feats(items);
-            if (map.getSource(src)) map.getSource(src).setData(last);
-          } });
+        map.on("moveend", () => { refresh(map); });
         map.on("idle", () => { if (L.isOn(o.id) && !map.getLayer(ids[0])) apply(map, true); });
         map.on("click", ids[0], (e) => { o.tap(map, e, e.features[0].properties); });
         apply(map, on);
       } });
   }
-  function short(s, n) {
-    s = String(s || "");
-    return s.length > n ? s.slice(0, n - 1) + "…" : s;
+  function osmUrl(id) {
+    var t = { n: "node", w: "way", r: "relation" }[String(id || "").charAt(0)];
+    return t ? "https://www.openstreetmap.org/" + t + "/" + String(id).slice(1) : "https://www.openstreetmap.org/";
   }
-  osmLayer({ id: "camps", name: "Campsites & lookouts", icon: "⛺", group: "Outdoors", minZoom: 10,
-    tip: "Campgrounds, backcountry sites and fire lookout towers (OpenStreetMap). Zoom in to load",
-    query: ['["tourism"="camp_site"]', '["man_made"="tower"]["tower:type"~"fire_lookout|observation"]'],
-    keep: (t) => {
-      var look = t.man_made === "tower";
-      return { n: short(t.name || (look ? (t["tower:type"] === "fire_lookout" ? "Fire lookout tower" : "Lookout tower") : "Campsite"), 80), k: look ? "l" : "c",
-        b: t.backcountry === "yes" ? 1 : 0, f: t.fee || "", w: t.website || "", o: t.operator ? short(t.operator, 60) : "" };
-    },
-    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 15, 7], "circle-color": ["match", ["get", "k"], "l", "#e0482a", "#3aa35b"],
+  function link(u, txt) {
+    return /^https?:/.test(u || "") ? '<a href="' + K.esc(u) + '" target="_blank" rel="noopener">' + txt + "</a>" : "";
+  }
+  var OSM_ATTR = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
+  packLayer({ id: "camps", name: "Campsites & lookouts", icon: "⛺", group: "Outdoors", minZoom: 7, attr: OSM_ATTR,
+    tip: "Campgrounds, backcountry sites and fire lookout towers (OpenStreetMap), saved per province or region. Zoom in to see",
+    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 15, 7], "circle-color": ["match", ["get", "kind"], "l", "#e0482a", "#3aa35b"],
       "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 },
     tap: (map, e, p) => {
-      K.show(map, e.lngLat, p.n, [p.k === "l" ? "Lookout tower" : (+p.b ? "Backcountry campsite" : "Campground"), p.o ? "Run by " + K.esc(p.o) : "",
-        p.f ? "Fee: " + K.esc(p.f) : "", /^https?:/.test(p.w) ? '<a href="' + K.esc(p.w) + '" target="_blank" rel="noopener">Website</a>' : ""], "OpenStreetMap (ODbL)");
+      K.show(map, e.lngLat, p.name, [p.kind === "l" ? "Lookout tower" : (+p.backcountry ? "Backcountry campsite" : "Campground"),
+        p.operator ? "Run by " + K.esc(p.operator) : "", p.fee ? "Fee: " + K.esc(p.fee) : "", link(p.website, "Website")], ["OpenStreetMap (ODbL)", osmUrl(p.osm)]);
     } });
-  osmLayer({ id: "plaques", name: "Historic plaques & sites", icon: "🪧", group: "History", minZoom: 12,
-    tip: "Historical plaques, memorials, monuments and history boards (OpenStreetMap). Zoom in to load",
-    query: ['["historic"~"memorial|monument|plaque|blue_plaque|ruins|fort|archaeological_site|battlefield|castle|wayside_cross|marker"]', '["tourism"="information"]["board_type"="history"]'],
-    keep: (t) => {
-      var n = t.name || t["memorial:name"] || (t.memorial === "plaque" ? "Historical plaque" : "");
-      if (!n && !t.inscription) return null;
-      return { n: short(n || "Historical plaque", 90), h: t.historic || (t.board_type ? "history board" : ""), m: t.memorial || "",
-        i: short(t.inscription || t.description || "", 600), d: t.start_date || "", w: t.website || "", by: t.operator ? short(t.operator, 60) : "" };
-    },
-    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3.5, 16, 6.5], "circle-color": "#5a3fb0", "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 },
+  var PLQ_SRC = { h: ["Ontario Heritage Trust plaque list", ""], p: ["Parks Canada", ""] };
+  packLayer({ id: "plaques", name: "Historic plaques & sites", icon: "🪧", group: "History", minZoom: 9,
+    attr: OSM_ATTR + ', <a href="https://www.heritagetrust.on.ca/" target="_blank" rel="noopener">Ontario Heritage Trust</a>, <a href="https://parks.canada.ca/" target="_blank" rel="noopener">Parks Canada</a>',
+    tip: "Historical plaques, monuments, Ontario Heritage Trust plaques and national historic sites. Zoom in to see",
+    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 2.5, 16, 6.5], "circle-color": ["match", ["get", "src"], "p", "#b0302a", "h", "#1e6bff", "#5a3fb0"],
+      "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 },
     tap: (map, e, p) => {
-      var kind = (p.m || p.h || "").replace(/_/g, " ");
-      K.show(map, e.lngLat, p.n, [kind ? K.esc(kind.charAt(0).toUpperCase() + kind.slice(1)) : "", p.d ? "Date " + K.esc(p.d) : "", p.by ? K.esc(p.by) : "",
-        p.i ? '<i class="lp-inscr">' + K.esc(p.i) + "</i>" : "", /^https?:/.test(p.w) ? '<a href="' + K.esc(p.w) + '" target="_blank" rel="noopener">More</a>' : ""], "OpenStreetMap (ODbL)");
+      var kind = String(p.kind || "").replace(/_/g, " ");
+      var src = p.src === "o" ? ["OpenStreetMap (ODbL)", osmUrl(p.osm)] : [PLQ_SRC[p.src][0], p.website];
+      K.show(map, e.lngLat, p.name, [kind ? K.esc(kind.charAt(0).toUpperCase() + kind.slice(1)) : "", p.date ? "Date " + K.esc(p.date) : "",
+        p.inscription ? '<i class="lp-inscr">' + K.esc(p.inscription) + "</i>" : "", p.src === "o" ? link(p.website, "More") : ""], src);
     } });
 })();

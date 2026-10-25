@@ -123,7 +123,8 @@
     var p = f.properties;
     var html = '<div class="pf-now"><span class="pf-facts"><b>' + esc(p.name) + "</b> impact crater<br>" +
       esc(p.diameter_km) + " km across<br>Age: " + esc(p.age) + (p.country ? "<br>" + esc(p.country) : "") +
-      '</span></div><div class="pf-src">Wikipedia / Earth Impact Database</div>';
+      '</span></div><div class="pf-src">Source: <a href="https://en.wikipedia.org/wiki/Special:Search?search=' + encodeURIComponent(p.name + " crater") +
+      '" target="_blank" rel="noopener">Wikipedia</a> · <a href="https://en.wikipedia.org/wiki/List_of_impact_structures_on_Earth" target="_blank" rel="noopener">impact list</a></div>';
     if (!popup) popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 8 });
     popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
   }

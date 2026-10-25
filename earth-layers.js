@@ -62,7 +62,7 @@
       map.on("click", "fire-dot", (e) => {
         var p = e.features[0].properties;
         var t = p.t ? new Date(p.t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-        K.show(map, e.lngLat, "Fire hotspot", ["Seen " + K.esc(t) + " by " + K.esc(p.sat), p.frp ? "Fire power " + K.esc(p.frp) + " MW" : "", p.ag ? "Agency " + K.esc(p.ag) : ""], "CWFIS, Natural Resources Canada");
+        K.show(map, e.lngLat, "Fire hotspot", ["Seen " + K.esc(t) + " by " + K.esc(p.sat), p.frp ? "Fire power " + K.esc(p.frp) + " MW" : "", p.ag ? "Agency " + K.esc(p.ag) : ""], ["CWFIS, Natural Resources Canada", "https://cwfis.cfs.nrcan.gc.ca/interactive-map"]);
       });
       fireApply(map, on);
     } });
@@ -94,7 +94,9 @@
       idleAdd(map, "meteorites", "meteor-dot", metApply);
       map.on("click", "meteor-dot", (e) => {
         var p = e.features[0].properties;
-        K.show(map, e.lngLat, p.n + " meteorite", ["Seen falling" + (p.y ? " in " + K.esc(p.y) : ""), "Type " + K.esc(p.c), p.m != null && p.m !== "null" ? "Found: " + mass(+p.m) : ""], "Meteoritical Society / NASA");
+        var rec = "https://www.lpi.usra.edu/meteor/metbull.php?sea=" + encodeURIComponent(p.n) + "&srt=name&lrec=50";
+        K.show(map, e.lngLat, p.n + " meteorite", ["Seen falling" + (p.y ? " in " + K.esc(p.y) : ""), "Type " + K.esc(p.c),
+          p.m != null && p.m !== "null" ? "Found: " + mass(+p.m) : ""], ["Meteoritical Bulletin record", rec]);
       });
       metApply(map, on);
     } });
@@ -125,12 +127,13 @@
       map.on("click", "geo-fill", (e) => {
         var p = e.features[0].properties;
         var lines = [K.esc([p.lith_class1, p.lith_type1, p.lith_type2].filter(Boolean).join(", ")), age(p)];
-        K.show(map, e.lngLat, "Bedrock", lines, "Macrostrat");
+        var mlink = "https://macrostrat.org/map/loc/" + e.lngLat.lng.toFixed(4) + "/" + e.lngLat.lat.toFixed(4);
+        K.show(map, e.lngLat, "Bedrock", lines, ["Macrostrat", mlink]);
         var q = "https://macrostrat.org/api/v2/mobile/map_query?lat=" + e.lngLat.lat.toFixed(4) + "&lng=" + e.lngLat.lng.toFixed(4) + "&z=" + Math.round(map.getZoom());
         fetch(q).then((r) => { return r.json(); }).then((j) => {
           var b = j.success && j.success.data && j.success.data.burwell && j.success.data.burwell[0];
           if (!b) return;
-          K.show(map, e.lngLat, b.name || "Bedrock", [b.lith ? "Rock: " + K.esc(b.lith) : lines[0], age(p), b.descrip ? K.esc(b.descrip).slice(0, 200) : ""], "Macrostrat (CC BY 4.0)");
+          K.show(map, e.lngLat, b.name || "Bedrock", [b.lith ? "Rock: " + K.esc(b.lith) : lines[0], age(p), b.descrip ? K.esc(b.descrip).slice(0, 200) : ""], ["Macrostrat map unit (CC BY 4.0)", mlink]);
         }).catch(() => {});
       });
       geoApply(map, on);

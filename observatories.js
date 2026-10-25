@@ -32,7 +32,7 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/observatories.json?d=opt94").then(readJson).then(keep);
+    if (!loading) loading = fetch("data/observatories.json?d=opt95").then(readJson).then(keep);
     return loading;
   }
   /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */
@@ -177,7 +177,14 @@
     if (p.scopes > 1) rows.push(esc(p.scopes) + " telescopes mapped here");
     if (p.operator) rows.push("Operator: " + esc(p.operator));
     if (p.link) rows.push('<a href="' + esc(p.link) + '" target="_blank" rel="noopener">More info</a>');
-    return '<div class="pf-now"><span class="pf-facts">' + rows.join("<br>") + '</span></div><div class="pf-src">' + (p.qid ? 'Wikidata <a href="https://www.wikidata.org/wiki/' + esc(p.qid) + '" target="_blank" rel="noopener">' + esc(p.qid) + "</a>" : "© OpenStreetMap contributors") + "</div>";
+    return '<div class="pf-now"><span class="pf-facts">' + rows.join("<br>") + "</span></div>" + srcHtml(p);
+  }
+  function srcHtml(p) {
+    var a = '" target="_blank" rel="noopener">';
+    var s = p.qid ? '<a href="https://www.wikidata.org/wiki/' + esc(p.qid) + a + "Wikidata " + esc(p.qid) + "</a>"
+      : p.link ? '<a href="' + esc(p.link) + a + "Site record</a>"
+      : '<a href="https://www.openstreetmap.org/#map=17/' + (+p.lat).toFixed(5) + "/" + (+p.lon).toFixed(5) + a + "OpenStreetMap</a>";
+    return '<div class="pf-src">Source: ' + s + "</div>";
   }
   function onClick(e) {
     var f = e.features && e.features[0];
