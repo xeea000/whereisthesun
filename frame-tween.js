@@ -437,19 +437,26 @@
       }
       return -1;
     }
+    function nextKept(i, max) {
+      var j = Math.min(max, i + 1);
+      if (src.keep) while (j < max && !src.keep(j)) j++;
+      return j;
+    }
     function paintAt(frac, maxIndex) {
       var n = src.count();
       if (!n) return false;
       var max = maxIndex == null ? n - 1 : maxIndex;
       var i0 = Math.max(0, Math.min(max, Math.floor(frac)));
-      var i1 = Math.min(max, i0 + 1);
-      var t = Math.max(0, Math.min(1, frac - i0));
+      if (src.keep) while (i0 > 0 && !src.keep(i0)) i0--; /* opt88 Fewer frames: blend kept frames only */
+      var i1 = nextKept(i0, max);
+      var t = Math.max(0, Math.min(1, (frac - i0) / Math.max(1, i1 - i0)));
       if (i0 >= max) { i0 = max; i1 = max; t = 0; }
       var A = src.images(i0), B = i1 !== i0 ? src.images(i1) : null;
-      if (src.kick) { src.kick(i0); src.kick(i1); src.kick(Math.min(max, i1 + 1)); }
+      var i2 = nextKept(i1, max), i3 = nextKept(i2, max);
+      if (src.kick) { src.kick(i0); src.kick(i1); src.kick(i2); }
       requestFlow(i0, i1);
-      if (i1 + 1 <= max) requestFlow(i1, i1 + 1);
-      if (i1 + 2 <= max) requestFlow(i1 + 1, i1 + 2);
+      if (i2 > i1) requestFlow(i1, i2);
+      if (i3 > i2) requestFlow(i2, i3);
       var baseA = A && A.base, baseB = B && B.base;
       if (!baseA && baseB) { baseA = baseB; baseB = null; t = 0; i0 = i1; }
       if (!baseA) i0 = nearestLoaded(Math.round(frac), max); /* opt64: never keep a stale frame */

@@ -194,6 +194,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
     var scale = 1;
     if (narrow) scale *= 0.75;
+    scale *= window.SunnyDataSaver.imageScale(); /* opt88 Zoom-matched images */
     /* opt59: removed Speed≥2 shrink (0.72) — lower-res at 2x+ and cache-key churn on Speed change */
     void sp;
     if (scale >= 0.999) return base;
@@ -337,7 +338,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     var i;
     for (i = 0; i < cloudTimes.length; i++) {
       var iso = cloudTimes[i];
-      if (!iso) continue;
+      if (!iso || !window.SunnyDataSaver.keepCloud(i)) continue;
       var meta = gibsWmsFrameMeta(iso, lon);
       if (!(playImgCache[meta.key] && playImgCache[meta.key].ok) && !playLoadPending[meta.key]) {
         missing += 1;
@@ -392,7 +393,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
       } else {
         for (i = 0; i < n; i++) out.push(i);
       }
-      return out;
+      return out.filter(window.SunnyDataSaver.keepCloud);
     }
     function pump() {
       if (gen !== playWarmGen) return;
@@ -537,6 +538,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     return { w: w, h: h };
   }
   function playHiResWorthwhile() {
+    if (window.SunnyDataSaver.imageScale() < 1 || window.SunnyLightClouds.on()) return false; /* opt88: zoomed out, one picture set only */
     var soft = playImageSize();
     var hi = computePlayHiResSize();
     return hi.w > soft.w + 16 || hi.h > soft.h + 16;

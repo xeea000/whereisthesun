@@ -5,6 +5,7 @@
   function kickLoadCloudIndex(idx) {
     try {
       if (playUseOpenMeteo || !cloudTimes.length) return;
+      if (!window.SunnyDataSaver.keepCloud(clampIndex(idx)) || window.SunnyDataSaver.mapMoving()) return;
       var isoN = cloudTimes[clampIndex(idx)];
       if (!isoN) return;
       var metaN = gibsWmsFrameMeta(isoN, sunnyApp_origin ? sunnyApp_origin.lon : null);

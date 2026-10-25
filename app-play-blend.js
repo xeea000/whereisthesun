@@ -347,13 +347,13 @@ var steerState, STEER_TTL_MS, STEER_FAIL_TTL_MS, omPlayGrid, omPlayPromise;
     return idx;
   }
   function prefetchPlayIndices(fromIndex) {
-    if (tabHidden || !cloudTimes.length || playUseOpenMeteo) return;
+    if (tabHidden || !cloudTimes.length || playUseOpenMeteo || window.SunnyDataSaver.mapMoving()) return;
     var lon = sunnyApp_origin ? sunnyApp_origin.lon : null;
     var n;
     var pending = [];
     for (n = 1; n <= PLAY_PREFETCH; n++) {
       var idx = playIndexAtOffset(fromIndex, n);
-      if (idx === fromIndex) continue;
+      if (idx === fromIndex || !window.SunnyDataSaver.keepCloud(idx)) continue;
       var iso = cloudTimes[idx];
       var meta = gibsWmsFrameMeta(iso, lon);
       if (!playImgCache[meta.key] && !playLoadPending[meta.key]) {
@@ -437,7 +437,7 @@ var steerState, STEER_TTL_MS, STEER_FAIL_TTL_MS, omPlayGrid, omPlayPromise;
     var oi;
     for (oi = 0; oi < offsets.length && warmed < IDLE_GOES_WARM_COUNT; oi++) {
       var idx = clampIndex(from + offsets[oi]);
-      if (idx === from) continue;
+      if (idx === from || !window.SunnyDataSaver.keepCloud(idx)) continue;
       var iso = cloudTimes[idx];
       if (!iso) continue;
       var meta = gibsWmsFrameMeta(iso, lon);

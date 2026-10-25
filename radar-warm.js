@@ -36,7 +36,7 @@
   }
   function order(center, count) {
     var list = [];
-    for (var i = 0; i < count; i++) list.push(i);
+    for (var i = 0; i < count; i++) if (!job.keep || job.keep(i)) list.push(i);
     list.sort(byScore.bind(null, center));
     return list;
   }
@@ -62,18 +62,18 @@
         inFlight++;
       }
     }
-    if (loaded >= count) {
+    if (loaded >= list.length) {
       hideNote();
       j.timer = setTimeout(step.bind(null, j), TICK_MS * 4);
       return;
     }
-    showNote(loaded, count);
+    showNote(loaded, list.length);
     j.timer = setTimeout(step.bind(null, j), TICK_MS);
   }
   /* opts: count(), center(), peek(i) → rec|null, build(i), active() → bool */
   function start(opts) {
     stop();
-    job = { count: opts.count, center: opts.center, peek: opts.peek, build: opts.build, active: opts.active, timer: 0 };
+    job = { count: opts.count, center: opts.center, peek: opts.peek, build: opts.build, active: opts.active, keep: opts.keep, timer: 0 };
     step(job);
   }
   function stop() {

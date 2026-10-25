@@ -60,6 +60,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
   function kickLoadHiResIndex(idx) {
     try {
       if (playUseOpenMeteo || !cloudTimes.length || !playHiResWorthwhile()) return;
+      if (!window.SunnyDataSaver.keepCloud(clampIndex(idx)) || window.SunnyDataSaver.mapMoving()) return;
       var isoN = cloudTimes[clampIndex(idx)];
       if (!isoN) return;
       var metaN = gibsWmsHiResMeta(isoN, sunnyApp_origin ? sunnyApp_origin.lon : null);
@@ -339,6 +340,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
   }
   function testWmsCors() {
     if (playCorsOk != null) return Promise.resolve(playCorsOk);
+    if (window.SunnyLightClouds.on()) return Promise.resolve(playCorsOk = true); /* opt88: no satellite probe */
     return new Promise((resolve) => {
       var iso = cloudTimes.length ? cloudTimes[cloudTimes.length - 1] : goesLatestIsoSync();
       var url = gibsWmsUrl(iso, sunnyApp_origin ? sunnyApp_origin.lon : -79);
@@ -411,7 +413,14 @@ var swGateOpen, swGateUrl, cloudTweenSource;
         finish(false);
       };
       try { img.crossOrigin = "anonymous"; } catch (e1) {}
-      img.src = url;
+      if (window.SunnyLightClouds.handles(url)) {
+        /* opt88 Light clouds: draw this frame from Open-Meteo cloud cover instead */
+        window.SunnyLightClouds.frameUrl(url).then((du) => {
+          if (!du) return finish(false);
+          url = du;
+          img.src = du;
+        });
+      } else img.src = url;
       setTimeout(() => {
         if (!settled) finish(img.naturalWidth > 0);
       }, 15000);
@@ -598,6 +607,7 @@ function sunnyStep04() {
     rows: 3,
     maxMagUv: 0.12,
     count: () => { return cloudTimes.length; },
+    keep: (i) => { return window.SunnyDataSaver.keepCloud(i); },
     images: (i) => {
       var rec = cachedPlayRec(i);
       var hi = null;

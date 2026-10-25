@@ -5,7 +5,7 @@
 var radarTweenSource;
   function radarTileZ() {
     /* 256-px tiles: MapLibre zoom z (512-px) ≈ tile zoom z+1; composite resolution cap */
-    var z = Math.round((map ? map.getZoom() : 3) + 1);
+    var z = Math.round((map ? map.getZoom() : 3) + (window.SunnyDataSaver.imageScale() < 1 ? 0 : 1)); /* opt88 */
     return Math.max(0, Math.min(window.SunnyRadar.MAX_ZOOM, z));
   }
   function radarCompKey(i) {
@@ -76,6 +76,7 @@ var radarTweenSource;
     return radarComposite(i, false);
   }
   function radarCompBuild(i) {
+    if (window.SunnyDataSaver.mapMoving()) return null; /* opt88 Visible tiles only: wait until the map stops */
     return radarComposite(i, true);
   }
   function radarAnyLoaded() {
@@ -96,7 +97,10 @@ var radarTweenSource;
   }
   function warmRadarComposites() {
     /* opt66: nearest the playhead first, a few in parallel (radar-warm.js) */
-    window.SunnyRadarWarm.start({ count: radarCount, center: radarPlayheadIndex, peek: radarCompPeek, build: radarCompBuild, active: radarWarmActive });
+    window.SunnyRadarWarm.start({
+      count: radarCount, center: radarPlayheadIndex, peek: radarCompPeek, build: radarCompBuild,
+      active: radarWarmActive, keep: window.SunnyDataSaver.keepRadar
+    });
   }
   function radarTweenLayer() {
     var T = tweenApi();
@@ -604,11 +608,12 @@ function sunnyStep12() {
     rows: 3,
     maxMagUv: 0.12,
     count: () => { return radarPast.length; },
+    keep: (i) => { return window.SunnyDataSaver.keepRadar(i); },
     images: (i) => {
       var rec = radarComposite(i, false);
       return { base: rec && rec.done && rec.loaded > 0 ? rec.canvas : null, hi: null, hiFade: 0 };
     },
-    kick: (i) => { radarComposite(i, true); },
+    kick: (i) => { radarCompBuild(i); },
     pairKey: (i0, i1) => {
       var a = radarCompKey(i0), b = radarCompKey(i1);
       return (a && b) ? a + "=>" + b : null;

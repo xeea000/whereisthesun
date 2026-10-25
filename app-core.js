@@ -578,7 +578,7 @@ function sunnyStep01() {
         }
       },
       layers: [
-        { id: "osm", type: "raster", source: "osm", layout: { visibility: "visible" } },
+        { id: "osm", type: "raster", source: "osm", layout: { visibility: window.SunnyDataSaver.on("vector") ? "none" : "visible" } },
         { id: "base-sat", type: "raster", source: "base-sat", layout: { visibility: "none" } },
         { id: "base-dark", type: "raster", source: "base-dark", layout: { visibility: "none" } }
       ]
@@ -593,6 +593,8 @@ function sunnyStep01() {
     attributionControl: false,
     maxPitch: 0
   });
+  if (window.SunnyDataSaver.on("visible") && map.setPrefetchZoomDelta) map.setPrefetchZoomDelta(0); /* opt88 */
+  window.SunnyVectorBase.start(map);
     map.on("error", (e) => {
     try {
       var msg = (e && e.error && e.error.message) ? e.error.message : "";

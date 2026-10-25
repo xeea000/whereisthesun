@@ -304,6 +304,7 @@ var labelsIdleHealArmed, labelsHealBusy;
     restackCloudRasters();
   }
   function basemapLayerId(mode) {
+    if (window.SunnyVectorBase.active(mode)) return "vector"; /* opt88: picture tiles off */
     if (mode === "satellite") return "base-sat";
     if (mode === "dark") return "base-dark";
     return "osm";
@@ -334,6 +335,7 @@ var labelsIdleHealArmed, labelsHealBusy;
       if (!map.getLayer(id)) continue;
       map.setLayoutProperty(id, "visibility", id === active ? "visible" : "none");
     }
+    window.SunnyVectorBase.apply(basemapMode);
     restackBasemap();
   }
   function setBasemapMode(mode) {
