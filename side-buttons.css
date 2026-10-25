@@ -10,3 +10,15 @@
   .ctrl-round .round-emoji { font-size: 17px; }
   .ctrl-round .ctrl-label { font-size: 8px; }
 }
+/* opt91: Find Beaches toggle state, hidden chosen-beach dot, Dark Sky legend, phone stack fit */
+.ctrl-sun.is-on { box-shadow: 0 0 0 3px #fff inset, 0 2px 10px rgba(0, 0, 0, 0.35); }
+body.beaches-hidden .clear-dot { display: none; }
+#skyglow-legend { position: fixed; left: 12px; top: 64px; z-index: 5; display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; font: 600 10px/1.2 system-ui, sans-serif; pointer-events: none; }
+#skyglow-legend i { display: block; width: 70px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #000, #1b2a55, #c9a64a, #fff6c8); }
+#skyglow-legend[hidden] { display: none; }
+@media (max-width: 700px) {
+  .ctrl-round { width: 48px; height: 48px; min-height: 48px; gap: 0; }
+  .ctrl-round .round-emoji { font-size: 15px; }
+  .ctrl-round .ctrl-label { font-size: 6.5px; }
+  .controls { gap: 4px; }
+}

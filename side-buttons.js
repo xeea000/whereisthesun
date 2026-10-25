@@ -17,6 +17,24 @@
   function markBusy(b, v) {
     b.classList.toggle("is-busy", !!v);
   }
+  /* opt91: Observatories and Dark Sky buttons mirror their Settings switches, which own saving */
+  function mirror(btnId, toggleId) {
+    var b = document.getElementById(btnId);
+    var t = document.getElementById(toggleId);
+    if (!b || !t) return;
+    function sync() {
+      b.setAttribute("aria-pressed", t.checked ? "true" : "false");
+    }
+    function flip() {
+      t.checked = !t.checked;
+      t.dispatchEvent(new Event("change", { bubbles: true }));
+      sync();
+    }
+    b.addEventListener("click", flip);
+    t.addEventListener("change", sync);
+    window.addEventListener("load", sync);
+    sync();
+  }
   function syncAll() {
     syncCraters();
     syncCrown();
@@ -44,6 +62,8 @@
   }
   function init() {
     keepBeachesEnabled();
+    mirror("btn-observatories", "toggle-observatories");
+    mirror("btn-skyglow", "toggle-skyglow");
     var bc = document.getElementById("btn-craters");
     var bl = document.getElementById("btn-crown");
     var t = document.getElementById("toggle-craters");

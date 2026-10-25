@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // workspace/whereisthesun/tools/build-observatories.js
 /* SUNNY build step (opt90): turns two OpenStreetMap Overpass CSV exports into
- * data/observatories.json. Run once by hand, never per visit:
+ * tools/osm-observatories.json (opt91: tools/build-astro-extra.js then writes data/observatories.json). Run once by hand, never per visit:
  *   node tools/build-observatories.js telescope.tsv observatory.tsv
  * Each TSV is Overpass [out:csv] of nwr["man_made"="telescope"] or ["man_made"="observatory"],
  * columns as in COLS. Weather, seismic and military sites are dropped. Telescopes within
@@ -116,5 +116,5 @@ var doc = {
   licence: "ODbL 1.0, (c) OpenStreetMap contributors, https://www.openstreetmap.org/copyright",
   sites: out
 };
-fs.writeFileSync(path.join(__dirname, "..", "data", "observatories.json"), JSON.stringify(doc));
+fs.writeFileSync(path.join(__dirname, "osm-observatories.json"), JSON.stringify(doc));
 console.log("sites", out.length, "observatories", obs.length, "telescopes", tel.length);

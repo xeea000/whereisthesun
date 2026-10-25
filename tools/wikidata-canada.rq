@@ -1,0 +1,5 @@
+SELECT ?i ?iLabel ?c ?opLabel ?art WHERE {
+ VALUES ?cls { wd:Q1254933 wd:Q62832 wd:Q4213 wd:Q184356 wd:Q148578 wd:Q1636521 wd:Q2080543 wd:Q349772 }
+ ?i wdt:P31 ?cls ; wdt:P17 wd:Q16 ; wdt:P625 ?c .
+ OPTIONAL { ?i wdt:P137 ?op } OPTIONAL { ?art schema:about ?i; schema:isPartOf <https://en.wikipedia.org/> }
+ SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr". } }

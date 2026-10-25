@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt90"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt91"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -29,7 +29,7 @@ var PRECACHE = [
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
   "styles.css?h=468e6b0212",
   "settings-panel.css?h=5ab8872727",
-  "side-buttons.css?h=5ab83bde0d",
+  "side-buttons.css?h=de1efe43ac",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "data-saver.js?h=9b7caac8c2",
   "vector-base.js?h=4d1c85b8fd",
@@ -45,9 +45,11 @@ var PRECACHE = [
   "wind-gl.js?h=cbb13e67c4",
   "point-forecast.js?h=e2b627528a",
   "craters.js?h=e36d68f681",
-  "observatories.js?h=93a87d3be3",
+  "sky-glow.js?h=67ea06339b",
+  "beach-toggle.js?h=29ef62a7e1",
+  "observatories.js?h=b1809b6af9",
   "crown-land.js?h=76409d2bb9",
-  "side-buttons.js?h=06480df83c",
+  "side-buttons.js?h=6e117a70f1",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=f2cd6bfd0b",
   "sw-ready.js?h=66b3059850",
@@ -65,7 +67,7 @@ var PRECACHE = [
   "app-wind-draw.js?h=f8483c2264",
   "app-radar.js?h=42414e10ae",
   "app-play-clock.js?h=49e4b1f99a",
-  "app-scrub.js?h=6d529a0cfc",
+  "app-scrub.js?h=82ccf24538",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",

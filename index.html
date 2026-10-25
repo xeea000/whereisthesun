@@ -39,7 +39,7 @@
   <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?h=5ae31c574f">
   <link rel="stylesheet" href="styles.css?h=468e6b0212">
   <link rel="stylesheet" href="settings-panel.css?h=5ab8872727">
-  <link rel="stylesheet" href="side-buttons.css?h=5ab83bde0d">
+  <link rel="stylesheet" href="side-buttons.css?h=de1efe43ac">
 </head>
 <body>
   <div id="map"></div>
@@ -185,7 +185,8 @@
       <h3 class="set-title">Sightseeing</h3>
       <div class="set-row">
         <label class="ov switch" title="Confirmed meteorite impact structures, drawn at true size"><input id="toggle-craters" type="checkbox"><span class="knob" aria-hidden="true"></span>Impact craters</label>
-        <label class="ov switch" title="Telescopes and observatories from OpenStreetMap"><input id="toggle-observatories" type="checkbox"><span class="knob" aria-hidden="true"></span>Observatories</label>
+        <label class="ov switch" title="Telescopes, radio arrays, neutrino and gravitational-wave detectors (OpenStreetMap, Wikidata)"><input id="toggle-observatories" type="checkbox"><span class="knob" aria-hidden="true"></span>Observatories</label>
+        <label class="ov switch" title="Night lights from NASA Black Marble (VIIRS 2016): darker map means darker skies"><input id="toggle-skyglow" type="checkbox"><span class="knob" aria-hidden="true"></span>Light pollution</label>
       </div>
     </section>
     <section class="set-group" id="lag-controls"></section>
@@ -202,6 +203,14 @@
     <button id="btn-crown" class="ctrl ctrl-round" type="button" aria-pressed="false" title="Crown land overlay (Ontario only, LIO open data)">
       <span class="round-emoji" aria-hidden="true">🌲</span>
       <span class="ctrl-label"><span>Crown</span><span>Land</span></span>
+    </button>
+    <button id="btn-skyglow" class="ctrl ctrl-round" type="button" aria-pressed="false" title="Light pollution: find dark skies (NASA Black Marble night lights)">
+      <span class="round-emoji" aria-hidden="true">🌌</span>
+      <span class="ctrl-label"><span>Dark</span><span>Sky</span></span>
+    </button>
+    <button id="btn-observatories" class="ctrl ctrl-round" type="button" aria-pressed="false" title="Show observatories, radio arrays and neutrino detectors">
+      <span class="round-emoji" aria-hidden="true">🔭</span>
+      <span class="ctrl-label"><span>Observa-</span><span>tories</span></span>
     </button>
     <button id="btn-craters" class="ctrl ctrl-round" type="button" aria-pressed="false" title="Show confirmed impact craters">
       <span class="round-emoji" aria-hidden="true">☄️</span>
@@ -237,9 +246,11 @@
   <script defer src="wind-gl.js?h=cbb13e67c4"></script>
   <script defer src="point-forecast.js?h=e2b627528a"></script>
   <script defer src="craters.js?h=e36d68f681"></script>
-  <script defer src="observatories.js?h=93a87d3be3"></script>
+  <script defer src="sky-glow.js?h=67ea06339b"></script>
+  <script defer src="beach-toggle.js?h=29ef62a7e1"></script>
+  <script defer src="observatories.js?h=b1809b6af9"></script>
   <script defer src="crown-land.js?h=76409d2bb9"></script>
-  <script defer src="side-buttons.js?h=06480df83c"></script>
+  <script defer src="side-buttons.js?h=6e117a70f1"></script>
   <script defer src="wind-play-fade.js?h=e342e19b7e"></script>
   <script defer src="frame-tween.js?h=f2cd6bfd0b"></script>
   <script defer src="sw-ready.js?h=66b3059850"></script>
@@ -257,7 +268,7 @@
   <script defer src="app-wind-draw.js?h=f8483c2264"></script>
   <script defer src="app-radar.js?h=42414e10ae"></script>
   <script defer src="app-play-clock.js?h=49e4b1f99a"></script>
-  <script defer src="app-scrub.js?h=6d529a0cfc"></script>
+  <script defer src="app-scrub.js?h=82ccf24538"></script>
   <script defer src="app.js?h=d9c14cf1bc"></script>
   <script defer src="update-banner.js?h=e3362c1916"></script>
   <script defer src="settings-panel.js?h=0e2b6b8551"></script>

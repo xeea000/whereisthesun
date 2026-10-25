@@ -1,0 +1,1084 @@
+{
+  "head" : {
+    "vars" : [ "i", "iLabel", "c", "opLabel", "art" ]
+  },
+  "results" : {
+    "bindings" : [ {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7017113"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Newbrook_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-112.955 54.3242)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Newbrook Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7636527"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Sulphur_Mountain_Cosmic_Ray_Station"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-115.577777777 51.146666666)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Sulphur Mountain Cosmic Ray Station"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7826439"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Toronto_Magnetic_and_Meteorological_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-79.3946 43.6632)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Louis B. Stewart Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q7896499"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/University_of_Toronto_Southern_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-70.7 -29.008333333)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "University of Toronto Southern Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q8006080"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/William_Brydone_Jack_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-66.640555555 45.948055555)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "William Brydone Jack Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q8055599"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Allan_I._Carswell_Astronomical_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-79.5073 43.7739)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "York University Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q10945955"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Killarney_Provincial_Park_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-81.399333333 46.012472222)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Killarney Provincial Park Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Killarney Provincial Park"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q21070676"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Canadian_Hydrogen_Intensity_Mapping_Experiment"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.623611111 49.320833333)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Canadian Hydrogen Intensity Mapping Experiment"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dominion Radio Astrophysical Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q21070676"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Canadian_Hydrogen_Intensity_Mapping_Experiment"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.623611111 49.320833333)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Canadian Hydrogen Intensity Mapping Experiment"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "University of British Columbia"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q21070676"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Canadian_Hydrogen_Intensity_Mapping_Experiment"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.623611111 49.320833333)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Canadian Hydrogen Intensity Mapping Experiment"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "McGill University"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q21070676"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Canadian_Hydrogen_Intensity_Mapping_Experiment"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.623611111 49.320833333)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Canadian Hydrogen Intensity Mapping Experiment"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "University of Toronto"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q22676378"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Algonquin_46m_radio_telescope"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-78.073042 45.955503)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Algonquin 46m radio telescope"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Thoth Technology Inc."
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q23926667"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Jonsrud_Viewpoint"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.273508 45.410288)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Jonsrud Viewpoint"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q28550666"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Dr._Neil_Trivett_Global_Atmosphere_Watch_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-62.507222222 82.450833333)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dr. Neil Trivett Global Atmosphere Watch Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q66667735"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Hume_Cronyn_Memorial_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-81.275236 43.005583)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Hume Cronyn Memorial Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "University of Western Ontario"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q176822"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Sudbury_Neutrino_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-81.172777777 46.466666666)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Sudbury Neutrino Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q266818"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Dominion_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.7143 45.3936)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dominion Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q531487"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/David_Dunlap_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-79.4227 43.863)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "David Dunlap Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Royal Astronomical Society of Canada"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1138010"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Algonquin_Radio_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-78.073 45.9555)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Algonquin Radio Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1238099"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Dominion_Astrophysical_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-123.41829 48.519806)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dominion Astrophysical Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1238107"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Dominion_Radio_Astrophysical_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.62081125 49.320751444)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Dominion Radio Astrophysical Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Herzberg Institute of Astrophysics"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q1543970"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Mont_M%C3%A9gantic_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-71.1525 45.4558)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Mont Mégantic Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Centre for Research in Astrophysics of Québec"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q2168759"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Rothney_Astrophysical_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-114.291 50.8684)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rothney Astrophysical Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3201"
+      },
+      "art" : {
+        "type" : "uri",
+        "value" : "https://en.wikipedia.org/wiki/Elginfield_Observatory"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-81.3158 43.1924)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Elginfield Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "University of Western Ontario"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3348388"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-71.218055555 46.808055555)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "La capitale Observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Commission de la capitale nationale du Québec"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3348419"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-72.3231 46.4753)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Cégep de Trois-Rivières Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q3348420"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-71.086241666 46.376227777)"
+      },
+      "iLabel" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Observatoire du Mont Cosmos"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q26306594"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-78.073 45.9555)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Algonquin 11m telescope"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q26307567"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.620123349 49.320918345)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "John A. Galt Telescope"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q26307657"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.622189206 49.322017256)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "DRAO Synthesis telescope"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q26307727"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-119.622049892 49.32222808)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "DRAO Solar-flux monitor"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q33060647"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-74.65049 45.52045)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Higginson Tower"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q40153566"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-71.206121 46.806518)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Building 20"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q107270955"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-122.58 49.025)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Golden Ears Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q108800200"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-70.1694231 47.6137819)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Astroblème Charlevoix observatory"
+      },
+      "opLabel" : {
+        "xml:lang" : "fr",
+        "type" : "literal",
+        "value" : "Centre d'études collégiales en Charlevoix"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114638892"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-123.315 48.427924)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Oak Bay observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114639187"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-114.0317 50.778455)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Stone Finder Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114639253"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-114.0667 51.116859)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Rock Finder Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114639325"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-123.617 48.366952)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Sooke observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114639363"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-123.3097 48.46198)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Climenhaga Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114642211"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-114.1142 51.086072)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Calgary observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114643664"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-97.12142 49.645227)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Glenlea Astronomical Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114662437"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-79.5342 43.914771)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "King City observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114662593"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.9135 45.254105)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Boltwood Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114663957"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-73.5833 45.350672)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Gemeaux Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114735314"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.614588721 45.895426063)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Val-des-Bois observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114736211"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-71.7718 46.219516)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Plessisville observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114736239"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-72.4607 48.651315)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Saint-Felicien observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q114773870"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-63.580505279 44.630798372)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Burke-Gaffney Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115523252"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-71.895 45.415613)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Sherbrooke observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115523259"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.09281 45.306132)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Casselman observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115536693"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-78.58311 43.91583)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Newcastle observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115536718"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.7025 45.48055)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Galaxy Blues Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115536724"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-73.3858 46.353842)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Pleiades observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115536747"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-63.82601 44.689361)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Abbey Ridge Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115536752"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.9994 45.347441)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Barred Owl Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115633411"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.20831 45.850016)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "GOZ observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115633408"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-76.25508 44.586395)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Leeside Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q115633414"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-74.08614 45.79256)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Loose Goose Observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q116161249"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-75.5269 45.454982)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "ottawa observatory"
+      }
+    }, {
+      "i" : {
+        "type" : "uri",
+        "value" : "http://www.wikidata.org/entity/Q116162710"
+      },
+      "c" : {
+        "datatype" : "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "type" : "literal",
+        "value" : "Point(-113.314 54.71367)"
+      },
+      "iLabel" : {
+        "xml:lang" : "en",
+        "type" : "literal",
+        "value" : "Athabasca University Geophysical Observatory"
+      }
+    } ]
+  }
+}

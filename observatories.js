@@ -1,7 +1,8 @@
 // workspace/whereisthesun/observatories.js
 /* SUNNY sightseeing layer (opt90): telescopes and observatories worldwide.
  * Data: data/observatories.json, built once by tools/build-observatories.js from
- * OpenStreetMap (ODbL). Fetched only when the switch is first turned on. Sites cluster
+ * OpenStreetMap (ODbL), plus Wikidata (CC0) radio arrays and neutrino, gravitational-wave
+ * and cosmic-ray detectors via tools/build-astro-extra.js (opt91). Fetched only when the switch is first turned on. Sites cluster
  * when zoomed out; each site is a small telescope icon. Tap for name, type, size,
  * operator and link. Toggle: Settings, Sightseeing, Observatories. */
 (function () {
@@ -9,7 +10,7 @@
   var KEY = "sunny-observatories";
   var SRC = "observatories";
   var IDS = ["obs-cluster", "obs-point"];
-  var ATTRIB = 'Observatories: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> (ODbL)';
+  var ATTRIB = 'Observatories: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> (ODbL), <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a> (CC0)';
   var data = null;
   var loading = null;
   var map = null;
@@ -31,8 +32,35 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/observatories.json").then(readJson).then(keep);
+    if (!loading) loading = fetch("data/observatories.json?d=opt91").then(readJson).then(keep);
     return loading;
+  }
+  /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */
+  function detectorIcon() {
+    var c = document.createElement("canvas");
+    c.width = 44;
+    c.height = 44;
+    var g = c.getContext("2d");
+    g.fillStyle = "#11a3a3";
+    g.strokeStyle = "rgba(255,255,255,0.9)";
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(22, 22, 20, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+    g.strokeStyle = "#fff";
+    g.lineWidth = 2.5;
+    [6, 12].forEach(ring.bind(null, g));
+    g.fillStyle = "#fff";
+    g.beginPath();
+    g.arc(22, 22, 2.5, 0, Math.PI * 2);
+    g.fill();
+    return g.getImageData(0, 0, 44, 44);
+  }
+  function ring(g, r) {
+    g.beginPath();
+    g.arc(22, 22, r, 0, Math.PI * 2);
+    g.stroke();
   }
   /* a 22 px telescope glyph: tube on a tripod, white on violet */
   function icon() {
@@ -71,6 +99,7 @@
   }
   function addLayers() {
     if (!map.hasImage("obs-icon")) map.addImage("obs-icon", icon(), { pixelRatio: 2 });
+    if (!map.hasImage("obs-detector")) map.addImage("obs-detector", detectorIcon(), { pixelRatio: 2 });
     if (!map.getSource(SRC)) map.addSource(SRC, { type: "geojson", data: data, attribution: ATTRIB, cluster: true, clusterRadius: 36, clusterMaxZoom: 7 });
     var before = beforeId();
     if (!map.getLayer("obs-cluster")) {
@@ -80,7 +109,7 @@
     }
     if (!map.getLayer("obs-point")) {
       map.addLayer({ id: "obs-point", type: "symbol", source: SRC, filter: ["!", ["has", "point_count"]],
-        layout: { "icon-image": "obs-icon", "icon-size": 1, "icon-allow-overlap": true } }, before);
+        layout: { "icon-image": ["match", ["get", "cat"], ["neutrino", "gravitational-wave", "cosmic-ray"], "obs-detector", "obs-icon"], "icon-size": 1, "icon-allow-overlap": true } }, before);
     }
   }
   function keepOrder() {
@@ -127,19 +156,24 @@
   function escChar(c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
   }
+  var CAT_TEXT = { optical: "Optical", radio: "Radio astronomy", neutrino: "Neutrino detector",
+    "gravitational-wave": "Gravitational-wave detector", "cosmic-ray": "Cosmic-ray detector" };
   function kindText(p) {
+    if (p.cat && p.cat !== "optical" && p.cat !== "radio") return CAT_TEXT[p.cat];
     if (p.kind === "observatory") return "Observatory";
     if (p.kind === "array") return "Telescope site";
     return "Telescope";
   }
   function popupHtml(p) {
     var rows = ["<b>" + esc(p.name || "Unnamed " + kindText(p).toLowerCase()) + "</b>", kindText(p)];
+    if (p.cat === "radio" || p.cat === "optical") rows.push("Kind: " + CAT_TEXT[p.cat]);
     if (p.type) rows.push("Type: " + esc(p.type));
+    if (p.note) rows.push("<i>" + esc(p.note) + "</i>");
     if (p.diameter_m && p.diameter_m !== "null") rows.push("Largest dish/mirror: " + esc(p.diameter_m) + " m");
     if (p.scopes > 1) rows.push(esc(p.scopes) + " telescopes mapped here");
     if (p.operator) rows.push("Operator: " + esc(p.operator));
     if (p.link) rows.push('<a href="' + esc(p.link) + '" target="_blank" rel="noopener">More info</a>');
-    return '<div class="pf-now"><span class="pf-facts">' + rows.join("<br>") + '</span></div><div class="pf-src">© OpenStreetMap contributors</div>';
+    return '<div class="pf-now"><span class="pf-facts">' + rows.join("<br>") + '</span></div><div class="pf-src">' + (p.qid ? 'Wikidata <a href="https://www.wikidata.org/wiki/' + esc(p.qid) + '" target="_blank" rel="noopener">' + esc(p.qid) + "</a>" : "© OpenStreetMap contributors") + "</div>";
   }
   function onClick(e) {
     var f = e.features && e.features[0];
