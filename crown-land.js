@@ -36,9 +36,12 @@
     }
     if (!map.getLayer(LAYER)) map.addLayer({ id: LAYER, type: "raster", source: SRC, paint: { "raster-opacity": 0.85 } }, beforeId());
   }
+  /* off must hide at once, even while tiles are still loading (opt89) */
   function apply() {
-    if (!map || !map.isStyleLoaded()) return;
-    if (on) addLayer();
+    if (!map) return;
+    if (on) {
+      try { addLayer(); } catch (eA) {}
+    }
     if (map.getLayer(LAYER)) map.setLayoutProperty(LAYER, "visibility", on ? "visible" : "none");
   }
   function esc(s) {
@@ -86,6 +89,7 @@
     try { on = localStorage.getItem(KEY) === "1"; } catch (eR) {}
     map.on("load", apply);
     map.on("styledata", apply);
+    map.on("idle", apply);
     map.on("click", onClick);
     apply();
   }

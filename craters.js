@@ -106,8 +106,8 @@
     load().then(applyLoaded).catch(noop);
   }
   function applyLoaded() {
-    if (!isOn() || !map.isStyleLoaded()) return;
-    addLayers();
+    if (!isOn()) return;
+    try { addLayers(); } catch (eA) { return; }
     setVisible(true);
   }
   function noop() {}
@@ -128,7 +128,10 @@
     popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
   }
   function onIdle() {
-    if (!isOn()) return;
+    if (!isOn()) {
+      setVisible(false);
+      return;
+    }
     if (!map.getLayer("craters-dot")) apply();
     else keepOrder();
   }

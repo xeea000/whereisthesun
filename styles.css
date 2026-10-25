@@ -1059,6 +1059,7 @@ label.ov.is-radar-muted {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .update-banner.is-on { opacity: 1; transform: translate(-50%, 0); }
+.update-banner[hidden] { display: none; }
 .update-banner-text { white-space: nowrap; }
 .update-banner-go {
   appearance: none;

@@ -1,0 +1,1 @@
+opt89: off means off for Crown Land and Craters (no isStyleLoaded gate on hide, idle re-apply); dismissed update banner no longer blocks taps; full control audit.

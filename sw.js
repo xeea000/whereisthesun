@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt88"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt89"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -27,7 +27,7 @@ var PRECACHE = [
   "index.html",
   "vendor/lag-o-meter-1.7.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
-  "styles.css?h=77c4d1a79b",
+  "styles.css?h=468e6b0212",
   "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=5ab83bde0d",
   "vendor/maplibre-gl.js?h=be9633c4d8",
@@ -44,8 +44,8 @@ var PRECACHE = [
   "wind-field.js?h=a95511e1dc",
   "wind-gl.js?h=cbb13e67c4",
   "point-forecast.js?h=b05dfd8dfe",
-  "craters.js?h=12ec56a7af",
-  "crown-land.js?h=066064dd81",
+  "craters.js?h=e36d68f681",
+  "crown-land.js?h=76409d2bb9",
   "side-buttons.js?h=06480df83c",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=f2cd6bfd0b",
