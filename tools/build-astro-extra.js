@@ -6,7 +6,8 @@
  * gravitational-wave or cosmic-ray. Non-astronomy OSM rows are dropped, type text is
  * tidied and quote marks stripped. A Wikidata site within 3 km of an OSM site that
  * shares a name word enriches it; otherwise it is added with its QID. Canadian sites come
- * from tools/wikidata-canada.json (query tools/wikidata-canada.rq), typed by name. */
+ * from tools/wikidata-canada.json (query tools/wikidata-canada.rq), typed by name. opt92 merges
+ * tools/canada-extra.json (each with a source link), skipping any within 1 km of a kept site. */
 "use strict";
 var fs = require("fs");
 var path = require("path");
@@ -145,10 +146,23 @@ function placeWd(w) {
 }
 wd.forEach(placeWd);
 var all = sites.concat(added);
+var caExtra = JSON.parse(fs.readFileSync(path.join(__dirname, "canada-extra.json"), "utf8")).sites;
+var caAdded = 0;
+function placeCa(c) {
+  function close(o) {
+    return o.kind === c.kind || sharesWord(o.name, c.name) || c.kind === "observatory";
+  }
+  if (near(all, c, c.kind === "dark-sky" ? 8 : 1, close)) return;
+  var s = { name: c.name, kind: c.kind, cat: c.cat, lat: c.lat, lon: c.lon, link: c.link };
+  if (c.note) s.note = c.note;
+  all.push(s);
+  caAdded++;
+}
+caExtra.forEach(placeCa);
 var doc = {
-  source: "OpenStreetMap man_made=telescope/observatory via Overpass (opt90), plus Wikidata (CC0) radio telescopes, interferometers, neutrino, gravitational-wave and cosmic-ray detectors (retrieved " + new Date().toISOString().slice(0, 10) + ").",
+  source: "OpenStreetMap man_made=telescope/observatory via Overpass (opt90), plus Wikidata (CC0) radio telescopes, interferometers, neutrino, gravitational-wave and cosmic-ray detectors, plus an opt92 Canada pass (tools/canada-extra.json: OSM, Wikidata, Wikipedia, RASC lists; per-site source link) (retrieved " + new Date().toISOString().slice(0, 10) + ").",
   licence: "OSM data ODbL 1.0, (c) OpenStreetMap contributors; Wikidata CC0",
   sites: all
 };
 fs.writeFileSync(path.join(root, "data", "observatories.json"), JSON.stringify(doc));
-console.log("osm kept", sites.length, "dropped", dropped, "wikidata merged", merged, "added", added.length, JSON.stringify(counts));
+console.log("osm kept", sites.length, "dropped", dropped, "wikidata merged", merged, "added", added.length, JSON.stringify(counts), "canada extra", caAdded);

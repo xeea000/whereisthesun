@@ -32,7 +32,7 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/observatories.json?d=opt91").then(readJson).then(keep);
+    if (!loading) loading = fetch("data/observatories.json?d=opt92").then(readJson).then(keep);
     return loading;
   }
   /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */
@@ -158,15 +158,18 @@
   }
   var CAT_TEXT = { optical: "Optical", radio: "Radio astronomy", neutrino: "Neutrino detector",
     "gravitational-wave": "Gravitational-wave detector", "cosmic-ray": "Cosmic-ray detector" };
+  var KIND_NO_CAT = { planetarium: 1, "dark-sky": 1 };
   function kindText(p) {
     if (p.cat && p.cat !== "optical" && p.cat !== "radio") return CAT_TEXT[p.cat];
     if (p.kind === "observatory") return "Observatory";
     if (p.kind === "array") return "Telescope site";
+    if (p.kind === "planetarium") return "Planetarium";
+    if (p.kind === "dark-sky") return "Dark-sky site";
     return "Telescope";
   }
   function popupHtml(p) {
     var rows = ["<b>" + esc(p.name || "Unnamed " + kindText(p).toLowerCase()) + "</b>", kindText(p)];
-    if (p.cat === "radio" || p.cat === "optical") rows.push("Kind: " + CAT_TEXT[p.cat]);
+    if ((p.cat === "radio" || p.cat === "optical") && !KIND_NO_CAT[p.kind]) rows.push("Kind: " + CAT_TEXT[p.cat]);
     if (p.type) rows.push("Type: " + esc(p.type));
     if (p.note) rows.push("<i>" + esc(p.note) + "</i>");
     if (p.diameter_m && p.diameter_m !== "null") rows.push("Largest dish/mirror: " + esc(p.diameter_m) + " m");
