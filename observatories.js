@@ -32,7 +32,7 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/observatories.json?d=opt92").then(readJson).then(keep);
+    if (!loading) loading = fetch("data/observatories.json?d=opt93").then(readJson).then(keep);
     return loading;
   }
   /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */
@@ -158,13 +158,14 @@
   }
   var CAT_TEXT = { optical: "Optical", radio: "Radio astronomy", neutrino: "Neutrino detector",
     "gravitational-wave": "Gravitational-wave detector", "cosmic-ray": "Cosmic-ray detector" };
-  var KIND_NO_CAT = { planetarium: 1, "dark-sky": 1 };
+  var KIND_NO_CAT = { planetarium: 1, "dark-sky": 1, "observing-site": 1 };
   function kindText(p) {
     if (p.cat && p.cat !== "optical" && p.cat !== "radio") return CAT_TEXT[p.cat];
     if (p.kind === "observatory") return "Observatory";
     if (p.kind === "array") return "Telescope site";
     if (p.kind === "planetarium") return "Planetarium";
     if (p.kind === "dark-sky") return "Dark-sky site";
+    if (p.kind === "observing-site") return "Stargazing site";
     return "Telescope";
   }
   function popupHtml(p) {

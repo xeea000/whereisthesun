@@ -7,7 +7,8 @@
  * tidied and quote marks stripped. A Wikidata site within 3 km of an OSM site that
  * shares a name word enriches it; otherwise it is added with its QID. Canadian sites come
  * from tools/wikidata-canada.json (query tools/wikidata-canada.rq), typed by name. opt92 merges
- * tools/canada-extra.json (each with a source link), skipping any within 1 km of a kept site. */
+ * tools/canada-extra.json (each with a source link), skipping any within 1 km of a kept site.
+ * opt93 adds Clear Sky Chart site pages and named-building geocodes to that file. */
 "use strict";
 var fs = require("fs");
 var path = require("path");
