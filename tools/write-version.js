@@ -8,7 +8,7 @@ var path = require("path");
 var crypto = require("crypto");
 var root = path.join(__dirname, "..");
 var FILES = [
-  "index.html", "app.js", "app-core.js", "app-timeline.js", "app-cloud-layers.js", "app-play-buffers.js", "app-play-blend.js", "app-cloud-frames.js", "app-beach-store.js", "app-beach-fetch.js", "app-beach-search.js", "app-wind-data.js", "app-wind-draw.js", "app-radar.js", "app-play-clock.js", "app-scrub.js", "frame-tween.js", "motion-worker.js", "radar-key.js", "radar-source.js", "radar-warm.js", "radar-mask.js", "radar-legend.js", "wind-field.js", "wind-gl.js", "point-forecast.js", "craters.js", "wind-play-fade.js",
+  "index.html", "app.js", "app-core.js", "app-timeline.js", "app-cloud-layers.js", "app-play-buffers.js", "app-play-blend.js", "app-cloud-frames.js", "app-beach-store.js", "app-beach-fetch.js", "app-beach-search.js", "app-wind-data.js", "app-wind-draw.js", "app-radar.js", "app-play-clock.js", "app-scrub.js", "frame-tween.js", "motion-worker.js", "radar-key.js", "radar-source.js", "radar-warm.js", "radar-mask.js", "radar-legend.js", "wind-field.js", "wind-gl.js", "point-forecast.js", "craters.js", "observatories.js", "wind-play-fade.js",
   "beach-worker.js", "update-banner.js", "settings-panel.js", "settings-panel.css", "cloud-key.js", "play-handoff.js", "styles.css", "sw.js"
 ];
 var sw = fs.readFileSync(path.join(root, "sw.js"), "utf8");

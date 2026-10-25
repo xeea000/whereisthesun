@@ -151,6 +151,7 @@ function sunnyStep14() {
   });
   if (window.SunnyPoint) window.SunnyPoint.attach(map, pointSkip); /* opt67: tap for point forecast */
   if (window.SunnyCraters) window.SunnyCraters.attach(map); /* opt74: impact craters (Settings, Sightseeing) */
+  if (window.SunnyObservatories) window.SunnyObservatories.attach(map); /* opt90 */
   if (window.SunnyCrownLand) window.SunnyCrownLand.attach(map); /* opt75: Ontario Crown land overlay */
   map.on("click", (e) => {
     if (!waitingForTap) return;

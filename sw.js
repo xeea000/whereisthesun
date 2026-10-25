@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt89"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt90"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -43,8 +43,9 @@ var PRECACHE = [
   "radar-legend.js?h=82ca8259a4",
   "wind-field.js?h=a95511e1dc",
   "wind-gl.js?h=cbb13e67c4",
-  "point-forecast.js?h=b05dfd8dfe",
+  "point-forecast.js?h=e2b627528a",
   "craters.js?h=e36d68f681",
+  "observatories.js?h=93a87d3be3",
   "crown-land.js?h=76409d2bb9",
   "side-buttons.js?h=06480df83c",
   "wind-play-fade.js?h=e342e19b7e",
@@ -64,7 +65,7 @@ var PRECACHE = [
   "app-wind-draw.js?h=f8483c2264",
   "app-radar.js?h=42414e10ae",
   "app-play-clock.js?h=49e4b1f99a",
-  "app-scrub.js?h=363c69d080",
+  "app-scrub.js?h=6d529a0cfc",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
@@ -201,7 +202,7 @@ function isTile(u) {
 function isStaticData(u) {
   if (u.origin !== self.location.origin) return false;
   var p = u.pathname;
-  return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json";
+  return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json" || p.slice(-23) === "/data/observatories.json";
 }
 function isBeachData(u) {
   return u.origin === self.location.origin && u.pathname.indexOf("/data/") !== -1 && u.searchParams.has("h");
