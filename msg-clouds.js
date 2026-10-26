@@ -2,7 +2,7 @@
 /* Meteosat (EUMETSAT, 0° view) clouds for Europe, Africa and the Middle East, where GOES sees only the edge.
  * Source: EUMETView WMS msg_fes:clm cloud mask (keyless, CORS open). White cloud stays; land and sea colours are keyed
  * out by cloud-key.js. The layer follows the main cloud layer ("gibs"): same visibility and opacity, drawn just below it.
- * Shows the latest image (a 15-minute slot, refreshed every 30 minutes); it is not part of Play frames. */
+ * Shows the latest image (a 15-minute slot, refreshed hourly); it is not part of Play frames. */
 (function () {
   "use strict";
   var ID = "msg-clouds", BOUNDS = [-15, -75, 75, 75], slot = "";
@@ -32,8 +32,7 @@
   var start = () => {
     var map = window.map;
     if (!map || !map.on) { setTimeout(start, 1000); return; }
-    var busy = 0, tick = () => { if (busy) return; busy = 1; setTimeout(() => { busy = 0; try { sync(map); } catch (e) {} }, 400); };
-    map.on("idle", tick); map.on("styledata", tick);
+    setInterval(() => { try { sync(map); } catch (e) {} }, 2000); /* the map rarely goes idle while clouds animate */
   };
   start();
 })();
