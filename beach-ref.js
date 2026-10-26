@@ -100,12 +100,14 @@
     store(PIN_KEY, p ? JSON.stringify(p) : "");
     syncUi();
     rerank();
+    document.dispatchEvent(new CustomEvent("sunny-origin"));
   }
   function setMode(m) {
     mode = WORDS[m] ? m : "me";
     store(MODE_KEY, mode);
     syncUi();
     rerank();
+    document.dispatchEvent(new CustomEvent("sunny-origin"));
   }
   /* A deliberate tap: one finger or mouse button, under 350 ms, moved less than 8 px. */
   function down(e) {
@@ -196,7 +198,7 @@
   mode = WORDS[read(MODE_KEY)] ? read(MODE_KEY) : "me";
   live = read(LIVE_KEY) === "1";
   try { pin = JSON.parse(read(PIN_KEY) || "null"); } catch (e) { pin = null; }
-  window.SunnyBeachRef = { words: words, rerank: rerank };
+  window.SunnyBeachRef = { words: words, rerank: rerank, pin: () => { return mode === "pin" ? pin : null; } };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", hook);
   else hook();
 })();

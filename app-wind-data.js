@@ -8,6 +8,7 @@ var windMoveTimer, windFetchPromise, windDpr, windMoving, windNeedsReseed, windS
 var windCellCounts;
   function loadAround(lat, lon) {
     sunnyApp_origin = { lat: lat, lon: lon };
+    document.dispatchEvent(new CustomEvent("sunny-origin"));
     homeCountry = null;
     waitingForTap = false;
     btnSun.disabled = true;

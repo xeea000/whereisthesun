@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt128"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt129"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -67,7 +67,7 @@ var PRECACHE = [
   "layers-panel.js?h=3ad8d10dc7",
   "famous.js?h=ddc2b79136",
   "overzoom.js?h=1dc114f61d",
-  "flight-time.js?h=f715e313ca",
+  "flight-time.js?h=79218c417c",
   "legend-stack.js?h=b35e7720b5",
   "existing-layers.js?h=12af67fb44",
   "advanced.js?h=ef030f80f5",
@@ -86,7 +86,7 @@ var PRECACHE = [
   "sats.js?h=7e53ca1d3e",
   "sky-draw.js?h=369e7e124f",
   "offline.js?h=f591704655",
-  "beach-ref.js?h=2da9abd59c",
+  "beach-ref.js?h=dab3a52757",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=f2cd6bfd0b",
   "sw-ready.js?h=66b3059850",
@@ -101,7 +101,7 @@ var PRECACHE = [
   "app-beach-store.js?h=2f443c94e4",
   "app-beach-fetch.js?h=ff99802b33",
   "app-beach-search.js?h=953df5657c",
-  "app-wind-data.js?h=86668761f0",
+  "app-wind-data.js?h=2fae005c89",
   "app-wind-draw.js?h=baf9bba812",
   "app-radar.js?h=477c8db9db",
   "app-play-clock.js?h=06b09bbc8c",
