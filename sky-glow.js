@@ -16,18 +16,21 @@
     var t = document.getElementById("toggle-skyglow");
     return !!(t && t.checked);
   }
-  /* opt107: the night-lights tint sits right above the base map, under every other overlay */
+  /* the night-lights tint sits above the base map, the cloud pictures, the night shade and the night-sky squares (they hid it),
+   * and under every other overlay */
+  var COVER = /^(gibs|iem-vis|light-cloud|lc-|sky-night|sky-grid|shower-band)/;
   function beforeId() {
-    var ls = map.getStyle().layers || [];
-    for (var i = 0; i < ls.length; i++) if (ls[i].id !== ID && ls[i].type !== "background" && ls[i].source !== "ofm") return ls[i].id;
+    var ls = map.getStyle().layers || [], from = 0;
+    ls.forEach((l, i) => { if (COVER.test(l.id) || l.type === "background" || l.source === "ofm") from = i + 1; });
+    for (var i = from; i < ls.length; i++) if (ls[i].id !== ID && !COVER.test(ls[i].id)) return ls[i].id;
     return undefined;
   }
   function keepLow() {
     if (!map || !map.getLayer(ID)) return;
-    var ls = map.getStyle().layers, me = ls.findIndex((l) => l.id === ID), b = beforeId(), bi = ls.findIndex((l) => l.id === b);
-    var base = ls.some((l, i) => { return i > me && (l.type === "background" || l.source === "ofm"); });
-    if (b && bi >= 0 && (bi < me || base)) map.moveLayer(ID, b);
-    else if (!b && base) map.moveLayer(ID);
+    var ls = map.getStyle().layers, me = ls.findIndex((l) => l.id === ID), b = beforeId();
+    var bi = b ? ls.findIndex((l) => l.id === b) : ls.length;
+    var low = ls.some((l, i) => { return i > me && (COVER.test(l.id) || l.type === "background" || l.source === "ofm"); });
+    if (low || bi !== me + 1) map.moveLayer(ID, b);
   }
   function addLayer() {
     var ts = window.SunnyDataSaver && window.SunnyDataSaver.low() ? 512 : 256;
