@@ -6,6 +6,8 @@
  *   temple  temples and shrines older than 800 years (churches are left out)
  *   c200 c500 c1000 c1500 cold  castles and forts by age: under 200, 201-500, 501-1000, 1001-1500, over 1500 years, cnone age not known
  *   site    other ancient and archaeological sites with 8+ Wikipedia articles
+ *   nhsca   opt163 Canada fill: National Historic Sites of Canada (P1435 Q1568567); Canadian castles, forts and ancient sites need no
+ *           Wikipedia threshold
  * Writes data/world/history.* (tools/split-points.js). Usage: node tools/build-history.js */
 const path = require("path");
 const fs = require("fs");
@@ -86,6 +88,10 @@ const main = async () => {
   const scls = await subs(["Q839954", "Q15661340"]);
   console.error("site classes", scls.length);
   console.error("sites", await batched(scls, "", 8, "site"));
+  console.error("ca castles", await batched(ccls, "?i wdt:P17 wd:Q16.", 0, band));
+  console.error("ca sites", await batched(scls, "?i wdt:P17 wd:Q16.", 0, "site"));
+  console.error("ca nhs", await rows("?i wdt:P1435 wd:Q1568567. OPTIONAL{?i wdt:P31 ?k}", 0, "nhsca"));
+  Object.values(by).filter((b) => { return b.code === "nhsca"; }).forEach((b) => { b.kind = "National Historic Site of Canada" + (b.kind ? " · " + b.kind : ""); });
   const items = Object.values(by);
   const c = {};
   items.forEach((s) => { c[s.code] = (c[s.code] || 0) + 1; });
