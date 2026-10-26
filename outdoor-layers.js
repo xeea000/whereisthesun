@@ -121,6 +121,10 @@
       attach: (map, on) => {
         map.on("moveend", () => { refresh(map); });
         map.on("idle", () => { if (L.isOn(o.id) && !map.getLayer(ids[0])) apply(map, true); });
+        (window.SunnyHoverName = window.SunnyHoverName || {})[ids[0]] = (g) => {
+          var f = g.properties;
+          return window.SunnyPoints.detail("data/packs/" + f.r + "/" + o.id, metas[f.r], f.i, built).then((d) => { return [d.name || o.label(f.k), o.label(f.k)]; });
+        };
         map.on("click", ids[0], (e) => {
           var f = e.features[0].properties;
           var ll = e.features[0].geometry.coordinates;

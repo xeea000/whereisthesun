@@ -5,7 +5,7 @@
 (() => {
   "use strict";
   if (!window.matchMedia || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  var SKIP = { ofm: 1, "iem-vis": 1, "sky-grid": 1 }, SKIPL = { "sky-night": 1 };
+  var SKIP = { ofm: 1, "iem-vis": 1, "sky-grid": 1 }, SKIPL = { "sky-night": 1, "sky-grid-line": 1 };
   var tip = document.createElement("div");
   tip.id = "hover-tip";
   tip.style.cssText = "position:fixed;z-index:9999;pointer-events:none;display:none;max-width:260px;padding:4px 8px;" +
@@ -13,6 +13,24 @@
   var esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   var nice = (s) => String(s || "")
     .replace(/^(w|pack)-/, "").replace(/[-_]+/g, " ").replace(/\b(dot|dots|sym|pts|fill|line|layer)\b/g, "").trim().replace(/^./, (c) => c.toUpperCase());
+  var PK = { sub: "Subduction edge", conv: "Collision edge", div: "Spreading edge", tr: "Transform edge" };
+  /* layers whose features carry the name under their own keys, or whose id makes a poor type word */
+  var OWN = {
+    "plate-edge": (p) => [PK[p.k] || "Plate edge", (p.pair || "").replace("-", " / ") + (p.v ? " · " + p.v + " mm a year" : "")],
+    "pipe-line": (p) => [p.o || "Undersea pipeline", (p.s ? p.s + " " : "") + "pipeline"],
+    "pipe-hit": (p) => [p.o || "Undersea pipeline", (p.s ? p.s + " " : "") + "pipeline"],
+    "sat-trk": (p) => [p.name || "Satellite", "Orbit track"],
+    "volc-due": (p) => [p.name || "Volcano", "Volcano · eruption may be due"],
+    "acc-ring": (p) => [p.name || p.n || "Accelerator ring", "Particle accelerator"],
+    "craton-line": (p) => [p.n || "Craton", "Craton · " + (p.t || "")],
+    "craton-fill": (p) => [p.n || "Craton", "Craton · " + (p.t || "")],
+    "quake-old": (p) => ["M " + (+p.m).toFixed(1) + " earthquake", String(p.t).slice(0, 4) + (p.d ? " · " + p.d + " km deep" : "")],
+    "eclipse-centre": (p) => [(p.kind || "") + " solar eclipse " + (p.date || ""), "Centre line" + (p.dur ? " · " + p.dur : "")],
+    "eclipse-fill": (p) => [(p.kind || "") + " solar eclipse " + (p.date || ""), "Eclipse path" + (p.dur ? " · up to " + p.dur : "")],
+    "eclipse-line": (p) => [(p.kind || "") + " solar eclipse " + (p.date || ""), "Eclipse path" + (p.dur ? " · up to " + p.dur : "")],
+    "obs-cluster": (p) => [p.point_count + " places", "Observatories · zoom in"],
+    "storm-track": (p) => [(p.n || "Storm") + (p.y ? " " + p.y : ""), "Storm track"]
+  };
   var show = (x, y, html) => {
     tip.innerHTML = html; tip.style.display = "block";
     var w = tip.offsetWidth, h = tip.offsetHeight;
@@ -24,15 +42,24 @@
   var label = (f) => {
     var ex = window.SunnyHoverExt && window.SunnyHoverExt(f, (html) => { if (cur === f.layer.id + ":" + (f.properties || {}).i) show(lx, ly, html); });
     if (ex) return ex;
+    var reg = window.SunnyHoverName && window.SunnyHoverName[f.layer.id], key = f.layer.id + ":" + (f.properties || {}).i;
+    if (reg) { /* async name from the layer's detail file; the hint shows until it arrives */
+      reg(f).then((r) => { if (r && cur === key) show(lx, ly, "<b>" + esc(r[0]) + "</b><br><small>" + esc(r[1]) + "</small>"); }).catch(() => {});
+      return "<b>" + esc((window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id)) + "</b>";
+    }
+    var own = OWN[f.layer.id] && OWN[f.layer.id](f.properties || {});
+    if (own) return "<b>" + esc(own[0]) + "</b><br><small>" + esc(own[1]) + "</small>";
     var hb = window.SunnyHoverBox && window.SunnyHoverBox.label(f.layer.id);
-    if (hb) return "<b>" + esc(hb) + "</b>";
     var p = f.properties || {};
     var name = p.name || p.n || p.title || p.NAME || p.Name || p.label || p.nm || "";
+    if (typeof name !== "string" || name.length < 2) name = "";
+    /* the item's own name first; the layer's short label is only a type hint, or the title when there is no name */
+    if (hb) return name ? "<b>" + esc(name) + "</b><br><small>" + esc(hb) + "</small>" : "<b>" + esc(hb) + "</b>";
     if (f.layer.id === "famous-star") return "<b>" + esc(name) + "</b><br><small>Famous</small>";
     var type = (window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id) || nice(f.source); /* opt105 */
     if (p.point_count) return "<b>" + p.point_count + " places</b><br><small>" + esc(type) + " · zoom in</small>";
     var kind = p.k || p.cat || p.type || ""; if (String(kind).length < 3) kind = "";
-    if (!name && kind) { name = nice(kind); kind = ""; }
+    if (!name) kind = ""; /* a bare code ("found", "div") is not a name */
     return "<b>" + esc(name || type) + "</b>" + (name ? "<br><small>" + esc(type + (kind && kind !== name ? " · " + nice(kind) : "")) + "</small>" : "");
   };
   var hook = () => {
@@ -71,5 +98,7 @@
       else if (!t && b.dataset && b.dataset.tip) b.title = b.dataset.tip;
     });
   };
+  window.SunnyHoverTip = { label: label };
+  window.SunnyHoverName = window.SunnyHoverName || {};
   window.addEventListener("load", () => { hook(); titles(); setInterval(titles, 3000); });
 })();

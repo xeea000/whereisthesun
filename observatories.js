@@ -170,6 +170,14 @@
   }
   function attach(m) {
     map = m;
+    var prev = window.SunnyHoverExt; /* hover shows the site's own name, the class as a hint */
+    window.SunnyHoverExt = (f, upd) => {
+      if (!f.layer || f.layer.id !== "obs-point") return prev ? prev(f, upd) : null;
+      var c = CLS.find((x) => { return x[0] === f.properties.cat; }), hint = c ? c[1].split(" (")[0] : "Observatory";
+      if (meta) window.SunnyPoints.detail(BASE, meta, f.properties.i, "opt96").then((d) => {
+        upd("<b>" + esc(d.name || hint) + "</b><br><small>" + esc(hint + (d.type && d.type !== hint ? " · " + d.type : "")) + "</small>"); }).catch(() => {});
+      return "<b>" + esc(hint) + "</b>";
+    };
     var t = document.getElementById("toggle-observatories");
     if (t) {
       try { t.checked = localStorage.getItem(KEY) === "1"; } catch (eR) {}

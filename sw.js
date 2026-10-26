@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt141"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt142"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -58,7 +58,7 @@ var PRECACHE = [
   "craters.js?h=aeca865098",
   "sky-glow.js?h=b325551c86",
   "beach-toggle.js?h=29ef62a7e1",
-  "observatories.js?h=ae74ee4e8f",
+  "observatories.js?h=5d9fbe537e",
   "crown-land.js?h=4f17ab26f8",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
@@ -76,13 +76,13 @@ var PRECACHE = [
   "aurora-top.js?h=d5ed39088c",
   "hover-box.js?h=8fe3f76718",
   "sky-layers.js?h=a4e092c437",
-  "earth-layers.js?h=0f84ec2b4a",
+  "earth-layers.js?h=4a03d3e3af",
   "plates.js?h=192e0fa1b8",
   "quakes.js?h=a47e073cf2",
   "volcanoes.js?h=5aede381a6",
   "storms.js?h=7df322a672",
-  "world-layers.js?h=d3f3e1130c",
-  "outdoor-layers.js?h=d931181d64",
+  "world-layers.js?h=5d335ac585",
+  "outdoor-layers.js?h=3a91b5b5c4",
   "sky-card.js?h=baf5b27358",
   "sats.js?h=7e53ca1d3e",
   "sky-draw.js?h=31736c79c8",
@@ -109,7 +109,7 @@ var PRECACHE = [
   "app-scrub.js?h=6eb88b2551",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
-  "hover-tips.js?h=5d84b07813",
+  "hover-tips.js?h=9cf0ae318d",
   "settings-panel.js?h=0e2b6b8551",
   "lagmeter.js?h=1da2e674c3",
   "manifest.webmanifest?h=3122f023bd",

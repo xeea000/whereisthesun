@@ -242,7 +242,7 @@
     var id = f.layer && f.layer.id, k = String(f.properties.k || "");
     if (id === "tower-dot" && tMeta[f.properties.t]) {
       tDetail(f).then((r) => { upd("<b>" + K.esc(mastName(r)) + "</b><br><small>" + (r.height !== "" ? r.height + " m · " : "") + K.esc(TN[k[0]] || "Tower") + "</small>"); }).catch(() => {});
-      return "<b>" + K.esc(TN[k[0]] || "Tower") + "</b><br><small>about " + k.slice(1) + " m</small>";
+      return "<b>" + K.esc(TN[k[0]] || "Tower") + "</b>" + (+k.slice(1) ? "<br><small>about " + k.slice(1) + " m</small>" : "");
     }
     var o = hoverOf[id];
     if (!o || !meta[o.file]) return null;
@@ -294,6 +294,11 @@
           if (pp.isOpen()) pp.setHTML(K.card(r[0] + " cable", ["Submarine telecom cable", r[1] ? "Length " + K.esc(r[1]) : "",
             r[2] ? (+r[2] > NOW ? "Planned to start " + K.esc(r[2]) : age("In service since", r[2])) : "", r[3] ? "Owners " + K.esc(r[3]) : ""], link));
         }).catch(() => { cableRows = null; if (pp.isOpen()) pp.setHTML(K.card("Submarine cable", ["Could not load details. Tap again when online."], CSRC)); });
+      };
+      var hn = window.SunnyHoverName = window.SunnyHoverName || {};
+      hn["cable-line"] = hn["cable-plan"] = (f) => {
+        if (!cableRows) cableRows = K.loadJson(BASE + "cables.d.json?h=" + V);
+        return cableRows.then((rows) => { var r = rows[f.properties.i]; return r ? [r[0], "Submarine cable" + (r[2] ? " · " + r[2] : "")] : null; });
       };
       map.on("click", "cable-line", cableTap); map.on("click", "cable-plan", cableTap);
       cableApply(map, on);

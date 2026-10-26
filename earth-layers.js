@@ -123,6 +123,10 @@
     tip: "Meteorites seen falling, plus finds of 1 kg or more, worldwide (Meteoritical Society, NASA)", apply: metApply,
     attach: (map, on) => {
       idleAdd(map, "meteorites", "meteor-dot", metApply);
+      (window.SunnyHoverName = window.SunnyHoverName || {})["meteor-dot"] = (f) => {
+        return window.SunnyPoints.detail(MET, metMeta, f.properties.i, "opt99").then((p) => {
+          return [p.n + " meteorite", (f.properties.k !== "found" ? "Seen falling" : "Found") + (p.y ? " " + p.y : "")]; });
+      };
       map.on("click", "meteor-dot", (e) => {
         var ll = e.features[0].geometry.coordinates;
         var fell = e.features[0].properties.k !== "found";
