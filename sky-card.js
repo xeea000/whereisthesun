@@ -2,9 +2,7 @@
 /* SUNNY "Tonight" card (opt94), worked out on the phone for the map centre:
  *   Moon & meteors  moon phase, moonrise and moonset (SunCalc, BSD), and the next major meteor
  *                   shower peak from the International Meteor Organization calendar.
- *   Satellites      ISS, Tiangong and Hubble: live position dots on the map and the next night
- *                   passes over you, from CelesTrak orbits (one tiny file each, kept 12 hours)
- *                   run through satellite.js (MIT).
+ *   Satellites      next night passes of the space stations and science satellites (orbits from sats.js).
  *   Night-sky score 0-10 for tonight: Open-Meteo cloud cover (free), the moon, and how dark the
  *                   sky is here from NASA Black Marble night lights. A SUNNY estimate. */
 (() => {
@@ -16,7 +14,6 @@
   var SHOWERS = [["Quadrantids", 1, 3, 80], ["Lyrids", 4, 22, 18], ["Eta Aquariids", 5, 6, 50], ["Southern Delta Aquariids", 7, 31, 25],
     ["Perseids", 8, 13, 100], ["Draconids", 10, 8, 10], ["Orionids", 10, 21, 20], ["Northern Taurids", 11, 12, 5],
     ["Leonids", 11, 17, 15], ["Geminids", 12, 14, 150], ["Ursids", 12, 22, 10]];
-  var SATS = [[25544, "ISS"], [48274, "Tiangong"], [20580, "Hubble"]];
   var map = null;
   var here = null;
   var sats = [];
@@ -58,21 +55,7 @@
     return ["🌙 " + phaseName(ill.phase) + ", " + Math.round(ill.fraction * 100) + " % lit · rise " + fmtTime(t.rise) + " · set " + fmtTime(t.set),
       "☄️ " + sh.n + " peak " + (days <= 0 ? "tonight" : days === 1 ? "tomorrow" : "in " + days + " days") + " (up to " + sh.z + "/h)"];
   }
-  /* satellites */
-  function loadSats() {
-    var sl = window.satellite;
-    if (!sl) return Promise.resolve();
-    return Promise.all(SATS.map((s) => {
-      var c = K.getStore("tle-" + s[0]);
-      var p = c ? Promise.resolve(c) : fetch("https://celestrak.org/NORAD/elements/gp.php?CATNR=" + s[0] + "&FORMAT=tle").then((r) => { return r.text(); }).then((txt) => {
-        var l = txt.trim().split(/\r?\n/);
-        if (l.length < 3) throw new Error("tle");
-        K.putStore("tle-" + s[0], [l[1], l[2]], 12 * 3600000);
-        return [l[1], l[2]];
-      });
-      return p.then((tle) => { return { name: s[1], rec: sl.twoline2satrec(tle[0], tle[1]) }; }).catch(() => { return null; });
-    })).then((list) => { sats = list.filter(Boolean); });
-  }
+  /* satellites come from sats.js (opt102); passes here use the space stations and science groups */
   function sunEci(date) {
     var d = (date.getTime() / 864e5) - 10957.5;
     var g = (357.529 + 0.98560028 * d) * Math.PI / 180;
@@ -112,6 +95,7 @@
     passes = [];
     if (!here || !window.SunCalc) return;
     var t0 = Date.now();
+    sats = window.SunnySats ? window.SunnySats.major() : [];
     sats.forEach((s) => {
       var cur = null;
       for (var t = t0; t < t0 + 36 * 3600000; t += 30000) {
@@ -129,42 +113,6 @@
       }
     });
     passes.sort((a, b) => { return a.start - b.start; });
-  }
-  function satGeo() {
-    var now = new Date();
-    return K.fc(sats.map((s) => {
-      var a = look(s.rec, now);
-      return a ? { type: "Feature", properties: { n: s.name }, geometry: { type: "Point", coordinates: [a.lng, a.lat] } } : null;
-    }).filter(Boolean));
-  }
-  /* small satellite picture: body with two solar panels, dark outline for satellite imagery */
-  function satIcon() {
-    var c = document.createElement("canvas");
-    c.width = c.height = 48;
-    var g = c.getContext("2d");
-    g.lineWidth = 2;
-    g.strokeStyle = "#0b1020";
-    g.fillStyle = "#3d7bff";
-    [[3, 18, 14, 12], [31, 18, 14, 12]].forEach((r) => { g.fillRect(r[0], r[1], r[2], r[3]); g.strokeRect(r[0], r[1], r[2], r[3]); });
-    g.fillStyle = "#f4f4f4";
-    g.fillRect(17, 15, 14, 18);
-    g.strokeRect(17, 15, 14, 18);
-    g.beginPath();
-    g.moveTo(24, 15);
-    g.lineTo(24, 7);
-    g.stroke();
-    return g.getImageData(0, 0, 48, 48);
-  }
-  function satDraw() {
-    if (!map || !L.isOn("sats") || !sats.length) return;
-    try {
-      if (!map.getSource("sats")) map.addSource("sats", { type: "geojson", data: satGeo(), attribution: 'Orbits: <a href="https://celestrak.org/" target="_blank" rel="noopener">CelesTrak</a>' });
-      else map.getSource("sats").setData(satGeo());
-      if (!map.hasImage("sat-ico")) map.addImage("sat-ico", satIcon(), { pixelRatio: 2 });
-      if (!map.getLayer("sat-dot")) {
-        map.addLayer({ id: "sat-dot", type: "symbol", source: "sats", layout: { "icon-image": "sat-ico", "icon-allow-overlap": true, "icon-ignore-placement": true } });
-      }
-    } catch (e) {}
   }
   function satLines() {
     if (!sats.length) return ["🛰️ Loading orbits…"];
@@ -284,40 +232,26 @@
     if (here && Math.abs(c.lat - here.lat) < 0.3 && Math.abs(c.lng - here.lng) < 0.3) return;
     here = { lat: c.lat, lng: c.lng };
     if (L.isOn("nightscore")) computeScore();
-    if (L.isOn("sats") && sats.length) findPasses();
+    if (L.isOn("sats")) findPasses();
     render();
   }
   function applyAll() {
     if (!map) return;
-    K.vis(map, ["sat-dot"], L.isOn("sats"));
-    if (L.isOn("sats") && !sats.length) loadSats().then(() => { findPasses(); satDraw(); render(); });
-    else if (L.isOn("sats")) satDraw();
+    if (L.isOn("sats")) { findPasses(); if (!sats.length) setTimeout(applyAll, 4000); }
     if (L.isOn("nightscore") && !score) computeScore();
     render();
     if (window.SunnySkyDraw) window.SunnySkyDraw.apply();
   }
   function def(id, name, icon, tip) {
-    L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, taps: id === "sats" ? ["sat-dot"] : null, apply: applyAll });
+    L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, apply: applyAll });
   }
   def("moon", "Moon & meteor showers", "🌙", "Moon phase, moonrise and moonset here, and the next meteor shower peak (IMO)");
-  def("sats", "ISS & satellite passes", "🛰️", "Live ISS, Tiangong and Hubble positions and their next visible passes over you (CelesTrak)");
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data");
   window.SunnySky = { sats: () => { return sats; }, look: look, here: () => { return here; }, passes: () => { return passes; },
     nextShower: nextShower, clouds: clouds, darkness: darkness, compass: compass, fmtTime: fmtTime };
   L.add({ id: "skycard-attach", group: "none", attach: (m) => {
     map = m;
     map.on("moveend", () => { setTimeout(moved, 400); });
-    map.on("idle", () => { if (L.isOn("sats") && !map.getLayer("sat-dot") && sats.length) satDraw(); });
-    map.on("click", "sat-dot", (e) => {
-      var n = e.features[0].properties.n;
-      var a = sats.filter((s) => { return s.name === n; })[0];
-      var pos = a ? window.satellite.propagate(a.rec, new Date()) : null;
-      var gd = pos && pos.position ? window.satellite.eciToGeodetic(pos.position, window.satellite.gstime(new Date())) : null;
-      var cat = SATS.filter((x) => { return x[1] === n; })[0];
-      K.show(map, e.lngLat, n, [gd ? Math.round(gd.height) + " km up" : "", "Moving at about 7.6 km every second", "Line: where it has been (faint) and is going (bright)"],
-        ["CelesTrak record " + (cat ? cat[0] : ""), "https://celestrak.org/satcat/table-satcat.php?CATNR=" + (cat ? cat[0] : "25544")]);
-    });
-    setInterval(() => { if (L.isOn("sats")) satDraw(); }, 5000);
     setInterval(render, 60000);
     moved();
     applyAll();

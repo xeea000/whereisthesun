@@ -110,17 +110,7 @@
   function satFeats(h, now) {
     var out = [];
     var sky = S();
-    sky.sats().forEach((s) => {
-      var past = [];
-      var next = [];
-      for (var t = -45; t <= 90; t += 1) {
-        var a = sky.look(s.rec, new Date(now.getTime() + t * 60000));
-        if (!a) continue;
-        (t <= 0 ? past : next).push([a.lng, a.lat]);
-      }
-      if (past.length) next.unshift(past[past.length - 1]);
-      out = out.concat(lines(past, "sat-past"), lines(next, "sat-next"));
-    });
+    /* opt102: live tracks are drawn by sats.js; here only the next pass arc */
     var p = sky.passes()[0];
     if (p && h) {
       var s2 = sky.sats().filter((x) => { return x.name === p.name; })[0];

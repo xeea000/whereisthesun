@@ -46,7 +46,7 @@
       if (d.note) r.note.textContent = d.note(map, on) || "";
     });
     var seg = document.querySelector("#overlay-seg .seg-btn.is-on");
-    var cur = seg ? seg.getAttribute("data-overlay") : "clouds";
+    var cur = seg ? seg.getAttribute("data-overlay") : "";
     document.querySelectorAll(".lp-ov").forEach((b) => {
       b.classList.toggle("is-on", b.getAttribute("data-ov") === cur);
     });
@@ -93,7 +93,43 @@
     r.appendChild(i);
     r.appendChild(el("span", "lp-sw"));
     rows[d.id] = { row: r, input: i, note: note };
-    return r;
+    if (!d.kids) return r;
+    /* opt102: twisty sub-section (e.g. Satellites groups), each child saved as sunny-L-<kid id> */
+    var w = el("div", "lp-fold");
+    var tw = el("button", "lp-twisty", "▸");
+    tw.type = "button";
+    tw.setAttribute("aria-label", "Show " + d.name + " groups");
+    var box = el("div", "lp-kids");
+    var open = saved(d.id + "-open", false);
+    var show = (o) => { box.hidden = !o; tw.textContent = o ? "▾" : "▸"; tw.setAttribute("aria-expanded", o ? "true" : "false"); };
+    show(open);
+    tw.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); open = !open; show(open);
+      try { localStorage.setItem("sunny-L-" + d.id + "-open", open ? "1" : "0"); } catch (e) {} });
+    r.insertBefore(tw, r.firstChild);
+    d.kids.forEach((k) => {
+      var kl = el("label", "lp-kid");
+      var ki = el("input");
+      ki.type = "checkbox";
+      ki.checked = saved(k.id, k.dflt);
+      ki.addEventListener("change", () => {
+        try { localStorage.setItem("sunny-L-" + k.id, ki.checked ? "1" : "0"); } catch (e) {}
+        if (ki.checked && !isOn(d)) setOn(d, true);
+        if (d.kidSet) d.kidSet();
+      });
+      kl.appendChild(ki);
+      kl.appendChild(document.createTextNode(" " + k.name));
+      box.appendChild(kl);
+    });
+    w.appendChild(r);
+    w.appendChild(box);
+    return w;
+  }
+  /* opt102: Clear all turns every overlay off (Clouds/Radar too) and saves it; base map, beaches and the tap pin stay */
+  function clearAll() {
+    defs.forEach((d) => { if (d.name && d.id !== "beaches" && isOn(d)) setOn(d, false); });
+    var b = document.querySelector("#overlay-seg .seg-btn.is-on");
+    if (b) b.click();
+    setTimeout(refresh, 80);
   }
   function build() {
     var body = panel.querySelector(".lp-body");
@@ -154,6 +190,11 @@
     panel.id = "layers-panel";
     panel.setAttribute("aria-label", "Layers");
     var head = el("div", "lp-title", "Layers");
+    var clr = el("button", "lp-clear", "Clear all");
+    clr.type = "button";
+    clr.title = "Turn off every overlay layer (keeps the base map, beaches and the tap pin)";
+    clr.addEventListener("click", clearAll);
+    head.appendChild(clr);
     panel.appendChild(head);
     panel.appendChild(el("div", "lp-body"));
     var tab = el("button", "lp-tab", "›");

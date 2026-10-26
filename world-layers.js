@@ -6,15 +6,15 @@
  *   Platforms    offshore platforms still standing (BOEM, public domain) plus oil platforms on Wikidata
  *   OSM undersea pipelines and platforms, zoom 9+, and OSM communication towers, zoom 11+ (Overpass, ODbL)
  *   Stations     research stations (Wikidata) and Antarctic facilities (COMNAP)
- *   Transmission tall TV and radio masts (shown by height: 300 m+ always, 150 m+ from zoom 4, all from 6),
- *                radio telescopes and radar sites (Wikidata) */
+ *   Transmission tall TV and radio masts (opt102: data/world/masts.*, dot size by height), radio telescopes
+ *                and radar sites (Wikidata) */
 (() => {
   "use strict";
   var K = window.SunnyKit, L = window.SunnyLayers, P = window.SunnyPoints;
   if (!K || !L || !P) return;
   var NOW = new Date().getFullYear();
   var BASE = "data/world/";
-  var V = "opt99"; /* bump when tools/build-world.js or build-cables.js output changes */
+  var V = "opt102"; /* bump when tools/build-world.js or build-cables.js output changes */
   var meta = {};
   var cap = (s) => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
   var age = (verb, y) => {
@@ -42,8 +42,8 @@
         if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: K.fc(P.toFeatures(d)), attribution: o.attrib });
         o.layers.forEach((l) => {
           if (map.getLayer(l.id)) return;
-          var spec = { id: l.id, type: "circle", source: sid, filter: ["in", ["get", "k"], ["literal", l.codes]], paint: {
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, l.r || 2.5, 8, (l.r || 2.5) * 2.2],
+          var spec = { id: l.id, type: "circle", source: sid, filter: l.filter || ["in", ["get", "k"], ["literal", l.codes]], paint: {
+            "circle-radius": o.radius || ["interpolate", ["linear"], ["zoom"], 1, l.r || 2.5, 8, (l.r || 2.5) * 2.2],
             "circle-color": l.color, "circle-stroke-color": "#101418", "circle-stroke-width": 0.8 } };
           if (l.minzoom) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
@@ -60,7 +60,7 @@
             var f = e.features[0];
             var pp = K.show(map, f.geometry.coordinates, "", [P.skeleton(o.name)], o.src);
             P.detail(BASE + o.file, meta[o.file], f.properties.i, V).then((r) => {
-              if (pp.isOpen()) pp.setHTML(K.card(r.name, o.lines(r, f.properties.k), src(r, o.src)));
+              if (pp.isOpen()) pp.setHTML(K.card(o.title ? o.title(r) : r.name, o.lines(r, f.properties.k), o.srcOf ? o.srcOf(r) : src(r, o.src)));
             }).catch(() => { if (pp.isOpen()) pp.setHTML(K.card(o.name, ["Could not load details. Tap again when online."], o.src)); });
           });
         });
@@ -107,11 +107,35 @@
     };
   };
   var TXA = 'Transmission: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>';
-  pointLayer({ id: "masts", file: "transmission", name: "Tall TV & radio masts", icon: "🗼", group: "Transmission",
-    tip: "TV towers and tall radio masts. 300 m and taller show everywhere, 150 m+ from zoom 4, all from zoom 6 (Wikidata)",
-    attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
-    layers: [{ id: "mast-300", codes: ["mast300"], color: "#ff6b3d", r: 3.4 }, { id: "mast-150", codes: ["mast150"], color: "#ff9a6b", r: 2.6, minzoom: 4 },
-      { id: "mast-all", codes: ["mast"], color: "#ffc2a6", r: 2, minzoom: 6 }], lines: txLines("Built") });
+  /* opt102 masts: own file (tools/build-masts.js: Wikidata + OSM + FCC ASR). Point code "h<m>" is the height
+   * bucket, so the dot grows with height before any detail loads. */
+  var MH = ["to-number", ["slice", ["get", "k"], 1]];
+  var mastKind = (r) => { return cap(r.kind || "mast"); };
+  var mastName = (r) => { return r.name || r.operator || "Unnamed mast"; };
+  var MSRC = { wd: (r) => { return ["Wikidata " + r.ref, "https://www.wikidata.org/wiki/" + r.ref]; },
+    osm: (r) => { return ["OpenStreetMap " + r.ref, "https://www.openstreetmap.org/" + r.ref]; },
+    fcc: (r) => { var p = String(r.ref).split(":"); return ["FCC ASR " + p[0], "https://wireless2.fcc.gov/UlsApp/AsrSearch/asrRegistration.jsp?regKey=" + p[1]]; } };
+  pointLayer({ id: "masts", file: "masts", name: "Tall TV & radio masts", icon: "🗼", group: "Transmission",
+    tip: "TV towers and tall radio masts; bigger dot = taller. 300 m+ show everywhere, 150 m+ from zoom 4, the rest from zoom 5 (Wikidata, OpenStreetMap, FCC ASR)",
+    attrib: 'Masts: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, OSM, FCC ASR', src: ["Wikidata, OpenStreetMap, FCC ASR", "https://www.fcc.gov/uls/transactions/daily-weekly"],
+    title: mastName, srcOf: (r) => { return (MSRC[r.src] || MSRC.wd)(r); },
+    radius: ["interpolate", ["linear"], ["zoom"], 1, ["+", 1.4, ["/", MH, 150]], 8, ["+", 3, ["/", MH, 55]]],
+    layers: [{ id: "mast-300", filter: [">=", MH, 300], color: "#ff5a2a" }, { id: "mast-150", filter: ["all", [">=", MH, 150], ["<", MH, 300]], color: "#ff9a6b", minzoom: 4 },
+      { id: "mast-all", filter: ["<", MH, 150], color: "#ffc2a6", minzoom: 5 }],
+    lines: (r) => {
+      return ["<b>" + (r.height !== "" ? Number(r.height).toLocaleString() + " m" : "Height unknown") + "</b> · " + K.esc(mastKind(r)), K.esc(r.country || ""), age("Built", r.year),
+        r.name && r.operator ? "Operator " + K.esc(r.operator) : "", wikiLine(r)];
+    } });
+  window.SunnyHoverExt = (f, upd) => {
+    var id = f.layer && f.layer.id;
+    if (!/^mast-/.test(id) || !meta.masts) return null;
+    var h = +String(f.properties.k).slice(1);
+    var base = "<br><small>" + (h ? h + (h >= 400 ? "+" : "–" + (h + 24)) + " m · " : "") + "tall mast</small>";
+    P.detail(BASE + "masts", meta.masts, f.properties.i, V).then((r) => {
+      upd("<b>" + K.esc(mastName(r)) + "</b><br><small>" + (r.height !== "" ? r.height + " m · " : "") + K.esc(mastKind(r)) + "</small>");
+    }).catch(() => {});
+    return "<b>Tall mast</b>" + base;
+  };
   pointLayer({ id: "radioscopes", file: "transmission", name: "Radio telescopes", icon: "📡", group: "Transmission",
     tip: "Radio telescopes and arrays (Wikidata)", attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
     layers: [{ id: "tx-scope", codes: ["scope"], color: "#c08bff", r: 3.2 }], lines: txLines("Opened") });

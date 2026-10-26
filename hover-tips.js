@@ -1,5 +1,6 @@
 // workspace/whereisthesun/hover-tips.js
 /* SUNNY desktop hover tooltips (opt100). Only on mouse devices (hover:hover and pointer:fine).
+ * opt102: other modules may supply a label via window.SunnyHoverExt(feature, update).
  * Shows name and type of the map feature or button under the mouse, from data already loaded (no fetch). */
 (() => {
   "use strict";
@@ -18,8 +19,11 @@
     tip.style.left = Math.min(x + 14, innerWidth - w - 4) + "px";
     tip.style.top = (y + 18 + h > innerHeight ? y - h - 10 : y + 18) + "px";
   };
-  var hide = () => { tip.style.display = "none"; };
+  var hide = () => { tip.style.display = "none"; cur = ""; };
+  var cur = "", lx = 0, ly = 0; /* opt102: async labels (SunnyHoverExt) only refresh the tip still under the mouse */
   var label = (f) => {
+    var ex = window.SunnyHoverExt && window.SunnyHoverExt(f, (html) => { if (cur === f.layer.id + ":" + (f.properties || {}).i) show(lx, ly, html); });
+    if (ex) return ex;
     var hb = window.SunnyHoverBox && window.SunnyHoverBox.label(f.layer.id);
     if (hb) return "<b>" + esc(hb) + "</b>";
     var p = f.properties || {};
@@ -50,6 +54,7 @@
         }
         if (!f) { hide(); cv.style.cursor = ""; return; }
         cv.style.cursor = "pointer";
+        cur = f.layer.id + ":" + (f.properties || {}).i; lx = e.originalEvent.clientX; ly = e.originalEvent.clientY;
         show(e.originalEvent.clientX, e.originalEvent.clientY, label(f));
       });
     });
