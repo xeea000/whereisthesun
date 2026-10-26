@@ -225,7 +225,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
         type: "raster",
         tiles: [url],
         tileSize: window.SunnyDataSaver.low() ? 512 : 256, /* Low data: one zoom level coarser */
-        maxzoom: 7,
+        maxzoom: window.SunnyDataSaver && window.SunnyDataSaver.low() ? 5 : 7,
         attribution: "NASA GIBS / NOAA GOES"
       });
     }
@@ -255,7 +255,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
       type: "raster",
       tiles: [url],
       tileSize: window.SunnyDataSaver.low() ? 512 : 256,
-      maxzoom: 7,
+      maxzoom: window.SunnyDataSaver && window.SunnyDataSaver.low() ? 5 : 7,
       attribution: "NASA GIBS / NOAA GOES"
     });
     m.addLayer({

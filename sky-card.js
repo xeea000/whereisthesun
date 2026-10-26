@@ -123,16 +123,16 @@
   }
   /* night-sky score */
   function darkness(lat, lng) {
-    var key = "lum-" + lat.toFixed(1) + "," + lng.toFixed(1);
+    var key = "lum-" + (window.SunnyDataSaver && window.SunnyDataSaver.low() ? "l" : "") + lat.toFixed(1) + "," + lng.toFixed(1);
     var c = K.getStore(key);
     if (c != null) return Promise.resolve(c);
-    var z = 8;
-    var n = 256;
+    var z = window.SunnyDataSaver && window.SunnyDataSaver.low() ? 4 : 8;
+    var n = Math.pow(2, z);
     var x = (lng + 180) / 360 * n;
     var r = lat * Math.PI / 180;
     var y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
     var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/" + z + "/" + Math.floor(y) + "/" + Math.floor(x) + ".png";
-    var tk = Math.floor(x) + "/" + Math.floor(y);
+    var tk = z + "/" + Math.floor(x) + "/" + Math.floor(y);
     if (!tileImg[tk]) tileImg[tk] = new Promise((res, rej) => {
       var img = new Image();
       img.crossOrigin = "anonymous";

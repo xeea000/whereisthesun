@@ -33,7 +33,8 @@
   }
   /* Frame times kept by Fewer frames: a fixed clock grid, so the same frames stay kept as time moves on */
   /* Low data (bottom bar): Play keeps hourly cloud and half-hourly radar frames, base maps stop at zoom 12,
-   * cloud pictures are half size and live layers refresh 4 times slower */
+   * cloud pictures are half size and stop at zoom 5, night-sky squares read zoom-4 light tiles,
+   * live layers refresh 4 times slower and the aurora forecast is kept 4 hours */
   function low() { try { return localStorage.getItem("sunny-lowdata") === "1"; } catch (e) { return false; } }
   function keepMs(ms, stepMs, isLast) {
     if ((!on("fewer") && !low()) || isLast || !isFinite(ms)) return true;

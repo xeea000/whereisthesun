@@ -23,7 +23,7 @@
           if (p[2] >= 4) pts.push([p[0] > 180 ? p[0] - 360 : p[0], p[1], p[2]]);
         });
         var d = { time: j["Forecast Time"] || "", pts: pts };
-        K.putStore("aurora", d, 30 * 60000);
+        K.putStore("aurora", d, (window.SunnyDataSaver && window.SunnyDataSaver.low() ? 240 : 30) * 60000);
         aurLoading = null;
         return d;
       });
