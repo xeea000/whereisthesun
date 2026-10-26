@@ -58,8 +58,9 @@ if (require.main === module) {
       scopes.push({ lat: a / 1e5, lon: o / 1e5, qid: row[7] });
     }
     const near = (s) => {
-      return scopes.some((q) => { return (s.qid && q.qid === s.qid) || Math.hypot(q.lat - s.lat, (q.lon - s.lon) * Math.cos(s.lat * Math.PI / 180)) < 0.018; }); };
-      const cls = (s) => {
+      return scopes.some((q) => { return (s.qid && q.qid === s.qid) || Math.hypot(q.lat - s.lat, (q.lon - s.lon) * Math.cos(s.lat * Math.PI / 180)) < 0.018; });
+    };
+    const cls = (s) => {
       if (/neutrino|gravitational|cosmic/.test(s.cat)) return "detector";
       if (s.kind === "dark-sky") return "darksky";
       if (s.kind === "observing-site" || s.kind === "planetarium") return "stargaze";
