@@ -69,13 +69,17 @@
     var cv = m.getCanvas(), dragging = false, raf = 0;
     m.on("dragstart", () => { dragging = true; hide(); });
     m.on("dragend", () => { dragging = false; });
-    m.on("mousemove", (e) => {
+    var le = null; /* the last move wins: a move during a pending frame is not dropped */
+    m.on("mousemove", (ev) => {
+      le = ev;
       if (dragging || raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
+        var e = le;
         var fs = [];
         try { fs = m.queryRenderedFeatures([[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]]); } catch (x) { fs = []; }
-        var f = fs.find((g) => !SKIP[g.source] && !SKIPL[g.layer.id] && g.layer && g.layer.type !== "raster");
+        var ok = fs.filter((g) => g.layer && !SKIP[g.source] && !SKIPL[g.layer.id] && g.layer.type !== "raster");
+        var f = ok.find((g) => /circle|symbol/.test(g.layer.type)) || ok.find((g) => g.layer.type === "line") || ok[0]; /* dots win over lines, lines over areas */
         if (!f && window.SunnyAurora) {
           var ll = m.unproject(e.point), v = window.SunnyAurora.at(ll.lng, ll.lat);
           if (v >= 5) { cv.style.cursor = "pointer"; return show(e.originalEvent.clientX, e.originalEvent.clientY, "<b>Aurora chance " + Math.round(v) + " %</b><br><small>NOAA aurora forecast</small>"); }

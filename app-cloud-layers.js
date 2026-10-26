@@ -3,8 +3,23 @@
  * Names here are page-wide and shared by every app-*.js file; startSunny in app.js runs each part's step in order. */
 "use strict";
 var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
+  /* clouds and radar sit right above the base map, under every data layer (dots, lines, tints), so nothing is hidden by them */
+  var WX = /^(gibs|iem-vis|radar|light-cloud|lc-)/;
+  function firstData() {
+    var ls = map.getStyle().layers || [], i;
+    for (i = 0; i < ls.length; i++) {
+      var l = ls[i];
+      if (l.type === "background" || l.source === "ofm" || /^(vb-|osm$|base-)/.test(l.id) || WX.test(l.id) || overlayIds.indexOf(l.id) >= 0) continue;
+      return l.id;
+    }
+    return undefined;
+  }
   function cloudStackBefore() {
-    /* Insert cloud rasters under radar (opt16/opt40 single buffer), else Labels, else beaches */
+    var fd = firstData();
+    if (fd) {
+      var ls = map.getStyle().layers, ri = ls.findIndex((l) => l.id === "radar"), fi = ls.findIndex((l) => l.id === fd);
+      return ri >= 0 && ri < fi ? "radar" : fd;
+    }
     if (map.getLayer("radar")) return "radar";
     var i, id;
     for (i = 0; i < overlayIds.length; i++) {
@@ -15,7 +30,9 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     return undefined;
   }
   function radarStackBefore() {
-    /* Radar above clouds, under Labels / beaches */
+    /* Radar above clouds, under data layers, Labels and beaches */
+    var fd = firstData();
+    if (fd) return fd;
     var i, id;
     for (i = 0; i < overlayIds.length; i++) {
       id = overlayIds[i];

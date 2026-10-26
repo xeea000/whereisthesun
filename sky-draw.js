@@ -282,7 +282,7 @@
       });
     }).catch(() => { gridKey = ""; });
   }
-  /* score squares and meteor bands sit just above the cloud pictures, so clouds never hide them */
+  /* score squares and meteor bands sit just above the cloud pictures and under the data layers */
   function above() {
     var ls = map.getStyle().layers, top = -1;
     ls.forEach((l, i) => { if (/^(gibs|iem-vis|light-cloud|lc-)/.test(l.id)) top = i; });
@@ -290,7 +290,7 @@
     var nxt = ls[top + 1] && ls[top + 1].id;
     ["sky-grid", "sky-grid-line", "shower-band"].forEach((id) => {
       var i = ls.findIndex((l) => l.id === id);
-      if (i >= 0 && i < top) { try { map.moveLayer(id, nxt); } catch (e) {} }
+      if (i >= 0 && (i < top || i > top + 3)) { try { map.moveLayer(id, nxt); } catch (e) {} } /* and under every dot */
     });
   }
   function apply() {

@@ -238,6 +238,7 @@
     } });
   var BT = { FIXED: "Fixed platform", CAIS: "Caisson", WP: "Well protector", TLP: "Tension-leg platform", SPAR: "Spar", MOPU: "Mobile production unit", SEMI: "Semi-submersible", SUBS: "Subsea" };
   /* opt105: hover labels with the real name and type for towers and every points layer (was "Plat", "Mast 300") */
+  var prevExt = window.SunnyHoverExt;
   window.SunnyHoverExt = (f, upd) => {
     var id = f.layer && f.layer.id, k = String(f.properties.k || "");
     if (id === "tower-dot" && tMeta[f.properties.t]) {
@@ -245,7 +246,7 @@
       return "<b>" + K.esc(TN[k[0]] || "Tower") + "</b>" + (+k.slice(1) ? "<br><small>about " + k.slice(1) + " m</small>" : "");
     }
     var o = hoverOf[id];
-    if (!o || !meta[o.file]) return null;
+    if (!o || !meta[o.file]) return prevExt ? prevExt(f, upd) : null;
     P.detail(BASE + o.file, meta[o.file], f.properties.i, V).then((r) => {
       var ty = o.id === "platforms" ? (k === "boem" ? BT[r.kind] || "Offshore platform" : cap(r.kind || "offshore platform")) : cap(r.kind || o.name);
       upd("<b>" + K.esc((o.title ? o.title(r) : r.name) || o.name) + "</b><br><small>" + K.esc(ty) + (r.operator ? " · " + K.esc(r.operator) : "") + "</small>");
