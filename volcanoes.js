@@ -61,9 +61,13 @@
       map.on("click", "volc-dot", (e) => { card(map, e); });
       apply(map, on);
     } });
-  L.add({ id: "volcdue", name: "Volcanoes past their average gap", icon: "⏰", group: "Earth", dflt: true, apply: dueApply,
+  L.add({ id: "volcdue", name: "Volcanoes past their average gap", icon: "⏰", group: "Earth", taps: ["volc-due"], dflt: true, apply: dueApply,
     tip: "Rough: years since the last eruption divided by the average gap since 1500, for volcanoes with 5+ eruptions since then. Not a forecast",
     legend: K.legKeys([["#ffe066", "dot", "1 to 2 times its average gap"], ["#ff9f1c", "dot", "2 to 5 times"], ["#e63946", "dot", "over 5 times"]]) +
       '<div class="ls-row"><small>Rough ratio, not a forecast</small></div>',
-    attach: (map, on) => { dueApply(map, on); } });
+    attach: (map, on) => {
+      map.on("click", "volc-due", (e) => { card(map, e); });
+      (window.SunnyHoverName = window.SunnyHoverName || {})["volc-due"] = (f) => Promise.resolve([f.properties.name, "time since last ÷ average gap " + f.properties.due]);
+      dueApply(map, on);
+    } });
 })();

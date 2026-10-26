@@ -30,7 +30,7 @@
     el.setAttribute("role", "status");
     el.setAttribute("aria-live", "polite");
     el.innerHTML =
-      '<span class="update-banner-text">A new update is ready</span>' +
+      '<span class="update-banner-text">Update ready</span>' +
       '<button type="button" class="update-banner-go">UPDATE</button>' +
       '<button type="button" class="update-banner-close" aria-label="Dismiss">\u00d7</button>';
     el.querySelector(".update-banner-go").addEventListener("click", applyUpdate);

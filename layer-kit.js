@@ -28,6 +28,10 @@
       '</span></div>' + srcHtml(src);
     popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "280px", className: "pf-popup", offset: 8 });
     popup.setLngLat(lngLat).setHTML(html).addTo(map);
+    if (!map._sunnyGone) {
+      map._sunnyGone = true; /* opt165: a card whose place has left the screen closes */
+      map.on("moveend", () => { if (popup && popup.isOpen() && !map.getBounds().contains(popup.getLngLat())) popup.remove(); });
+    }
     return popup;
   }
   function before(map) {

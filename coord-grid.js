@@ -24,9 +24,9 @@
       f.push({ type: "Feature", properties: { t: ln }, geometry: { type: "Point", coordinates: [w + dx, yy] } });
     }
     for (var x = Math.ceil(w / s) * s; x <= e && n < 400; x += s, n++) {
-      var xx = +x.toFixed(4), wr = ((xx + 540) % 360) - 180, lo = fmt(+wr.toFixed(4), false);
-      f.push({ type: "Feature", properties: { k: wr === 0 ? 1 : 0, n: (wr === 0 ? "Prime meridian " : "Longitude ") + lo }, geometry: { type: "LineString", coordinates: [[xx, so], [xx, no]] } });
-      f.push({ type: "Feature", properties: { t: lo }, geometry: { type: "Point", coordinates: [xx, no - dy] } });
+      var xx = +x.toFixed(4), wr = ((xx + 540) % 360) - 180, am = Math.abs(wr) === 180, lo = am ? "180°" : fmt(+wr.toFixed(4), false);
+      f.push({ type: "Feature", properties: { k: wr === 0 ? 1 : 0, n: (wr === 0 ? "Prime meridian " : am ? "Antimeridian " : "Longitude ") + lo }, geometry: { type: "LineString", coordinates: [[xx, so], [xx, no]] } });
+      f.push({ type: "Feature", properties: { t: lo }, geometry: { type: "Point", coordinates: [am ? xx - Math.sign(xx) * 1e-4 : xx, no - dy] } });
     }
     Object.keys(SPECIAL).forEach((k) => {
       var v = +k;
@@ -55,12 +55,17 @@
     }
     K.vis(map, IDS, want);
   };
-  L.add({ id: "grid", name: "Coordinate grid", icon: "🌐", group: "Earth", apply: apply,
+  L.add({ id: "grid", name: "Coordinate grid", icon: "🌐", group: "Earth", taps: ["grid-line", "grid-label"], apply: apply,
     legend: K.legKeys([["rgba(40,60,90,0.6)", "line", "latitude and longitude lines; spacing follows the zoom"], ["rgba(200,40,40,0.8)", "line", "Equator and prime meridian"],
       ["rgba(200,120,30,0.8)", "line", "tropics and polar circles"]]),
     tip: "Latitude and longitude lines with edge labels. Computed, no download",
     attach: (map, want) => {
-      (window.SunnyHoverName = window.SunnyHoverName || {})["grid-line"] = (f) => Promise.resolve([f.properties.n, "coordinate grid"]);
+      var H = (window.SunnyHoverName = window.SunnyHoverName || {});
+      H["grid-line"] = (f) => Promise.resolve([f.properties.n, "coordinate grid"]);
+      H["grid-label"] = (f) => Promise.resolve([f.properties.t, "grid line label"]);
+      var gc = (e) => { var p = e.features[0].properties, ll = e.lngLat;
+        K.show(map, ll, p.n || p.t, ["Tapped at " + ll.lat.toFixed(4) + "°, " + ll.lng.toFixed(4) + "°"], ["Computed grid", ""]); };
+      map.on("click", "grid-line", gc); map.on("click", "grid-label", gc);
       apply(map, want);
     } });
 })();

@@ -57,7 +57,7 @@
     K.vis(map, ["parks-fill", "parks-edge", "parks-dot"], want);
   };
   var card = (e) => { var r = props(e.features[0]); if (r) K.show(map, e.lngLat, title(r), lines(r), SRC); };
-  L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", apply: () => apply(),
+  L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
     kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
     legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
     tip: "1,347 provincial and territorial parks (CPCAD). Orange = non-operating (Ontario status). Outlines from zoom 6; tap for details",

@@ -60,11 +60,14 @@
     var b = BANDS[f.properties.b];
     return Promise.resolve([b[3] + " now", "sun " + b[0] + "° to " + b[1] + "°"]);
   };
-  L.add({ id: "goldenhour", name: "Golden hour", icon: "🌅", group: "Sky & Space", dflt: true, apply: apply,
+  L.add({ id: "goldenhour", name: "Golden hour", icon: "🌅", group: "Sky & Space", taps: ["gold-fill"], dflt: true, apply: apply,
     legend: K.legKeys(BANDS.slice().reverse().map((c) => { return [c[2], "area", c[3] + " (sun " + c[0] + "° to " + c[1] + "°)"]; })),
     tip: "Where the sun is low right now: golden hour (sun 4° below to 6° above the horizon) and blue hour (6° to 4° below). Computed, no download",
     attach: (map, on) => {
       (window.SunnyHoverName = window.SunnyHoverName || {})["gold-fill"] = hoverName;
+      map.on("click", "gold-fill", (e) => { var b = BANDS[e.features[0].properties.b];
+        K.show(map, e.lngLat, b[3] + " here now", ["Sun " + b[0] + "° to " + b[1] + "° above the horizon", "Computed from the sun's position; updates each minute"],
+          ["Computed from the sun position", ""]); });
       map.on("idle", () => { if (!L.isOn("goldenhour")) return; if (!map.getLayer("gold-fill")) apply(map, true); else low(map); });
       apply(map, on);
     } });

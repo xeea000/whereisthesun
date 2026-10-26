@@ -146,6 +146,8 @@
     popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 10 });
     popup._sunnyMap = map;
     map.on("click", onClick.bind(null, map, skip));
+    /* opt165: a card whose place has left the screen closes */
+    map.on("moveend", () => { if (popup.isOpen() && !map.getBounds().contains(popup.getLngLat())) popup.remove(); });
     document.addEventListener("click", onDoc, true);
   }
   window.SunnyPoint = { attach: attach };
