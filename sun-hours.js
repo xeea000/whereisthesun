@@ -7,7 +7,7 @@
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
-  var viewKey = "", ID = "sunh", N = 150, NZ = [150, 240], MINZ = 13, R = Math.PI / 180, timer = null, last = null, run = 0;
+  var viewKey = "", ID = "sunh", N = 300, MINZ = 13, R = Math.PI / 180, timer = null, last = null, run = 0;
   var RAMP = [[0, "#1b1f5e"], [2, "#3b3fa0"], [4, "#7a4aa8"], [6, "#c0567f"], [8, "#ef8a3c"], [10, "#ffc93a"], [12, "#fff3a0"]];
   var DEM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/";
   var sunAt = (t, lat, lon) => {
@@ -23,8 +23,8 @@
   var my = (lat) => { var s = Math.sin(lat * R); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); };
   var img = (u) => { return new Promise((ok, no) => { var i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => { ok(i); }; i.onerror = no; i.src = u; }); };
   /* terrain heights for the outer grid (3N x 3N cells over [x0, y0] + 3N * c) */
-  var terrain = (x0, y0, c, z) => {
-    var n = 1 << z, M = 3 * N, tx0 = Math.floor(x0 * n), ty0 = Math.floor(y0 * n), tx1 = Math.floor((x0 + M * c) * n), ty1 = Math.floor((y0 + M * c) * n);
+  var terrain = (x0, y0, c, z, M) => {
+    var n = 1 << z, tx0 = Math.floor(x0 * n), ty0 = Math.floor(y0 * n), tx1 = Math.floor((x0 + M * c) * n), ty1 = Math.floor((y0 + M * c) * n);
     var cv = document.createElement("canvas"), W = (tx1 - tx0 + 1) * 256, H = (ty1 - ty0 + 1) * 256;
     cv.width = W; cv.height = H;
     var g = cv.getContext("2d"), jobs = [];
@@ -72,20 +72,44 @@
     var t = K.overpass(q).then((j) => { treeKey = k; treeList = j.elements.map((e) => { return [e.lat, e.lon]; }); return treeList; }).catch(() => { return null; });
     return Promise.race([t, new Promise((ok) => { setTimeout(() => { ok(null); }, 8000); })]);
   };
+  /* Esri / Impact Observatory Sentinel-2 10 m land cover, raw classes (2 = trees) for the view, one N x N image */
+  var LC = "https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer/exportImage";
+  var cover = (x0, y0, c) => {
+    var E = 40075016.686, b = [x0 * E - E / 2, E / 2 - (y0 + N * c) * E, (x0 + N * c) * E - E / 2, E / 2 - y0 * E].map((v) => { return v.toFixed(1); });
+    var u = LC + "?bbox=" + b.join(",") + "&bboxSR=3857&imageSR=3857&size=" + N + "," + N + "&format=png&f=image&renderingRule=%7B%22rasterFunction%22%3A%22None%22%7D";
+    return img(u).then((i) => {
+      var cv = document.createElement("canvas"); cv.width = cv.height = N;
+      var g = cv.getContext("2d"); g.drawImage(i, 0, 0, N, N);
+      var px = g.getImageData(0, 0, N, N).data, o = new Uint8Array(N * N);
+      for (var k = 0; k < N * N; k++) o[k] = px[k * 4];
+      return o;
+    }).catch(() => { return null; });
+  };
+  /* separable gaussian, sigma about 1.2 cells, so there are no hard cell edges */
+  var blur = (a) => {
+    var w = [0.07, 0.24, 0.38, 0.24, 0.07], t = new Float32Array(N * N), o = new Float32Array(N * N), i, j, k;
+    for (j = 0; j < N; j++) for (i = 0; i < N; i++) { var s = 0; for (k = -2; k <= 2; k++) s += w[k + 2] * a[j * N + Math.max(0, Math.min(N - 1, i + k))]; t[j * N + i] = s; }
+    for (j = 0; j < N; j++) for (i = 0; i < N; i++) { var s2 = 0; for (k = -2; k <= 2; k++) s2 += w[k + 2] * t[Math.max(0, Math.min(N - 1, j + k)) * N + i]; o[j * N + i] = s2; }
+    return o;
+  };
   var compute = (map) => {
     var b0 = map.getBounds(), vk = b0.toArray().join(",") + map.getZoom().toFixed(2);
     if (vk === viewKey) return; /* the map also fires moveend without moving; keep the run in flight */
     viewKey = vk;
     var my0 = ++run, b = b0, z = map.getZoom();
     if (z < MINZ - 0.01) { clear(map); return; }
-    N = z >= 15 ? NZ[1] : NZ[0];
     var x0 = mx(b.getWest()), x1 = mx(b.getEast()), y0 = my(b.getNorth()), y1 = my(b.getSouth());
     var c = Math.max(x1 - x0, y1 - y0) / N, ox = x0 - N * c, oy = y0 - N * c, lat = map.getCenter().lat, lon = map.getCenter().lng;
-    var cm = c * 40075016.7 * Math.cos(lat * R), dz = Math.max(8, Math.min(12, Math.floor(z) - 2));
-    Promise.all([terrain(ox, oy, c, dz), treesFor(b, z)]).then((tt) => {
-      var h = tt[0];
+    var cm = c * 40075016.7 * Math.cos(lat * R), dz = Math.max(8, Math.min(12, Math.floor(z) - 3)), fz = Math.min(14, Math.floor(z) - 1);
+    Promise.all([terrain(ox, oy, c, dz, 3 * N), treesFor(b, z), terrain(x0, y0, c, fz, N), cover(x0, y0, c)]).then((tt) => {
+      var h = tt[0], fine = tt[2], lc = tt[3];
       if (my0 !== run) return;
-      var ob = objects(map, x0, y0, c, cm, tt[1]), M = 3 * N, sun = [], day = new Date(); day.setHours(0, 0, 0, 0);
+      var ob = objects(map, x0, y0, c, cm, tt[1]), M = 3 * N, ne = 0;
+      for (var q = 0; q < N * N; q++) { /* Sentinel-2 trees where OSM maps no wood or building: 15 m, an estimate */
+        if (lc && lc[q] === 2 && !ob.h[q]) { ob.h[q] = 15; ne++; }
+        h[(Math.floor(q / N) + N) * M + (q % N) + N] = fine[q]; /* finer terrain inside the view */
+      }
+      var sun = [], day = new Date(); day.setHours(0, 0, 0, 0);
       var k;
       for (var t = 0; t < 96; t++) { var s = sunAt(day.getTime() + t * 9e5 + 4.5e5, lat, lon); if (s.alt > 0.005) sun.push([Math.sin(s.az), -Math.cos(s.az), Math.tan(s.alt)]); }
       for (var j = 0; j < N; j++) for (var i = 0; i < N; i++) h[(j + N) * M + i + N] += ob.h[j * N + i];
@@ -107,7 +131,8 @@
         }
         hrs[j * N + i] = lit / 4; if (lit / 4 > top) top = lit / 4;
       }
-      last = { x0: x0, y0: y0, c: c, n: N, hrs: hrs, day: sun.length / 4, nb: ob.nb, nt: ob.nt };
+      hrs = blur(hrs);
+      last = { x0: x0, y0: y0, c: c, n: N, hrs: hrs, day: sun.length / 4, nb: ob.nb, nt: ob.nt, ne: ne, lc: !!lc };
       draw(map, x0, y0, c, hrs, z);
     }).catch((e) => { console.error("sun hours", e); });
   };
@@ -133,7 +158,7 @@
       map.addSource(ID + "-hit", { type: "geojson", data: K.fc([]) });
       map.addLayer({ id: ID + "-hit", type: "fill", source: ID + "-hit", paint: { "fill-opacity": 0 } });
     }
-    map.setPaintProperty(ID, "raster-resampling", z >= 15 ? "linear" : "nearest"); /* smooth when cells are a few metres */
+    map.setPaintProperty(ID, "raster-resampling", "linear");
     map.getSource(ID + "-hit").setData(K.fc([{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [co.concat([co[0]])] } }]));
     K.vis(map, [ID, ID + "-hit"], true);
   };
@@ -141,7 +166,7 @@
   var ensure = (map) => {
     if (map.getSource(ID + "-omt")) return;
     map.addSource(ID + "-omt", { type: "vector", url: "https://tiles.openfreemap.org/planet",
-      attribution: "Sun hours: estimate from AWS Terrarium terrain and OpenFreeMap (OSM) buildings" });
+      attribution: "Sun hours: estimate from AWS Terrarium terrain and OpenFreeMap (OSM) buildings, Esri/Impact Observatory Sentinel-2 land cover" });
     ["building", "landcover"].forEach((l) => { map.addLayer({ id: ID + "-q-" + l, type: "fill", source: ID + "-omt", "source-layer": l, minzoom: MINZ,
       paint: { "fill-opacity": 0 } }); });
   };
@@ -163,7 +188,7 @@
   window.SunnySunHours = { at: at, fmt: fmt, last: () => { return last; } };
   L.add({ id: "sunhours", name: "Sun hours (estimate)", icon: "⏱️", group: "Sky & Space", taps: [ID + "-hit"], dflt: true, apply: apply,
     legend: K.legRamp(RAMP.map((r) => { return r[1]; }).join(","), "0 h", "6 h", "12+ h"),
-    tip: "Estimated hours of direct sun today on a clear day, with shade from hills, buildings and woods. Zoom 13 or closer; tap for the value",
+    tip: "Estimated hours of direct sun today on a clear day: shade from hills, buildings, woods; satellite tree cover fills gaps in OSM (estimate). Zoom 13+; tap for the value",
     attach: (map, on) => {
       map.on("moveend", () => { if (L.isOn("sunhours")) later(map); });
       map.on("click", ID + "-hit", (e) => {
@@ -171,8 +196,10 @@
         if (v == null) return;
         K.show(map, e.lngLat, "About " + fmt(v) + " of direct sun today", ["Open sky here would give " + fmt(last.day),
           "Estimate: clear sky, terrain, " + last.nb + " building shapes" + (last.nt ? ", " + last.nt + " single trees" : "") + "; woods 12 m, in leaf",
+          last.lc ? last.ne + " cells of trees from satellite land cover (no OSM wood there) set to 15 m: estimate" : "Satellite land cover unavailable",
           "Zoom 13 or closer; redrawn when the map moves"],
-          ["AWS Terrarium terrain, OpenFreeMap (OSM) buildings", "https://registry.opendata.aws/terrain-tiles/"]);
+          ["AWS Terrarium terrain, OpenFreeMap (OSM), Esri/Impact Observatory Sentinel-2 land cover (CC BY 4.0)",
+          "https://registry.opendata.aws/terrain-tiles/"]);
       });
       apply(map, on);
     } });
