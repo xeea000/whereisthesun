@@ -1,8 +1,6 @@
 // workspace/whereisthesun/outdoor-layers.js
 /* SUNNY opt94 outdoors and history layers. All load a piece at a time and only when zoomed in.
- *   Provincial parks  Ontario "Provincial Park Regulated" (LIO, OGL-Ontario), operating parks
- *                     solid green, non-operating parks hatched-look orange outline. Picture
- *                     tiles from 256 px server renders, zoom 6 and closer, Ontario only.
+ *   Provincial parks  moved to parks-ca.js (opt164, all of Canada).
  *   Campsites         OpenStreetMap (ODbL) tourism=camp_site and fire lookout towers, zoom 7+.
  *   Plaques           OpenStreetMap plaques, memorials, monuments and history boards, plus Ontario
  *                     Heritage Trust plaques and Parks Canada national historic sites, zoom 9+.
@@ -12,50 +10,6 @@
   var K = window.SunnyKit;
   var L = window.SunnyLayers;
   if (!K || !L) return;
-  /* Ontario provincial parks */
-  var PARK_BASE = "https://ws.lioservices.lrc.gov.on.ca/arcgis2/rest/services/LIO_OPEN_DATA/LIO_Open03/MapServer";
-  var PARK_STYLE = [{ id: 4, source: { type: "mapLayer", mapLayerId: 4 }, drawingInfo: { renderer: { type: "uniqueValue", field1: "OPERATING_STATUS_IND",
-    defaultSymbol: { type: "esriSFS", style: "esriSFSSolid", color: [60, 160, 90, 110], outline: { type: "esriSLS", style: "esriSLSSolid", color: [20, 100, 50, 230], width: 0.8 } },
-    uniqueValueInfos: [{ value: "No", symbol: { type: "esriSFS", style: "esriSFSBackwardDiagonal", color: [230, 120, 20, 200], outline: { type: "esriSLS", style: "esriSLSDash", color: [200, 90, 0, 255], width: 1 } } }] } } }];
-  function parkApply(map, on) {
-    K.vis(map, ["parks-raster"], on);
-    if (!on) return;
-    try {
-      if (!map.getSource("on-parks")) {
-        map.addSource("on-parks", { type: "raster", tileSize: 256, minzoom: 6, maxzoom: 14, bounds: [-95.2, 41.6, -74.3, 56.9],
-          tiles: [PARK_BASE + "/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png8&transparent=true&f=image&dynamicLayers=" + encodeURIComponent(JSON.stringify(PARK_STYLE))],
-          attribution: 'Parks (Ontario): <a href="https://geohub.lio.gov.on.ca/" target="_blank" rel="noopener">LIO</a>, OGL-Ontario' });
-      }
-      if (!map.getLayer("parks-raster")) map.addLayer({ id: "parks-raster", type: "raster", source: "on-parks", minzoom: 6, paint: { "raster-opacity": 0.85 } }, K.before(map));
-    } catch (e) {}
-    K.vis(map, ["parks-raster"], L.isOn("parks"));
-  }
-  function parkClick(map, e) {
-    if (!L.isOn("parks") || map.getZoom() < 6) return;
-    var tap = window.SunnyLayers.tapIds().filter(map.getLayer.bind(map));
-    if (tap.length && map.queryRenderedFeatures(e.point, { layers: tap }).length) return;
-    var b = map.getBounds();
-    var c = map.getCanvas();
-    var q = "geometry=" + e.lngLat.lng + "," + e.lngLat.lat + "&geometryType=esriGeometryPoint&sr=4326&layers=all:4&tolerance=1" +
-      "&mapExtent=" + [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].join(",") +
-      "&imageDisplay=" + c.clientWidth + "," + c.clientHeight + ",96&returnGeometry=false&f=json";
-    fetch(PARK_BASE + "/identify?" + q).then((r) => { return r.json(); }).then((d) => {
-      var a = d.results && d.results[0] && d.results[0].attributes;
-      if (!a) return;
-      var op = a.OPERATING_STATUS_IND === "Yes";
-      K.show(map, e.lngLat, a.PROTECTED_AREA_NAME_ENG, [K.esc(a.PROVINCIAL_PARK_CLASS_ENG) + " class provincial park",
-        op ? "Operating park (facilities, fees)" : "Non-operating park (no facilities, open to low-impact use)"], ["Ontario GeoHub, Provincial Park Regulated (OGL-Ontario)", "https://geohub.lio.gov.on.ca/datasets/provincial-park-regulated"]);
-    }).catch(() => {});
-  }
-  L.add({ id: "parks", name: "Provincial parks (Ontario)", icon: "🏞️", group: "Outdoors", apply: parkApply,
-    legend: K.legKeys([["rgb(60,160,90)", "area", "operating"], ["rgb(230,120,20)", "area", "non-operating"]]),
-    tip: "Ontario provincial parks: green = operating, orange hatch = non-operating. Zoom in; tap for details",
-    note: (map, on) => { return on && map && map.getZoom() < 6 ? "zoom in" : ""; },
-    attach: (map, on) => {
-      map.on("idle", () => { if (L.isOn("parks") && !map.getLayer("parks-raster")) parkApply(map, true); });
-      map.on("click", parkClick.bind(null, map));
-      parkApply(map, on);
-    } });
   /* Pack point layers (opt95): data/packs/<region>/<layer>.json built by tools/build-packs.js.
    * Only regions overlapping the view are fetched; the service worker keeps them (cache-first),
    * so a region downloads once and then works offline. */
