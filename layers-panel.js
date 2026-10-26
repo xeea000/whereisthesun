@@ -78,7 +78,7 @@
     return r;
   }
   function row(d) {
-    var r = el("label", "lp-row");
+    var r = el(d.kids ? "div" : "label", "lp-row" + (d.kids ? " lp-par" : "")); /* opt106: a parent row is not a label, so its text only folds */
     r.title = d.tip || "";
     r.appendChild(el("span", "lp-ico", d.icon));
     var n = el("span", "lp-name", d.name);
@@ -90,8 +90,12 @@
     i.className = "lp-input";
     i.dataset.id = d.id;
     i.addEventListener("change", () => { setOn(d, i.checked); });
-    r.appendChild(i);
-    r.appendChild(el("span", "lp-sw"));
+    var sw = el("span", "lp-sw");
+    if (d.kids) { /* opt106: own hit area for the switch; it only toggles the layer */
+      var sl = el("label", "lp-swhit");
+      sl.addEventListener("click", (ev) => { ev.stopPropagation(); });
+      sl.appendChild(i); sl.appendChild(sw); r.appendChild(sl);
+    } else { r.appendChild(i); r.appendChild(sw); }
     rows[d.id] = { row: r, input: i, note: note };
     if (!d.kids) return r;
     /* opt102: twisty sub-section (e.g. Satellites groups), each child saved as sunny-L-<kid id> */
@@ -103,8 +107,10 @@
     var open = saved(d.id + "-open", false);
     var show = (o) => { box.hidden = !o; tw.textContent = o ? "▾" : "▸"; tw.setAttribute("aria-expanded", o ? "true" : "false"); };
     show(open);
-    tw.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); open = !open; show(open);
-      try { localStorage.setItem("sunny-L-" + d.id + "-open", open ? "1" : "0"); } catch (e) {} });
+    var flip = (ev) => { ev.preventDefault(); ev.stopPropagation(); open = !open; show(open);
+      try { localStorage.setItem("sunny-L-" + d.id + "-open", open ? "1" : "0"); } catch (e) {} };
+    tw.addEventListener("click", flip);
+    r.addEventListener("click", flip); /* opt106: icon, name and twisty fold; only the switch toggles */
     r.insertBefore(tw, r.firstChild);
     d.kids.forEach((k) => {
       var kl = el("label", "lp-kid");

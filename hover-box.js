@@ -64,7 +64,7 @@
         try { m.fire("click", { type: "click", point: pt, lngLat: m.unproject(pt), originalEvent: e.originalEvent, target: m }); } catch (er) {}
         cap = false;
         if (caps.length) { var keep = caps; open(x, y, capHtml()); caps = keep; }
-      }, 2000);
+      }, window.SunnyHoverDelay ? window.SunnyHoverDelay() : 2000); /* opt106: Advanced setting */
     });
     m.getCanvas().addEventListener("mouseleave", () => { clearTimeout(timer); last = null; setTimeout(close, 80); });
   }

@@ -54,3 +54,4 @@
 .lp-row.is-on .lp-sw::after{transform:translateX(12px)}.lp-sw{width:28px;height:16px}.lp-sw::after{width:12px;height:12px}.lp-bicon{padding:2px 8px 4px 30px;font-size:12px}
 .lp-fold-h{padding:3px 6px;margin:2px 0 0;font-size:12px}.lp-fold-h.lp-l1{font-size:10px;padding-left:14px;margin-top:0}.lp-kids{padding:0 6px 3px 30px;gap:0}.lp-kid{min-height:24px}
 @media (pointer:coarse){.lp-row{min-height:32px;padding:3px 6px}.lp-fold-h{min-height:30px}.lp-kid{min-height:30px}}
+.lp-swhit{display:flex;align-items:center;align-self:stretch;padding:0 2px 0 10px;cursor:pointer}.lp-par .lp-name{cursor:pointer}

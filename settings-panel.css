@@ -177,3 +177,4 @@ body.settings-open .update-banner { display: none; }
   .ctrl-sun .ctrl-label { font-size: 8px; }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 236px); }
 }
+.set-adv-btn{display:block;margin:6px 0 2px;border:0;background:transparent;color:inherit;opacity:.75;font:600 11px system-ui,sans-serif;padding:2px 0;cursor:pointer}.set-adv[hidden]{display:none}.set-adv #hover-delay{width:110px;vertical-align:middle}
