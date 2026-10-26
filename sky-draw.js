@@ -203,7 +203,8 @@
     var up = Sc.getMoonPosition(mid, lat, lng).altitude > 0;
     var moon = 1 - (up ? 0.6 * Sc.getMoonIllumination(mid).fraction : 0);
     var dark = lum == null ? 1 : 1 - Math.min(1, lum / 160) * 0.85;
-    return Math.round(10 * (1 - sum / n / 100) * moon * dark);
+    return { v: Math.round(10 * (1 - sum / n / 100) * moon * dark), cl: Math.round(sum / n), mn: up ? Math.round(100 * Sc.getMoonIllumination(mid).fraction) : 0,
+      lt: lum == null ? "" : lum < 15 ? "dark sky" : lum < 60 ? "some light pollution" : "bright city sky" };
   }
   /* opt107: fixed world-aligned squares (they no longer slide with the view), sized by zoom, at every zoom.
    * Each square's clouds are fetched once an hour and reused while panning. */
@@ -221,7 +222,8 @@
           cellStore[need[k].k] = v; K.putStore("ns-" + need[k].k, v, 3600000);
         });
       }).catch(() => {
-        if (n < 3) { clearTimeout(retryT); retryT = setTimeout(() => { fetchClouds(need, n + 1).then(() => { gridKey = ""; grid(); }); }, 5000 * Math.pow(3, n)); }
+        clearTimeout(retryT); /* 5, 15, 45 s, then once a minute while the layer is on */
+        retryT = setTimeout(() => { if (L.isOn("nightscore")) fetchClouds(need, n + 1).then(() => { gridKey = ""; grid(); }); }, Math.min(60000, 5000 * Math.pow(3, n)));
       });
   }
   function stale(k) { try { var v = JSON.parse(localStorage.getItem("sunny-c-ns-" + k)); return v && v.t > Date.now() - 864e5 ? v.d : null; } catch (e) { return null; } }
@@ -260,17 +262,19 @@
         if (key !== gridKey) return;
         var f = cells.map((c, k) => {
           var cc = cellStore[c.k] || K.getStore("ns-" + c.k) || coarse(c), v = cc ? scoreOf(cc, lums[k], c.lat, c.lng) : null;
-          return { type: "Feature", properties: { v: v == null ? -1 : v }, geometry: { type: "Polygon", coordinates: [[[c.w, c.s], [c.e, c.s], [c.e, c.n], [c.w, c.n], [c.w, c.s]]] } };
+          return { type: "Feature", properties: v ? v : { v: -1 }, geometry: { type: "Polygon", coordinates: [[[c.w, c.s], [c.e, c.s], [c.e, c.n], [c.w, c.n], [c.w, c.s]]] } };
         });
         if (!map.getSource("sky-grid")) {
           map.addSource("sky-grid", { type: "geojson", data: K.fc(f) });
-          map.addLayer({ id: "sky-grid", type: "fill", source: "sky-grid", filter: [">=", ["get", "v"], 0],
-            paint: { "fill-color": ["interpolate", ["linear"], ["get", "v"], 0, "#d7301f", 5, "#fdcc3a", 10, "#1a9850"], "fill-opacity": 0.35, "fill-antialias": false } }, K.before(map));
+          map.addLayer({ id: "sky-grid", type: "fill", source: "sky-grid", /* unknown squares (v -1, no cloud data yet) are light grey, never red */
+            paint: { "fill-color": ["case", ["<", ["get", "v"], 0], "#9aa0a6", ["interpolate", ["linear"], ["get", "v"], 0, "#d7301f", 5, "#fdcc3a", 10, "#1a9850"]],
+              "fill-opacity": ["case", ["<", ["get", "v"], 0], 0.12, 0.35], "fill-antialias": false } }, K.before(map));
           map.addLayer({ id: "sky-grid-line", type: "line", source: "sky-grid", filter: [">=", ["get", "v"], 0], paint: { "line-color": "#fff", "line-opacity": 0.2, "line-width": 0.6 } }, K.before(map));
           map.on("click", "sky-grid", (ev) => {
-            var v = ev.features[0].properties.v;
-            K.show(map, ev.lngLat, "Night-sky score " + v + "/10", ["Tonight in this square: clouds, the moon and how dark the sky is",
-              "Green is good stargazing, red is poor"], ["Open-Meteo clouds + NASA Black Marble (SUNNY estimate)", "https://open-meteo.com/en/docs"]);
+            var q = ev.features[0].properties, v = q.v;
+            K.show(map, ev.lngLat, v < 0 ? "Night-sky score: no data yet" : "Night-sky score " + v + "/10", v < 0 ?
+              ["The cloud forecast for this square has not loaded (Open-Meteo busy). It retries every minute"] :
+              [q.cl + " % cloud, " + (q.mn ? "moon " + q.mn + " % lit and up" : "no moon") + (q.lt ? ", " + q.lt : ""), "Green is good stargazing, red is poor"], ["Open-Meteo clouds + NASA Black Marble (SUNNY estimate)", "https://open-meteo.com/en/docs"]);
           });
         } else {
           map.getSource("sky-grid").setData(K.fc(f));

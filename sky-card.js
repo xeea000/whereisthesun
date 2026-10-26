@@ -249,7 +249,8 @@
     '<div class="ls-k">Labels: moonrise / moonset direction and the next meteor shower radiant. Phase and times in the sky card.</div>');
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data",
     '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#d7301f,#fdcc3a,#1a9850)"></div>' +
-    '<div class="sat-rl"><span>0 poor</span><span>score tonight</span><span>10 great</span></div></div>');
+    '<div class="sat-rl"><span>0 poor</span><span>score tonight</span><span>10 great</span></div>' +
+    '<div class="ls-k">Grey square: no cloud data yet. A bright moon lowers every square.</div></div>');
   /* opt116: meteor showers layer. The legend lists the next five peaks with rate and moonlight; the map shades where the next radiant never rises */
   var upcoming = () => {
     var now = Date.now() - 864e5, y = new Date().getFullYear(), out = [];
