@@ -1,13 +1,14 @@
 // workspace/whereisthesun/tornadoes.js
 /* SUNNY tornado tracks: every EF3/F3 or stronger American tornado 1950-2024 (NOAA SPC Severe Weather Database, public domain),
  * drawn from touchdown to lift-off and coloured by rating; EF5 tornadoes carry a star. 56 KB gzipped, cached for good.
- * Gap: United States only; waterspouts are not in this database. */
+ * Canada: all 1,839 ECCC tornadoes 1980-2009, F0-F5. Gap: Canada after 2009 is not included; waterspouts are not in this database. */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
   var SRC = ["NOAA SPC Severe Weather Database", "https://www.spc.noaa.gov/wcm/"];
-  var EF = [[3, "#ffb347", "EF3 / F3"], [4, "#e53935", "EF4 / F4"], [5, "#b0006d", "EF5 / F5 (star)"]];
-  var color = ["match", ["get", "m"], 3, EF[0][1], 4, EF[1][1], "#b0006d"];
+  var SRC_CA = ["ECCC Canadian National Tornado Database 1980-2009", "https://open.canada.ca/data/en/dataset/fd3355a7-ae34-4df7-b477-07306182db69"];
+  var EF = [[0, "#9ccc65", "F0 (Canada)"], [1, "#fdd835", "F1 (Canada)"], [2, "#ff9800", "F2 (Canada)"], [3, "#ffb347", "EF3 / F3"], [4, "#e53935", "EF4 / F4"], [5, "#b0006d", "EF5 / F5 (star)"]];
+  var color = ["match", ["get", "m"], 0, EF[0][1], 1, EF[1][1], 2, EF[2][1], 3, EF[3][1], 4, EF[4][1], "#b0006d"];
   var IDS = ["torn-line", "torn-hit", "torn-dot", "torn-star"], TAPS = ["torn-hit", "torn-dot", "torn-star"];
   var feats = (g) => {
     return g.t.map((r, i) => {
@@ -25,7 +26,7 @@
         attribution: 'Tornadoes: <a href="' + SRC[1] + '" target="_blank" rel="noopener">NOAA SPC</a>' });
       if (!map.getLayer("torn-line")) map.addLayer({ id: "torn-line", type: "line", source: "torn", filter: ["==", ["geometry-type"], "LineString"],
         layout: { "line-cap": "round" }, paint: { "line-color": color, "line-opacity": 0.85,
-          "line-width": ["interpolate", ["linear"], ["zoom"], 3, ["-", ["get", "m"], 2], 9, ["*", 2, ["get", "m"]]] } }, K.before(map));
+          "line-width": ["interpolate", ["linear"], ["zoom"], 3, ["max", 1, ["-", ["get", "m"], 2]], 9, ["max", 2, ["*", 2, ["get", "m"]]]] } }, K.before(map));
       if (!map.getLayer("torn-hit")) map.addLayer({ id: "torn-hit", type: "line", source: "torn", filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": "#000", "line-width": 16, "line-opacity": 0 } }, K.before(map)); /* wide see-through strip so a thin track is easy to tap */
       if (!map.getLayer("torn-dot")) map.addLayer({ id: "torn-dot", type: "circle", source: "torn", filter: ["==", ["geometry-type"], "Point"],
@@ -42,18 +43,20 @@
   };
   var hoverName = (f) => {
     var r = data && data.t[f.properties.i];
-    return Promise.resolve(r ? [title(r), r[4] + " tornado track"] : ["Tornado track", ""]);
+    return Promise.resolve(r ? [title(r), (r[14] ? "Near " + r[13] + ", " + r[4] : r[4]) + " tornado track"] : ["Tornado track", ""]);
   };
   var card = (map, e) => {
     var r = data && data.t[e.features[0].properties.i];
     if (!r) return;
-    K.show(map, e.lngLat, title(r), [r[4] + ", United States",
-      "Path " + r[7] + " mi (" + Math.round(r[7] * 1.609) + " km) long, " + r[8] + " yd (" + Math.round(r[8] * 0.914) + " m) wide",
-      r[5] + " killed, " + r[6] + " injured"], SRC);
+    var km = (mi) => { return mi < 0 ? "not recorded" : mi + " mi (" + Math.round(mi * 1.609) + " km)"; };
+    var cnt = (v) => { return v < 0 ? "not recorded" : v; };
+    K.show(map, e.lngLat, title(r), [r[14] ? "Near " + r[13] + ", " + r[4] + ", Canada" : r[4] + ", United States",
+      "Path " + km(r[7]) + " long, " + (r[8] < 0 ? "width not recorded" : r[8] + " yd (" + Math.round(r[8] * 0.914) + " m) wide"),
+      "Killed " + cnt(r[5]) + ", injured " + cnt(r[6])], r[14] ? SRC_CA : SRC);
   };
-  L.add({ id: "tornadoes", name: "Tornado tracks (US)", icon: "🌪️", group: "Weather", taps: TAPS, dflt: true, apply: apply,
+  L.add({ id: "tornadoes", name: "Tornado tracks (US, Canada)", icon: "🌪️", group: "Weather", taps: TAPS, dflt: true, apply: apply,
     legend: K.legKeys(EF.map((c) => { return [c[1], "line", c[2]]; })),
-    tip: "Every EF3 or stronger US tornado 1950-2024, touchdown to lift-off (NOAA SPC). F scale before 2007",
+    tip: "Every EF3+ US tornado 1950-2024 (NOAA SPC) and every Canadian tornado 1980-2009, all ratings (ECCC). F scale before 2007",
     attach: (map, on) => {
       map.on("idle", () => { if (L.isOn("tornadoes") && !map.getLayer("torn-line")) apply(map, true); });
       var hn = window.SunnyHoverName = window.SunnyHoverName || {};
