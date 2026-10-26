@@ -138,6 +138,17 @@
     legend: K.legKeys([["#9be564", "dot", "laboratory or research centre"], ["#5fb8ff", "dot", "research institute"]]),
     layers: [{ id: "lab-dot", codes: ["lab"], color: "#9be564", r: 2.4 }, { id: "inst-dot", codes: ["inst"], color: "#5fb8ff", r: 2.4 }],
     lines: sciLines });
+  /* History: one place per point, in the first group that claims it (tools/build-history.js) */
+  var HIST = [["wonder", "Ancient Wonders (original sites)", "#ffd34d", 5], ["new7", "New 7 Wonders", "#ffb000", 5], ["whs", "UNESCO World Heritage", "#3f8cff", 3],
+    ["temple", "Temples & shrines, 800+ years", "#c08bff", 2.8], ["c200", "Castles & forts, under 200 years", "#f6d6a8", 2.4],
+    ["c500", "Castles & forts, 201–500 years", "#e8a25c", 2.4], ["c1000", "Castles & forts, 501–1,000 years", "#c46a2a", 2.6],
+    ["c1500", "Castles & forts, 1,001–1,500 years", "#8e3b1a", 2.8], ["cold", "Castles & forts, over 1,500 years", "#5a1d0c", 3],
+    ["cnone", "Castles & forts, age not known", "#9a9a9a", 2.2], ["site", "Other ancient sites", "#7fc6a4", 2.4]];
+  pointLayer({ id: "history", file: "history", name: "Heritage & ancient sites", icon: "🏛️", group: "History", dflt: true, kids: true,
+    tip: "World Heritage, the Wonders, old temples, castles and forts by age, and ancient sites, each place listed once (Wikidata)", attrib: WD,
+    src: ["Wikidata", "https://www.wikidata.org/"], legend: K.legKeys(HIST.map((h) => { return [h[2], "dot", h[1]]; })),
+    layers: HIST.map((h) => { return { id: "hist-" + h[0], codes: [h[0]], color: h[2], r: h[3], name: h[1] }; }),
+    lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
   /* Travel: airports */
   pointLayer({ id: "airports", file: "airports", name: "Airports", icon: "✈️", group: "Travel", dflt: true,
     tip: "Large airports and medium airports with scheduled flights (OurAirports, public domain)",
@@ -330,25 +341,26 @@
       p.acc ? "Access " + K.esc(p.acc) : ""];
   };
   /* opt119: undersea pipelines at all zooms, a static file built from Geofabrik OpenStreetMap extracts (tools/build-pipelines.py) */
-  var PIPE_IDS = ["pipe-line"];
+  var PIPE_IDS = ["pipe-line", "pipe-hit"];
   function pipeApply(map, on) {
     K.vis(map, PIPE_IDS, on);
     if (!on) return;
     K.loadJson(BASE + "pipelines.geo.json").then((g) => {
       if (!map.getSource("w-pipes")) map.addSource("w-pipes", { type: "geojson", data: g,
         attribution: 'Pipelines: <a href="https://download.geofabrik.de/" target="_blank" rel="noopener">Geofabrik</a> · OpenStreetMap (ODbL)' });
+      if (!map.getLayer("pipe-hit")) map.addLayer({ id: "pipe-hit", type: "line", source: "w-pipes", paint: { "line-color": "#000", "line-width": 16, "line-opacity": 0 } });
       if (!map.getLayer("pipe-line")) map.addLayer({ id: "pipe-line", type: "line", source: "w-pipes", paint: {
         "line-color": ["match", ["get", "s"], "gas", "#ff9a3c", "oil", "#c0662b", "#e3c07a"],
         "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 9, 2], "line-opacity": 0.9 } }, K.before(map));
       K.vis(map, PIPE_IDS, L.isOn("pipelines"));
     }).catch(() => {});
   }
-  L.add({ id: "pipelines", name: "Undersea pipelines", icon: "🛢️", group: "Ocean", taps: PIPE_IDS, dflt: true, apply: pipeApply,
+  L.add({ id: "pipelines", name: "Undersea pipelines", icon: "🛢️", group: "Ocean", taps: ["pipe-hit"], dflt: true, apply: pipeApply,
     tip: "Undersea oil and gas pipelines at every zoom, from OpenStreetMap (North Sea, Gulf of Mexico, Persian Gulf, Asia, Australia, Brazil, Nigeria)",
     legend: K.legKeys([["#ff9a3c", "line", "gas"], ["#c0662b", "line", "oil"], ["#e3c07a", "line", "other or not tagged"]]),
     attach: (map, on) => {
       idle(map, "pipelines", "pipe-line", pipeApply);
-      map.on("click", "pipe-line", (e) => {
+      map.on("click", "pipe-hit", (e) => {
         var p = e.features[0].properties;
         K.show(map, e.lngLat, p.n || "Undersea pipeline", [p.s ? "Carries " + K.esc(p.s) : "", p.o ? "Operator " + K.esc(p.o) : ""],
           ["OpenStreetMap via Geofabrik", "https://www.openstreetmap.org/#map=12/" + e.lngLat.lat.toFixed(4) + "/" + e.lngLat.lng.toFixed(4)]);

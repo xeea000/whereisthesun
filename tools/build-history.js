@@ -70,7 +70,8 @@ const ANCIENT = [["Great Pyramid of Giza", 29.9792, 31.1342, -2560, "Egypt", "Q3
   ["Lighthouse of Alexandria", 31.214, 29.8856, -280, "Egypt", "Q43473"]];
 const main = async () => {
   ANCIENT.forEach((a) => {
-    by[a[5]] = { lat: a[1], lon: a[2], code: "wonder", name: a[0], kind: "Seven Wonders of the Ancient World", year: a[3], country: a[4], qid: a[5], wiki: a[0].replace(/ /g, "_") };
+    by[a[5]] = { lat: a[1], lon: a[2], code: "wonder", name: a[0], kind: "Seven Wonders of the Ancient World", year: a[3], country: a[4], qid: a[5],
+      wiki: a[0].replace(/ /g, "_") };
   });
   console.error("new7", await rows("VALUES ?i { wd:Q12501 wd:Q5788 wd:Q79961 wd:Q676203 wd:Q5823 wd:Q10285 wd:Q9141 } ?i wdt:P31 ?k.", 0, "new7"));
   Object.values(by).filter((b) => { return b.code === "new7"; }).forEach((b) => { b.kind = "New 7 Wonders of the World"; });
