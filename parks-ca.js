@@ -20,14 +20,14 @@
   var title = (r) => { return r[2]; };
   var lines = (r) => { return ["<b>" + K.esc(SS[r[4]][0]) + "</b>", K.esc(PV[r[3]] || r[3]), K.esc(r[5]),
     r[6] ? "Area " + Number(r[6]).toLocaleString() + " ha" : "", r[8] ? "Established " + r[8] : "",
-    r[3] === "ON" && r[4] !== "u" ? "Status: Ontario LIO, Provincial Park Regulated" : r[4] === "u" ? "Operating status not in open data" : ""]; };
+    r[3] === "ON" && r[4] !== "u" ? "Status: Ontario LIO, Provincial Park Regulated" : r[3] === "BC" && r[4] === "o" ? "Status: BC Parks API lists an active operating season" : r[3] === "BC" && r[4] === "n" ? "Status: BC Parks API lists no operating season or services" : r[4] === "u" ? "Operating status not in open data" : ""]; };
   var SRC = ["CPCAD 2025 (ECCC, OGL-Canada)", "https://www.canada.ca/en/environment-climate-change/services/national-wildlife-areas/protected-conserved-areas-database.html"];
   var props = (f) => { return f.properties.i === undefined ? null : row(f.properties); };
   var fc = () => { return K.fc(data.r.map((r, i) => { return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] }, properties: { i: i, s: r[4] } }; })); };
   var bfc = () => { var fs = []; Object.keys(got).forEach((k) => { if (got[k] !== 1) fs = fs.concat(got[k]); }); return K.fc(fs); };
   var add = () => {
     if (map.getSource("parks-pt")) return;
-    map.addSource("parks-b", { type: "geojson", data: bfc(), attribution: "Parks: CPCAD (ECCC), LIO Ontario" });
+    map.addSource("parks-b", { type: "geojson", data: bfc(), attribution: "Parks: CPCAD (ECCC), LIO Ontario, BC Parks API" });
     map.addSource("parks-pt", { type: "geojson", data: fc() });
     map.addLayer({ id: "parks-fill", type: "fill", source: "parks-b", minzoom: 6, paint: { "fill-color": color, "fill-opacity": 0.28 } }, K.before(map));
     map.addLayer({ id: "parks-edge", type: "line", source: "parks-b", minzoom: 6, paint: { "line-color": color, "line-width": ["match", ["get", "s"], "n", 1.8, 1],
@@ -60,7 +60,7 @@
   L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
     kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
     legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
-    tip: "1,347 provincial and territorial parks (CPCAD). Orange = non-operating (Ontario status). Outlines from zoom 6; tap for details",
+    tip: "1,347 provincial and territorial parks (CPCAD). Orange = non-operating (Ontario LIO; BC Parks API). Outlines from zoom 6; tap for details",
     attach: (m) => {
       map = m;
       if (hooked) return; hooked = true;
