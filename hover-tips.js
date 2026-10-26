@@ -16,8 +16,8 @@
   var show = (x, y, html) => {
     tip.innerHTML = html; tip.style.display = "block";
     var w = tip.offsetWidth, h = tip.offsetHeight;
-    tip.style.left = Math.min(x + 14, innerWidth - w - 4) + "px";
-    tip.style.top = (y + 18 + h > innerHeight ? y - h - 10 : y + 18) + "px";
+    tip.style.left = Math.max(4, Math.min(x - w / 2, innerWidth - w - 4)) + "px";
+    tip.style.top = (y - h - 12 < 4 ? Math.min(y + 18, innerHeight - h - 4) : y - h - 12) + "px";
   };
   var hide = () => { tip.style.display = "none"; cur = ""; };
   var cur = "", lx = 0, ly = 0; /* opt102: async labels (SunnyHoverExt) only refresh the tip still under the mouse */
@@ -28,6 +28,7 @@
     if (hb) return "<b>" + esc(hb) + "</b>";
     var p = f.properties || {};
     var name = p.name || p.n || p.title || p.NAME || p.Name || p.label || p.nm || "";
+    if (f.layer.id === "famous-star") return "<b>" + esc(name) + "</b><br><small>Famous</small>";
     var type = (window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id) || nice(f.source); /* opt105 */
     if (p.point_count) return "<b>" + p.point_count + " places</b><br><small>" + esc(type) + " · zoom in</small>";
     var kind = p.k || p.cat || p.type || ""; if (String(kind).length < 3) kind = "";

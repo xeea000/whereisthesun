@@ -44,7 +44,7 @@
         var inner = d.legend ? '<div class="ls-own">' + d.legend + "</div>" : '<span class="ls-auto">' + auto(map, d) + "</span>";
         return '<div class="ls-row"><b>' + (d.icon || "") + " " + d.name + "</b>" + inner + "</div>";
       }).join("");
-      if (window.SunnyFamousOn && window.SunnyFamousOn()) html += '<div class="ls-row"><b style="color:#ffd34d">★</b> famous: 30+ Wikipedia languages, or hand-picked</div>';
+      if (window.SunnyFamousOn && window.SunnyFamousOn()) html += '<div class="ls-row"><b style="color:#ffd34d">★</b> Famous</div>';
       if (html !== last) { body.innerHTML = html; last = html; }
     };
     head.addEventListener("click", () => { open = !open; put("sunny-leg-open", open ? "1" : "0"); last = ""; draw(); });

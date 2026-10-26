@@ -25,8 +25,10 @@
     box.style.cssText = "position:fixed;z-index:9998;width:260px;border-radius:10px;background:rgba(20,24,32,.95);color:#fff;font:12px/1.4 system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.45);overflow:hidden";
     box.innerHTML = '<div class="hb-bar" title="Drag to move" style="cursor:move;padding:3px 8px;background:rgba(255,255,255,.12);font-size:11px;user-select:none">⠿ Info</div><div class="hb-body" style="padding:6px 10px 8px">' + html + "</div>";
     document.body.appendChild(box);
-    box.style.left = Math.max(4, Math.min(x - 20, innerWidth - 264)) + "px";
-    box.style.top = Math.max(4, Math.min(y + 4, innerHeight - box.offsetHeight - 4)) + "px";
+    var bw = box.offsetWidth || 260, bh = box.offsetHeight;
+    box.style.left = Math.max(4, Math.min(x - bw / 2, innerWidth - bw - 4)) + "px";
+    if (y - Math.max(bh, 120) - 12 < 4) box.style.top = Math.max(4, Math.min(y + 18, innerHeight - bh - 4)) + "px";
+    else { box.style.top = "auto"; box.style.bottom = (innerHeight - y + 12) + "px"; box.style.maxHeight = (y - 16) + "px"; box.style.overflow = "auto"; }
     box.addEventListener("mouseenter", () => { inBox = true; });
     box.addEventListener("mouseleave", () => { inBox = false; if (!drag) setTimeout(() => { if (!inBox && !overNow()) close(); }, 50); });
     box.querySelector(".hb-bar").addEventListener("pointerdown", (e) => {
@@ -35,7 +37,8 @@
     });
     box.querySelector(".hb-bar").addEventListener("pointermove", (e) => {
       if (!drag) return;
-      box.style.left = Math.max(0, Math.min(innerWidth - 40, e.clientX - drag.dx)) + "px"; box.style.top = Math.max(0, Math.min(innerHeight - 24, e.clientY - drag.dy)) + "px";
+      box.style.left = Math.max(0, Math.min(innerWidth - 40, e.clientX - drag.dx)) + "px";
+      box.style.bottom = "auto"; box.style.top = Math.max(0, Math.min(innerHeight - 24, e.clientY - drag.dy)) + "px";
     });
     box.querySelector(".hb-bar").addEventListener("pointerup", () => { drag = null; });
   }

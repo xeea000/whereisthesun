@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt121"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt122"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -64,15 +64,15 @@ var PRECACHE = [
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
   "layer-kit.js?h=d3129cdac5",
   "layers-panel.js?h=c790c03363",
-  "famous.js?h=f6b55e9420",
+  "famous.js?h=ddc2b79136",
   "overzoom.js?h=986a281673",
   "flight-time.js?h=f715e313ca",
-  "legend-stack.js?h=fd03854924",
+  "legend-stack.js?h=b35e7720b5",
   "existing-layers.js?h=12af67fb44",
   "advanced.js?h=ef030f80f5",
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
-  "hover-box.js?h=87ead30292",
+  "hover-box.js?h=d4ab2cd4da",
   "sky-layers.js?h=d5c40cdf04",
   "earth-layers.js?h=536a8382bf",
   "world-layers.js?h=7f639ec86a",
@@ -103,7 +103,7 @@ var PRECACHE = [
   "app-scrub.js?h=6eb88b2551",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
-  "hover-tips.js?h=ad3104dfff",
+  "hover-tips.js?h=5d84b07813",
   "settings-panel.js?h=0e2b6b8551",
   "lagmeter.js?h=1da2e674c3",
   "manifest.webmanifest?h=3122f023bd",
