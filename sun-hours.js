@@ -92,6 +92,40 @@
     for (j = 0; j < N; j++) for (i = 0; i < N; i++) { var s2 = 0; for (k = -2; k <= 2; k++) s2 += w[k + 2] * t[Math.max(0, Math.min(N - 1, j + k)) * N + i]; o[j * N + i] = s2; }
     return o;
   };
+  /* the ray march runs in a Web Worker so phones keep scrolling; same code on the main thread if workers fail */
+  function marchCode(h, N, M, cm, sun, hmax) {
+    var hrs = new Float32Array(N * N), i, j, k;
+    for (j = 0; j < N; j++) for (i = 0; i < N; i++) {
+      var h0 = h[(j + N) * M + i + N] + 1, lit = 0;
+      for (k = 0; k < sun.length; k++) {
+        var dx = sun[k][0], dy = sun[k][1], tn = sun[k][2], d = 0.7, st = 0.7, sh = false;
+        while (true) {
+          var u = Math.round(i + N + dx * d), v = Math.round(j + N + dy * d);
+          if (u < 0 || v < 0 || u >= M || v >= M) break;
+          var need = h0 + d * cm * tn;
+          if (need > hmax) break; /* nothing in the grid is that tall */
+          if (h[v * M + u] > need) { sh = true; break; }
+          d += st; st = Math.min(st * 1.08, 6);
+        }
+        if (!sh) lit++;
+      }
+      hrs[j * N + i] = lit / 4;
+    }
+    return hrs;
+  }
+  var worker = null, wq = {}, wid = 0;
+  var march = (h, n, M, cm, sun, hmax) => {
+    try {
+      if (!worker) {
+        var src = "var f = " + marchCode.toString() + ";\nonmessage = (e) => { var d = e.data, r = f(d.h, d.n, d.M, d.cm, d.sun, d.hmax);" +
+          " postMessage({ id: d.id, r: r }, [r.buffer]); };";
+        worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+        worker.onmessage = (e) => { var cb = wq[e.data.id]; delete wq[e.data.id]; if (cb) cb(e.data.r); };
+      }
+      var id = ++wid;
+      return new Promise((ok) => { wq[id] = ok; worker.postMessage({ id: id, h: h, n: n, M: M, cm: cm, sun: sun, hmax: hmax }, [h.buffer]); });
+    } catch (e) { return Promise.resolve(marchCode(h, n, M, cm, sun, hmax)); }
+  };
   var compute = (map) => {
     var b0 = map.getBounds(), vk = b0.toArray().join(",") + map.getZoom().toFixed(2);
     if (vk === viewKey) return; /* the map also fires moveend without moving; keep the run in flight */
@@ -114,26 +148,13 @@
       for (var t = 0; t < 96; t++) { var s = sunAt(day.getTime() + t * 9e5 + 4.5e5, lat, lon); if (s.alt > 0.005) sun.push([Math.sin(s.az), -Math.cos(s.az), Math.tan(s.alt)]); }
       for (var j = 0; j < N; j++) for (var i = 0; i < N; i++) h[(j + N) * M + i + N] += ob.h[j * N + i];
       var hmax = -1e9; for (k = 0; k < M * M; k++) if (h[k] > hmax) hmax = h[k];
-      var hrs = new Float32Array(N * N), top = 0;
-      for (j = 0; j < N; j++) for (i = 0; i < N; i++) {
-        var gi = (j + N) * M + i + N, h0 = h[gi] + 1, lit = 0;
-        for (k = 0; k < sun.length; k++) {
-          var dx = sun[k][0], dy = sun[k][1], tn = sun[k][2], d = 0.7, st = 0.7, sh = false;
-          while (true) {
-            var u = Math.round(i + N + dx * d), v = Math.round(j + N + dy * d);
-            if (u < 0 || v < 0 || u >= M || v >= M) break;
-            var need = h0 + d * cm * tn;
-            if (need > hmax) break; /* nothing in the grid is that tall */
-            if (h[v * M + u] > need) { sh = true; break; }
-            d += st; st = Math.min(st * 1.08, 6);
-          }
-          if (!sh) lit++;
-        }
-        hrs[j * N + i] = lit / 4; if (lit / 4 > top) top = lit / 4;
-      }
-      hrs = blur(hrs);
-      last = { x0: x0, y0: y0, c: c, n: N, hrs: hrs, day: sun.length / 4, nb: ob.nb, nt: ob.nt, ne: ne, lc: !!lc };
-      draw(map, x0, y0, c, hrs, z);
+      var nn = N;
+      march(h, nn, M, cm, sun, hmax).then((hrs) => {
+        if (my0 !== run || nn !== N) return;
+        hrs = blur(hrs);
+        last = { x0: x0, y0: y0, c: c, n: N, hrs: hrs, day: sun.length / 4, nb: ob.nb, nt: ob.nt, ne: ne, lc: !!lc };
+        draw(map, x0, y0, c, hrs, z);
+      });
     }).catch((e) => { console.error("sun hours", e); });
   };
   var col = (v) => {
@@ -185,7 +206,7 @@
     return i < 0 || j < 0 || i >= last.n || j >= last.n ? null : last.hrs[j * last.n + i];
   };
   var fmt = (v) => { return (Math.round(v * 4) / 4).toFixed(2).replace(/\.?0+$/, "") + " h"; };
-  window.SunnySunHours = { at: at, fmt: fmt, last: () => { return last; } };
+  window.SunnySunHours = { at: at, fmt: fmt, last: () => { return last; }, worker: () => { return !!worker; } };
   L.add({ id: "sunhours", name: "Sun hours (estimate)", icon: "⏱️", group: "Sky & Space", taps: [ID + "-hit"], dflt: true, apply: apply,
     legend: K.legRamp(RAMP.map((r) => { return r[1]; }).join(","), "0 h", "6 h", "12+ h"),
     tip: "Estimated hours of direct sun today on a clear day: shade from hills, buildings, woods; satellite tree cover fills gaps in OSM (estimate). Zoom 13+; tap for the value",
@@ -198,7 +219,7 @@
           "Estimate: clear sky, terrain, " + last.nb + " building shapes" + (last.nt ? ", " + last.nt + " single trees" : "") + "; woods 12 m, in leaf",
           last.lc ? last.ne + " cells of trees from satellite land cover (no OSM wood there) set to 15 m: estimate" : "Satellite land cover unavailable",
           "Zoom 13 or closer; redrawn when the map moves"],
-          ["AWS Terrarium terrain, OpenFreeMap (OSM), Esri/Impact Observatory Sentinel-2 land cover (CC BY 4.0)",
+          ["Sentinel-2 land cover (Esri/IO, CC BY), AWS terrain, OSM",
           "https://registry.opendata.aws/terrain-tiles/"]);
       });
       apply(map, on);
