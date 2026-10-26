@@ -88,6 +88,7 @@
     var i = el("input");
     i.type = "checkbox";
     i.className = "lp-input";
+    i.dataset.id = d.id;
     i.addEventListener("change", () => { setOn(d, i.checked); });
     r.appendChild(i);
     r.appendChild(el("span", "lp-sw"));

@@ -39,9 +39,21 @@
     var fx = x - x0, fy = y - y0, g = (i, j) => aurGrid[(j) * 360 + (i % 360)] || 0;
     return (g(x0, y0) * (1 - fx) + g(x0 + 1, y0) * fx) * (1 - fy) + (g(x0, y0 + 1) * (1 - fx) + g(x0 + 1, y0 + 1) * fx) * fy;
   }
-  var RAMP = [[5, [40, 220, 110, 0]], [12, [40, 220, 110, 150]], [30, [230, 235, 60, 180]], [60, [255, 70, 50, 200]], [100, [255, 30, 60, 220]]];
+  /* opt101: vivid, stretched ramp; Dev sliders (aurora-dev.js) set contrast and brightness. */
+  var RAMP = [[0, [0, 255, 90, 0]], [8, [0, 255, 90, 215]], [25, [255, 255, 0, 235]], [50, [255, 30, 0, 245]], [100, [255, 0, 220, 255]]];
+  function aurTune() {
+    var g = (k, d) => { var v = parseFloat(localStorage.getItem(k)); return isNaN(v) ? d : v; };
+    return { c: g("sunny.aurContrast", 50), b: g("sunny.aurBright", 50) };
+  }
+  var TUNE = aurTune();
   function aurColor(v) {
-    if (v < 5) return null;
+    if (v < 0.5) return null;
+    var edge = Math.min(1, v / 6);
+    v = 100 * Math.pow(v / 100, 0.35 + (100 - TUNE.c) / 100);
+    var col = aurRamp(v), k = 0.6 + TUNE.b / 62.5;
+    return [Math.min(255, col[0] * k), Math.min(255, col[1] * k), Math.min(255, col[2] * k), Math.min(255, col[3] * k) * edge];
+  }
+  function aurRamp(v) {
     for (var i = 1; i < RAMP.length; i++) if (v <= RAMP[i][0]) {
       var a = RAMP[i - 1], b = RAMP[i], t = (v - a[0]) / (b[0] - a[0]);
       return a[1].map((c, k) => c + (b[1][k] - c) * t);
@@ -64,6 +76,7 @@
       }
     }
     cx.putImageData(im, 0, 0);
+    window.SunnyAurora.canvas = cv;
     return cv.toDataURL("image/png");
   }
   function aurAdd(map, url) {
@@ -71,16 +84,26 @@
     if (map.getSource("aurora")) map.getSource("aurora").updateImage({ url: url, coordinates: co });
     else map.addSource("aurora", { type: "image", url: url, coordinates: co });
     if (!map.getLayer("aurora-dot")) {
-      map.addLayer({ id: "aurora-dot", type: "raster", source: "aurora", paint: { "raster-opacity": 0.75, "raster-resampling": "linear", "raster-fade-duration": 0 } }, K.before(map));
+      map.addLayer({ id: "aurora-dot", type: "raster", source: "aurora", paint: { "raster-opacity": 0, "raster-resampling": "linear", "raster-fade-duration": 0 } }, K.before(map));
     }
   }
-  window.SunnyAurora = { at: (lon, lat) => (L.isOn("aurora") && aurGrid ? aurAt(lon, lat) : 0), time: () => aurTime };
+  var lastD = null, redrawQ = 0, mapRef = null;
+  /* opt101: the band is painted by aurora-top.js on a canvas above clouds and radar; the map layer stays invisible. */
+  function aurTop(map) { if (window.SunnyAuroraTop) window.SunnyAuroraTop.draw(map); }
+  function redraw() {
+    TUNE = aurTune();
+    if (redrawQ || !lastD || !mapRef) return;
+    redrawQ = requestAnimationFrame(() => { redrawQ = 0; try { aurAdd(mapRef, aurImage(lastD)); } catch (e) {} });
+  }
+  window.SunnyAurora = { at: (lon, lat) => (L.isOn("aurora") && aurGrid ? aurAt(lon, lat) : 0), time: () => aurTime, redraw: redraw };
   function aurApply(map, on) {
     K.vis(map, AUR_IDS, on);
+    aurTop(map);
     if (!on) return;
     aurData().then((d) => {
       if (!L.isOn("aurora")) return;
-      try { aurAdd(map, aurImage(d)); } catch (e) {}
+      lastD = d; mapRef = map;
+      try { aurAdd(map, aurImage(d)); aurTop(map); } catch (e) {}
       K.vis(map, AUR_IDS, L.isOn("aurora"));
     }).catch(() => {});
   }
@@ -88,6 +111,7 @@
     tip: "NOAA 30-minute aurora forecast: chance of seeing the northern lights overhead",
     apply: aurApply,
     attach: (map, on) => {
+      map.on("styledata", () => { try { aurTop(map); } catch (e) {} });
       map.on("idle", () => { if (L.isOn("aurora") && !map.getLayer("aurora-dot")) aurApply(map, true); });
       setInterval(() => { if (L.isOn("aurora")) aurApply(map, true); }, 30 * 60000);
       map.on("click", (e) => {
@@ -133,12 +157,14 @@
     apply: eclApply,
     attach: (map, on) => {
       map.on("idle", () => { if (L.isOn("eclipses") && !map.getLayer("eclipse-fill")) eclApply(map, true); });
-      map.on("click", "eclipse-fill", (e) => {
-        var fs = e.features.slice(0, 3).map((f) => { return f.properties; });
-        var p = fs[0];
-        K.show(map, e.lngLat, p.kind + " solar eclipse", [K.esc(p.date), "Longest " + K.esc(p.dur) + " on the centre line",
-          fs.length > 1 ? "Also here: " + fs.slice(1).map((q) => { return K.esc(q.date); }).join(", ") : ""], ["NASA GSFC eclipse page", eclUrl(p.date)]);
-      });
+      var eclCard = (feats) => {
+        var fs = feats.slice(0, 3).map((f) => { return f.properties; }), p = fs[0];
+        return [p.kind + " solar eclipse", [K.esc(p.date), "Longest " + K.esc(p.dur) + " on the centre line",
+          fs.length > 1 ? "Also here: " + fs.slice(1).map((q) => { return K.esc(q.date); }).join(", ") : ""], ["NASA GSFC eclipse page", eclUrl(p.date)]];
+      };
+      map.on("click", "eclipse-fill", (e) => { var c = eclCard(e.features); K.show(map, e.lngLat, c[0], c[1], c[2]); });
+      if (window.SunnyHoverBox) window.SunnyHoverBox.add({ "eclipse-centre": "Eclipse centre line", "eclipse-fill": "Eclipse path", "eclipse-line": "Eclipse path" },
+        (fs) => { var p = fs.filter((f) => f.layer.id === "eclipse-fill"), c = eclCard(p.length ? p : fs); return K.card(c[0], c[1], c[2]); });
       eclApply(map, on);
     } });
 })();

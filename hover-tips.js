@@ -20,6 +20,8 @@
   };
   var hide = () => { tip.style.display = "none"; };
   var label = (f) => {
+    var hb = window.SunnyHoverBox && window.SunnyHoverBox.label(f.layer.id);
+    if (hb) return "<b>" + esc(hb) + "</b>";
     var p = f.properties || {};
     var name = p.name || p.n || p.title || p.NAME || p.Name || p.label || p.nm || "";
     var type = nice(f.layer.id) || nice(f.source);
