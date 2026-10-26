@@ -228,14 +228,13 @@
   function coarse(c) {
     var own = stale(c.k);
     if (own) return own;
-    var steps = [0.5, 1, 2, 4, 10, 20, 40];
-    for (var i = 0; i < steps.length; i++) {
-      var d = steps[i];
-      if (d <= c.e - c.w) continue;
-      var k = d + ":" + Math.floor(c.lng / d) * d + ":" + Math.floor(c.lat / d) * d, v = cellStore[k] || K.getStore("ns-" + k);
-      if (v) return v;
-    }
-    return null;
+    var best = null, bd = 1e9, keys = Object.keys(cellStore);
+    try { for (var j = 0; j < localStorage.length; j++) { var lk = localStorage.key(j); if (lk.indexOf("sunny-c-ns-") === 0) keys.push(lk.slice(11)); } } catch (e) {}
+    keys.forEach((k) => {
+      var p = k.split(":").map(Number), d = p[0];
+      if (d > c.e - c.w && d < bd && c.lng >= p[1] && c.lng < p[1] + d && c.lat >= p[2] && c.lat < p[2] + d) { var v = cellStore[k] || stale(k); if (v) { best = v; bd = d; } }
+    });
+    return best;
   }
   function step() { var z = map.getZoom(); return z < 3 ? 10 : z < 5 ? 4 : z < 7 ? 2 : z < 9 ? 1 : 0.5; }
   function grid() {
