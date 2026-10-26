@@ -5,7 +5,7 @@
  * Shows the latest image (a 15-minute slot, refreshed hourly); it is not part of Play frames. */
 (function () {
   "use strict";
-  var ID = "msg-clouds", BOUNDS = [-15, -75, 75, 75], slot = "";
+  var ID = "msg-clouds", BOUNDS = [-20, -75, 75, 75], slot = "";
   var url = (t) => {
     var u = "https://view.eumetsat.int/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=msg_fes:clm&styles=&crs=EPSG:3857" +
       "&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true&time=" + t;

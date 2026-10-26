@@ -248,7 +248,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
   }
   /* opt167: only ask GIBS for tiles inside the satellite's view disk (outside it every tile is a 404) */
   function gibsBounds(url) {
-    return /GOES-West/.test(url) ? [-180, -81, -56, 81] : [-156, -81, 6, 81];
+    return /GOES-West/.test(url) ? [-180, -81, -56, 81] : [-156, -81, -20, 81]; /* east of -20° Meteosat (msg-clouds.js) has the better view */
   }
   function rebuildStaticGibs(url) {
     var m = cloudTargetMap();
