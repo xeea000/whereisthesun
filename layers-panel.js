@@ -146,12 +146,12 @@
   }
   /* opt103: sections and sub-groups fold with twisty triangles (state saved per path, open by default).
    * PLACE moves a layer into a "Section/Sub" path without touching the layer's own file. */
-  var PLACE = { skyglow: "Sky & Space/Natural", aurora: "Sky & Space/Natural", eclipses: "Sky & Space/Natural", moon: "Sky & Space/Natural", showers: "Sky & Space/Natural",
-    nightscore: "Sky & Space/Natural", goldenhour: "Sky & Space/Natural", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
+  var PLACE = { skyglow: "Sky & Space", aurora: "Sky & Space", eclipses: "Sky & Space", moon: "Sky & Space", showers: "Sky & Space",
+    nightscore: "Sky & Space", goldenhour: "Sky & Space", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
     craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", rockage: "Earth/Geology", cratons: "Earth/Geology",
     plates: "Earth/Geology", platemotion: "Earth/Geology", quakes: "Earth/Geology", quakeslive: "Earth/Geology",
     volcanoes: "Earth/Geology", volcdue: "Earth/Geology", stations: "Science" };
-  var SUBS = { "Sky & Space": ["Natural", "Artificial"], Earth: ["", "Geology"] };
+  var SUBS = { "Sky & Space": ["", "Artificial"], Earth: ["", "Geology"] };
   function fold(parent, path, label, lvl) {
     var key = "sunny-lp-g2-" + path; /* opt104: new key, folded by default */
     var open = false;
@@ -228,6 +228,14 @@
     defs.forEach((d) => { if (d.attach) d.attach(map, isOn(d)); });
     map.on("zoomend", refresh);
     refresh();
+    /* opt155: a layer whose first add fell before the style was ready (and whose idle hook never fired) gets added again */
+    var tries = 0, heal = setInterval(() => {
+      if (++tries > 15) clearInterval(heal);
+      defs.forEach((d) => {
+        if (!d.apply || !d.taps || !isOn(d) || d.taps.some((id) => { return map.getLayer(id); })) return;
+        try { d.apply(map, true); } catch (e) {}
+      });
+    }, 4000);
     setTimeout(() => { if (window.SunnyLegend) window.SunnyLegend(map); }, 0); /* opt108 legend stack */
   }
   function tapIds() {

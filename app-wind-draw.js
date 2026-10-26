@@ -284,6 +284,8 @@ var radarTween, radarComp, radarCompOrder, RADAR_COMP_CAP, RADAR_COMP_MAX_SIDE, 
           try { setStatus("Wind field empty — try again in a moment."); } catch (eEmpty) {}
         }
       });
+    } else if (/^Wind /.test(statusEl.textContent || "")) {
+      setStatus(""); /* opt155: no stale wind note once wind is off */
     }
   }
   function bootWindIfNeeded() {

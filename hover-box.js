@@ -65,6 +65,7 @@
       var x = e.originalEvent.clientX, y = e.originalEvent.clientY;
       timer = setTimeout(() => {
         if (inBox || drag) return;
+        var pk = document.getElementById("ip-peek"); if (pk && !pk.hidden) return; /* opt155: a tapped card is open, so no second hover card */
         var c = cards.find((k) => fs.some((f) => k.ids[f.layer.id]));
         if (c) return open(x, y, c.fn(fs));
         caps = []; cap = true;
@@ -74,6 +75,7 @@
         if (caps.length) { var keep = caps; open(x, y, capHtml()); caps = keep; }
       }, window.SunnyHoverDelay ? window.SunnyHoverDelay() : 2000); /* opt106: Advanced setting */
     });
+    m.on("click", () => { if (!cap) { clearTimeout(timer); close(); } }); /* opt155: a real click replaces the hover card */
     m.getCanvas().addEventListener("mouseleave", () => { clearTimeout(timer); last = null; setTimeout(close, 80); });
   }
   window.SunnyHoverBox = {
