@@ -145,7 +145,7 @@
   }
   /* opt103: sections and sub-groups fold with twisty triangles (state saved per path, open by default).
    * PLACE moves a layer into a "Section/Sub" path without touching the layer's own file. */
-  var PLACE = { skyglow: "Sky & Space/Natural", aurora: "Sky & Space/Natural", eclipses: "Sky & Space/Natural", moon: "Sky & Space/Natural",
+  var PLACE = { skyglow: "Sky & Space/Natural", aurora: "Sky & Space/Natural", eclipses: "Sky & Space/Natural", moon: "Sky & Space/Natural", showers: "Sky & Space/Natural",
     nightscore: "Sky & Space/Natural", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
     craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", rockage: "Earth/Geology", cratons: "Earth/Geology", stations: "Science" };
   var SUBS = { "Sky & Space": ["Natural", "Artificial"], Earth: ["", "Geology"] };

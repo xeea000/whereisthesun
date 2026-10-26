@@ -11,9 +11,9 @@
   var L = window.SunnyLayers;
   if (!K || !L) return;
   /* IMO meteor shower calendar: usual peak (month, day) and peak rate per hour (ZHR) */
-  var SHOWERS = [["Quadrantids", 1, 3, 80], ["Lyrids", 4, 22, 18], ["Eta Aquariids", 5, 6, 50], ["Southern Delta Aquariids", 7, 31, 25],
-    ["Perseids", 8, 13, 100], ["Draconids", 10, 8, 10], ["Orionids", 10, 21, 20], ["Northern Taurids", 11, 12, 5],
-    ["Leonids", 11, 17, 15], ["Geminids", 12, 14, 150], ["Ursids", 12, 22, 10]];
+  var SHOWERS = [["Quadrantids", 1, 3, 80, 49], ["Lyrids", 4, 22, 18, 34], ["Eta Aquariids", 5, 6, 50, -1], ["Southern Delta Aquariids", 7, 31, 25, -16],
+    ["Perseids", 8, 13, 100, 58], ["Draconids", 10, 8, 10, 54], ["Orionids", 10, 21, 20, 16], ["Northern Taurids", 11, 12, 5, 22],
+    ["Leonids", 11, 17, 15, 22], ["Geminids", 12, 14, 150, 33], ["Ursids", 12, 22, 10, 76]];
   var map = null;
   var here = null;
   var sats = [];
@@ -39,7 +39,7 @@
     [y, y + 1].forEach((yy) => {
       SHOWERS.forEach((s) => {
         var d = new Date(yy, s[1] - 1, s[2]);
-        if (d.getTime() > now.getTime() - 864e5 && (!best || d < best.d)) best = { n: s[0], d: d, z: s[3] };
+        if (d.getTime() > now.getTime() - 864e5 && (!best || d < best.d)) best = { n: s[0], d: d, z: s[3], dec: s[4] };
       });
     });
     return best;
@@ -250,6 +250,43 @@
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data",
     '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#d7301f,#fdcc3a,#1a9850)"></div>' +
     '<div class="sat-rl"><span>0 poor</span><span>score tonight</span><span>10 great</span></div></div>');
+  /* opt116: meteor showers layer. The legend lists the next five peaks with rate and moonlight; the map shades where the next radiant never rises */
+  var upcoming = () => {
+    var now = Date.now() - 864e5, y = new Date().getFullYear(), out = [];
+    [y, y + 1].forEach((yy) => { SHOWERS.forEach((s) => { var d = new Date(yy, s[1] - 1, s[2]); if (d.getTime() > now) out.push({ n: s[0], d: d, z: s[3], dec: s[4] }); }); });
+    return out.sort((a, b) => { return a.d - b.d; }).slice(0, 5);
+  };
+  var moonPct = (d) => { return window.SunCalc ? Math.round(window.SunCalc.getMoonIllumination(new Date(d.getTime() + 2 * 36e5)).fraction * 100) : null; };
+  var shLegend = () => {
+    return upcoming().map((s) => {
+      var m = moonPct(s.d);
+      return '<span class="ls-k" style="display:block">☄️ <b>' + K.esc(s.n) + "</b> " + s.d.toLocaleDateString([], { month: "short", day: "numeric" }) + " · up to " + s.z + "/h" +
+        (m != null ? " · moon " + m + "% lit" : "") + "</span>";
+    }).join("") + K.legKeys([["#3a2a5a", "area", "next radiant never rises here"]]);
+  };
+  var band = (dec) => {
+    var a = dec >= 0 ? -90 : dec + 90, b = dec >= 0 ? dec - 90 : 90;
+    return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[-180, a], [180, a], [180, b], [-180, b], [-180, a]]] } };
+  };
+  function shApply(m, on) {
+    K.vis(m, ["shower-band"], on);
+    if (!on || m.getLayer("shower-band")) return;
+    try {
+      m.addSource("shower-band", { type: "geojson", data: band(nextShower().dec) });
+      m.addLayer({ id: "shower-band", type: "fill", source: "shower-band", paint: { "fill-color": "#3a2a5a", "fill-opacity": 0.35 } }, K.before(m));
+    } catch (e) {}
+  }
+  L.add({ id: "showers", name: "Meteor showers", icon: "☄️", group: "Sky & Space", taps: ["shower-band"], dflt: true,
+    tip: "The next meteor shower peaks, rates and moonlight (IMO calendar); the shaded band cannot see the next shower", legend: shLegend(), apply: shApply,
+    attach: (m, on) => {
+      m.on("idle", () => { if (L.isOn("showers") && !m.getLayer("shower-band")) shApply(m, true); });
+      m.on("click", "shower-band", (e) => {
+        var sh = nextShower();
+        K.show(m, e.lngLat, sh.n + " not visible", ["The " + K.esc(sh.n) + " radiant never rises at this latitude", "Peak " + sh.d.toLocaleDateString([], { month: "short", day: "numeric" })],
+          ["IMO meteor shower calendar", "https://www.imo.net/resources/calendar/"]);
+      });
+      shApply(m, on);
+    } });
   window.SunnySky = { sats: () => { return sats; }, look: look, here: () => { return here; }, passes: () => { return passes; },
     nextShower: nextShower, clouds: clouds, darkness: darkness, compass: compass, fmtTime: fmtTime };
   L.add({ id: "skycard-attach", group: "none", attach: (m) => {
