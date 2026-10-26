@@ -187,6 +187,7 @@
   var mastName = (r) => { return r.name || r.operator || "Unnamed tower"; };
   var MSRC = { wd: (r) => { return ["Wikidata " + r.ref, "https://www.wikidata.org/wiki/" + r.ref]; },
     osm: (r) => { return ["OpenStreetMap " + r.ref, "https://www.openstreetmap.org/" + r.ref]; },
+    ised: (r) => { return ["ISED broadcast data, licence " + r.ref, "https://open.canada.ca/data/en/dataset/508040d7-6fa9-46e4-afbc-aa61f3ca317e"]; },
     fcc: (r) => { var p = String(r.ref).split(":"); return ["FCC ASR " + p[0], "https://wireless2.fcc.gov/UlsApp/AsrSearch/asrRegistration.jsp?regKey=" + p[1]]; } };
   var tMeta = {}, tFeats = {}, tMap = null;
   var tBase = (k) => { return k === "big" ? BASE + "masts" : BASE + "towers-t/" + k + "/t"; };
@@ -221,7 +222,7 @@
     if (window.SunnyCaCell) window.SunnyCaCell.apply(); /* opt159: Canadian cell sites (ca-cell.js) follow the Towers switch */
     if (!on) return;
     if (!map.getSource("w-towers")) {
-      map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR" });
+      map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR, ISED" });
       map.addLayer({ id: "tower-dot", type: "circle", source: "w-towers", filter: tFilter(), paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, ["+", 1, ["/", TH, 170]], 6, ["+", 1.6, ["/", TH, 90]], 12, ["+", 3, ["/", TH, 40]]],
         "circle-color": tColor, "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
@@ -232,7 +233,7 @@
   };
   var tDetail = (f) => { var k = f.properties.t; return P.detail(tBase(k), tMeta[k], f.properties.i, V); };
   L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot", "fire-look-dot"], apply: tApply,
-    tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ at every zoom, shorter towers (60 m+, United States) from zoom 6. Types are guessed from the owner.",
+    tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ at every zoom, shorter towers (60 m+, United States and Canadian broadcast) from zoom 6. Types are guessed from the owner.",
     kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true },
       { id: "towers-fl", name: "Fire lookout towers", dflt: true }]),
     kidSet: () => { if (tMap && tMap.getLayer("tower-dot")) tMap.setFilter("tower-dot", tFilter()); if (window.SunnyCaCell) window.SunnyCaCell.apply();
