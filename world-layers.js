@@ -34,9 +34,13 @@
   var hoverOf = {};
   function pointLayer(o) {
     o.layers.forEach((l) => { hoverOf[l.id] = o; });
+    /* opt113: kids: true gives each map layer its own switch under the row (saved as sunny-L-<id>-<layer id>) */
+    var kidOn = (l) => { try { return !o.kids || localStorage.getItem("sunny-L-" + o.id + "-" + l.id) !== "0"; } catch (e) { return true; } };
+    var kidVis = (map, on) => { o.layers.forEach((l) => { K.vis(map, [l.id], on && kidOn(l)); }); };
     function apply(map, on) {
       var ids = o.layers.map((l) => { return l.id; });
-      K.vis(map, ids.concat(o.extraIds || []), on);
+      K.vis(map, o.extraIds || [], on);
+      kidVis(map, on);
       if (!on) return;
       K.loadJson(BASE + o.file + ".p.json?h=" + V).then((d) => {
         meta[o.file] = d;
@@ -51,12 +55,17 @@
           map.addLayer(spec, K.before(map));
         });
         if (o.extra) o.extra(map);
-        K.vis(map, ids.concat(o.extraIds || []), L.isOn(o.id));
+        K.vis(map, o.extraIds || [], L.isOn(o.id));
+        kidVis(map, L.isOn(o.id));
       }).catch(() => {});
     }
     var taps = o.layers.map((l) => { return l.id; });
+    var pMap = null;
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply, legend: o.legend,
+      kids: o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: true }; }) : undefined,
+      kidSet: o.kids ? () => { if (pMap) kidVis(pMap, L.isOn(o.id)); } : undefined,
       attach: (map, on) => {
+        pMap = map;
         idle(map, o.id, taps[0], apply);
         taps.forEach((t) => {
           map.on("click", t, (e) => {
@@ -223,26 +232,34 @@
     layers: [{ id: "tx-scope", codes: ["scope"], color: "#c08bff", r: 3.2 }], lines: txLines("Opened") });
   pointLayer({ id: "radars", file: "transmission", name: "Radar sites", icon: "🛰️", group: "Transmission",
     tip: "Radar stations (Wikidata)", attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
-    layers: [{ id: "tx-radar", codes: ["radar"], color: "#5ad1ff", r: 3 }], lines: txLines("Opened") });
+    kids: true, legend: K.legKeys([["#5ad1ff", "dot", "civil and weather radar"], ["#ff7a59", "dot", "military radar"]]),
+    layers: [{ id: "tx-radar", codes: ["radar"], color: "#5ad1ff", r: 3, name: "Civil & weather" }, { id: "tx-radarm", codes: ["radarm"], color: "#ff7a59", r: 3, name: "Military" }],
+    lines: txLines("Opened") });
   /* submarine cables: one 75 KB file of lines, details file on first tap */
   var cableRows = null;
   function cableApply(map, on) {
-    K.vis(map, ["cable-line"], on);
+    K.vis(map, ["cable-line", "cable-plan"], on);
     if (!on) return;
     K.loadJson(BASE + "cables.geo.json?h=" + V).then((g) => {
       if (!map.getSource("w-cables")) map.addSource("w-cables", { type: "geojson", data: g,
         attribution: 'Cables: <a href="https://www.submarinecablemap.com/" target="_blank" rel="noopener">TeleGeography</a> (CC BY-NC-SA)' });
-      if (!map.getLayer("cable-line")) map.addLayer({ id: "cable-line", type: "line", source: "w-cables", paint: {
-        "line-color": ["coalesce", ["get", "c"], "#4fc3f7"], "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.8, 8, 2.2], "line-opacity": 0.8 } }, K.before(map));
-      K.vis(map, ["cable-line"], L.isOn("cables"));
+      /* opt113: coloured by ready-for-service year; planned cables dashed */
+      var cw = ["interpolate", ["linear"], ["zoom"], 1, 0.8, 8, 2.2];
+      if (!map.getLayer("cable-line")) map.addLayer({ id: "cable-line", type: "line", source: "w-cables", filter: ["<=", ["get", "y"], NOW], paint: {
+        "line-color": ["step", ["get", "y"], "#8a94a8", 1995, "#4fc3f7", 2010, "#7cf29a", 2020, "#ffd34d"], "line-width": cw, "line-opacity": 0.85 } }, K.before(map));
+      if (!map.getLayer("cable-plan")) map.addLayer({ id: "cable-plan", type: "line", source: "w-cables", filter: [">", ["get", "y"], NOW], paint: {
+        "line-color": "#ff6ad5", "line-width": cw, "line-opacity": 0.85, "line-dasharray": [2, 1.5] } }, K.before(map));
+      K.vis(map, ["cable-line", "cable-plan"], L.isOn("cables"));
     }).catch(() => {});
   }
   var CSRC = ["TeleGeography Submarine Cable Map", "https://www.submarinecablemap.com/"];
-  L.add({ id: "cables", name: "Submarine cables", icon: "🧵", group: "Ocean", taps: ["cable-line"], apply: cableApply,
+  L.add({ id: "cables", name: "Submarine cables", icon: "🧵", group: "Ocean", taps: ["cable-line", "cable-plan"], apply: cableApply,
+    legend: K.legKeys([["#8a94a8", "line", "before 1995 or year unknown"], ["#4fc3f7", "line", "1995 to 2009"], ["#7cf29a", "line", "2010 to 2019"],
+      ["#ffd34d", "line", "2020 to now"], ["#ff6ad5", "line", "planned (dashed)"]]),
     tip: "Undersea internet and power cables (TeleGeography, CC BY-NC-SA)",
     attach: (map, on) => {
       idle(map, "cables", "cable-line", cableApply);
-      map.on("click", "cable-line", (e) => {
+      var cableTap = (e) => {
         var i = e.features[0].properties.i;
         var pp = K.show(map, e.lngLat, "", [P.skeleton("Submarine cable")], CSRC);
         if (!cableRows) cableRows = K.loadJson(BASE + "cables.d.json?h=" + V);
@@ -252,7 +269,8 @@
           if (pp.isOpen()) pp.setHTML(K.card(r[0] + " cable", ["Submarine telecom cable", r[1] ? "Length " + K.esc(r[1]) : "",
             r[2] ? (+r[2] > NOW ? "Planned to start " + K.esc(r[2]) : age("In service since", r[2])) : "", r[3] ? "Owners " + K.esc(r[3]) : ""], link));
         }).catch(() => { cableRows = null; if (pp.isOpen()) pp.setHTML(K.card("Submarine cable", ["Could not load details. Tap again when online."], CSRC)); });
-      });
+      };
+      map.on("click", "cable-line", cableTap); map.on("click", "cable-plan", cableTap);
       cableApply(map, on);
     } });
   /* OSM viewport layers via Overpass (only when zoomed in, cached per tile for a week) */

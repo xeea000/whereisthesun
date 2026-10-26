@@ -26,7 +26,7 @@ const main = async () => {
   const feats = g.features.map((f) => {
     const gm = f.geometry;
     const cs = gm.type === "MultiLineString" ? gm.coordinates.map(line).filter((l) => { return l.length > 1; }) : [line(gm.coordinates)];
-    return { type: "Feature", properties: { i: ids.indexOf(f.properties.id), c: f.properties.color }, geometry: { type: "MultiLineString", coordinates: cs } };
+    return { type: "Feature", properties: { i: ids.indexOf(f.properties.id), y: parseInt(rows[ids.indexOf(f.properties.id)][2], 10) || 0 }, geometry: { type: "MultiLineString", coordinates: cs } };
   });
   fs.writeFileSync(path.join(OUT, "cables.geo.json"), JSON.stringify({ type: "FeatureCollection", features: feats }));
   fs.writeFileSync(path.join(OUT, "cables.d.json"), JSON.stringify(rows));

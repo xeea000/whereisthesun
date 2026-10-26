@@ -79,7 +79,7 @@ const main = async () => {
   const scopes = await wd(["Q184356"]);
   const radar = await wd(["Q89578131", "Q1094622"]);
   const tx = masts.map((s) => { s.t = s.height >= 300 ? "mast300" : s.height >= 150 ? "mast150" : "mast"; return s; })
-    .concat(scopes.map((s) => { s.t = "scope"; return s; }), radar.map((s) => { s.t = "radar"; return s; }));
+    .concat(scopes.map((s) => { s.t = "scope"; return s; }), radar.map((s) => { s.t = /military|Texas Tower/i.test(s.kind) ? "radarm" : "radar"; return s; }));
   man.files.transmission = write("transmission", tx, (s) => { return s.t; });
   /* BOEM offshore structures still in place (Gulf of Mexico and Pacific OCS) */
   const f = process.argv[2];
