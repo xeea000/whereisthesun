@@ -22,7 +22,8 @@
     ABn: "Status: no Alberta Parks facility points inside (no facilities listed)",
     QCo: "Status: established Québec national park (CPCAD type; these run visitor services)",
     QCn: "Status: Québec national park reserve, not yet an operating park (CPCAD type)" };
-  var stNote = (r) => { return NOTE[r[3] + r[4]] || (r[4] === "u" ? "Operating status not in open data" : ""); };
+  var stNote = (r) => { if (r[7] === "osm") return r[9] ? "Closed " + r[9] + " (Wikidata)" : "Location: OpenStreetMap; status not in open data";
+    return NOTE[r[3] + r[4]] || (r[4] === "u" ? "Operating status not in open data" : ""); };
   var row = (p) => { return data.r[p.i]; };
   var title = (r) => { return r[2]; };
   var lines = (r) => { return ["<b>" + K.esc(SS[r[4]][0]) + "</b>", K.esc(PV[r[3]] || r[3]), K.esc(r[5]),
@@ -30,6 +31,7 @@
     stNote(r)]; };
   var SRC = ["CPCAD 2025 (ECCC, OGL-Canada)", "https://www.canada.ca/en/environment-climate-change/services/national-wildlife-areas/protected-conserved-areas-database.html"];
   var SRC_AB = ["Alberta Parks protected areas (Gov. of Alberta, OGL-Alberta)", "https://geospatial.alberta.ca/titan/rest/services/boundary/parks_protected_areas_alberta/FeatureServer/0"];
+  var SRC_OSM = ["OpenStreetMap contributors (ODbL), Wikidata", "https://www.openstreetmap.org/copyright"];
   var props = (f) => { return f.properties.i === undefined ? null : row(f.properties); };
   var fc = () => { return K.fc(data.r.map((r, i) => { return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] }, properties: { i: i, s: r[4] } }; })); };
   var bfc = () => { var fs = []; Object.keys(got).forEach((k) => { if (got[k] !== 1) fs = fs.concat(got[k]); }); return K.fc(fs); };
@@ -64,11 +66,11 @@
     ["parks-fill", "parks-edge", "parks-dot"].forEach((id) => { if (map.getLayer(id)) map.setFilter(id, filt()); });
     K.vis(map, ["parks-fill", "parks-edge", "parks-dot"], want);
   };
-  var card = (e) => { var r = props(e.features[0]); if (r) K.show(map, e.lngLat, title(r), lines(r), r[7] === "ab" ? SRC_AB : SRC); };
+  var card = (e) => { var r = props(e.features[0]); if (r) K.show(map, e.lngLat, title(r), lines(r), r[7] === "ab" ? SRC_AB : r[7] === "osm" ? SRC_OSM : SRC); };
   L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
     kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
     legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
-    tip: "1,540 provincial and territorial parks (CPCAD; Alberta recreation areas from Alberta Parks). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines from zoom 6; tap for details",
+    tip: "1,764 provincial and territorial parks (CPCAD; Alberta recreation areas from Alberta Parks; 224 more from OpenStreetMap). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines from zoom 6; tap for details",
     attach: (m) => {
       map = m;
       if (hooked) return; hooked = true;
