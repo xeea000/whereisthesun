@@ -47,6 +47,7 @@ var PRECACHE = [
   "vector-base.js?h=e2411f3d4a",
   "light-clouds.js?h=b3980fe855",
   "cloud-key.js?h=5d5b626b3c",
+  "msg-clouds.js?h=cd99d52748",
   "play-handoff.js?h=b695a52a77",
   "radar-key.js?h=13e90ad595",
   "radar-source.js?h=8a8a3abbaa",
