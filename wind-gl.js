@@ -79,7 +79,8 @@
     var det = a * e - b * c2;
     return { a: a, b: b, c: c2, e: e, ia: e / det, ib: -b / det, ic: -c2 / det, ie: a / det, m0: m0, s0: [p0.x, p0.y] };
   }
-  function Wind(canvas, count) {
+  function Wind(canvas, count, field) {
+    this.field = field || null;
     var gl = canvas.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true });
     if (!gl) throw new Error("no webgl");
     this.gl = gl;
@@ -141,7 +142,7 @@
   function step(map, dt, vw, vh, moving) {
     var A = affine(map);
     var k, sx, sy, ci;
-    var field = window.SunnyWindField;
+    var field = this.field || window.SunnyWindField;
     this.cells.fill(0);
     for (k = 0; k < this.n; k++) {
       sx = A.a * (this.mx[k] - A.m0[0]) + A.b * (this.my[k] - A.m0[1]) + A.s0[0];
@@ -257,10 +258,12 @@
   Wind.prototype.frame = frame;
   Wind.prototype.state = particleState;
   var last = null;
-  function create(canvas, count) {
+  /* field: any object with sample(lon, lat) returning {u, v} or null; wind by default */
+  function create(canvas, count, field) {
     try {
-      last = new Wind(canvas, count);
-      return last;
+      var w = new Wind(canvas, count, field);
+      if (!field) last = w;
+      return w;
     } catch (eW) {
       return null;
     }
