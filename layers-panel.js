@@ -1,8 +1,8 @@
 // workspace/whereisthesun/layers-panel.js
 /* SUNNY layers sidebar (opt94). An arrow tab on the left edge folds a Windy-style panel in
  * and out. Every layer is one row: icon, name, on/off switch, grouped by type. Older layers
- * keep their own Settings switches (the row flips that switch); opt94 layers get a switch
- * made here in Settings, "More layers". Open/closed and each layer's state are saved. */
+ * keep a hidden input as their saved state (the row flips it). This panel is the only place that
+ * switches map layers. Open/closed and each layer's state are saved. */
 (() => {
   "use strict";
   var GROUPS = ["Weather", "Sky & Space", "Earth", "Ocean", "Science", "Transmission", "Travel", "Outdoors", "History"];
@@ -182,39 +182,7 @@
         sl.forEach((d) => { tgt.appendChild(row(d)); });
       });
     });
-    buildSettings();
     refresh();
-  }
-  /* Settings switches for opt94 layers (older layers already have theirs) */
-  function buildSettings() {
-    var pop = document.getElementById("settings-pop");
-    if (!pop) return;
-    var sec = document.getElementById("set-more-layers");
-    if (!sec) {
-      sec = el("section", "set-group");
-      sec.id = "set-more-layers";
-      sec.appendChild(el("h3", "set-title", "More layers"));
-      sec.appendChild(el("div", "set-row"));
-      var lag = document.getElementById("lag-controls");
-      pop.insertBefore(sec, lag);
-    }
-    var box = sec.querySelector(".set-row");
-    box.textContent = "";
-    defs.filter((d) => { return d.name && !d.get; }).forEach((d) => {
-      var l = el("label", "ov switch");
-      l.title = d.tip || "";
-      var i = el("input");
-      i.type = "checkbox";
-      i.id = "toggle-L-" + d.id;
-      i.checked = isOn(d);
-      i.addEventListener("change", () => { setOn(d, i.checked); });
-      l.appendChild(i);
-      var k = el("span", "knob");
-      k.setAttribute("aria-hidden", "true");
-      l.appendChild(k);
-      l.appendChild(document.createTextNode(d.name));
-      box.appendChild(l);
-    });
   }
   function setOpen(open) {
     panel.classList.toggle("is-open", open);
