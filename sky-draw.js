@@ -201,8 +201,8 @@
     if (!n) return null;
     var mid = new Date(start.getTime() + 2 * 3600000);
     var up = Sc.getMoonPosition(mid, lat, lng).altitude > 0;
-    var moon = 1 - (up ? 0.6 * Sc.getMoonIllumination(mid).fraction : 0);
-    var dark = lum == null ? 1 : 1 - Math.min(1, lum / 160) * 0.85;
+    var moon = 1 - (up ? 0.3 * Sc.getMoonIllumination(mid).fraction : 0); /* cloud dominates; full moon -30 %, city sky up to -35 % */
+    var dark = lum == null ? 1 : 1 - Math.min(1, lum / 160) * 0.35;
     return { v: Math.round(10 * (1 - sum / n / 100) * moon * dark), cl: Math.round(sum / n), mn: up ? Math.round(100 * Sc.getMoonIllumination(mid).fraction) : 0,
       lt: lum == null ? "" : lum < 15 ? "dark sky" : lum < 60 ? "some light pollution" : "bright city sky" };
   }
@@ -267,7 +267,7 @@
         if (!map.getSource("sky-grid")) {
           map.addSource("sky-grid", { type: "geojson", data: K.fc(f) });
           map.addLayer({ id: "sky-grid", type: "fill", source: "sky-grid", /* unknown squares (v -1, no cloud data yet) are light grey, never red */
-            paint: { "fill-color": ["case", ["<", ["get", "v"], 0], "#9aa0a6", ["interpolate", ["linear"], ["get", "v"], 0, "#d7301f", 5, "#fdcc3a", 10, "#1a9850"]],
+            paint: { "fill-color": ["case", ["<", ["get", "v"], 0], "#9aa0a6", ["interpolate", ["linear"], ["get", "v"], 0, "#b2182b", 3, "#ef8a62", 5, "#fddb6d", 7, "#a6d96a", 10, "#1a9850"]],
               "fill-opacity": ["case", ["<", ["get", "v"], 0], 0.12, 0.35], "fill-antialias": false } }, K.before(map));
           map.addLayer({ id: "sky-grid-line", type: "line", source: "sky-grid", filter: [">=", ["get", "v"], 0], paint: { "line-color": "#fff", "line-opacity": 0.2, "line-width": 0.6 } }, K.before(map));
           map.on("click", "sky-grid", (ev) => {

@@ -186,8 +186,8 @@
       var ill = S.getMoonIllumination(mid).fraction;
       var up = S.getMoonPosition(mid, lat, lng).altitude > 0;
       var clear = 1 - cloud / 100;
-      var moon = 1 - (up ? 0.6 * ill : 0);
-      var dark = lum == null ? 1 : 1 - Math.min(1, lum / 160) * 0.85;
+      var moon = 1 - (up ? 0.3 * ill : 0); /* cloud dominates; a full moon up costs 30 %, a city sky up to 35 % */
+      var dark = lum == null ? 1 : 1 - Math.min(1, lum / 160) * 0.35;
       var moonTxt = up ? Math.round(ill * 100) + " % moon up" : "moon down";
       var darkTxt = lum == null ? "" : lum < 15 ? "dark sky" : lum < 60 ? "some light pollution" : "bright city sky";
       score = { v: Math.round(10 * clear * moon * dark), cloud: Math.round(cloud), moon: moonTxt, dark: darkTxt, at: start };
@@ -248,9 +248,9 @@
   def("moon", "Moon & meteor showers", "🌙", "Moon phase, moonrise and moonset here, and the next meteor shower peak (IMO)",
     '<div class="ls-k">Labels: moonrise / moonset direction and the next meteor shower radiant. Phase and times in the sky card.</div>');
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data",
-    '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#d7301f,#fdcc3a,#1a9850)"></div>' +
+    '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#b2182b,#ef8a62 30%,#fddb6d 50%,#a6d96a 70%,#1a9850)"></div>' +
     '<div class="sat-rl"><span>0 poor</span><span>score tonight</span><span>10 great</span></div>' +
-    '<div class="ls-k">Grey square: no cloud data yet. A bright moon lowers every square.</div></div>');
+    '<div class="ls-k">Clouds count most: overcast is 0. A full moon costs about 3 points, city light up to 3. Grey square: no cloud data yet.</div></div>');
   /* opt116: meteor showers layer. The legend lists the next five peaks with rate and moonlight; the map shades where the next radiant never rises */
   var upcoming = () => {
     var now = Date.now() - 864e5, y = new Date().getFullYear(), out = [];
