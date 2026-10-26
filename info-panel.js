@@ -27,7 +27,8 @@
     var p = where();
     if (!p || !pinOn) return "";
     var ll = p._sLL || p._lngLat;
-    return '<div class="tp-ll">' + PIN + " " + ll.lat.toFixed(4) + "°, " + ll.lng.toFixed(4) + "°</div>";
+    var w = ll.lat.toFixed(4) + "," + ll.lng.toFixed(4);
+    return '<div class="tp-ll">' + PIN + " " + ll.lat.toFixed(4) + "°, " + ll.lng.toFixed(4) + '° <button type="button" class="pf-wx" data-ll="' + w + '">Weather</button></div>';
   }
   function syncPin() {
     var p = where();

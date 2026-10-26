@@ -1,6 +1,6 @@
 // workspace/whereisthesun/point-forecast.js
 /* SUNNY point forecast (opt67), the Windy-style "tap anywhere" picker. A tap on open map
- * (not a beach, not while Settings is open) shows a small card with the weather right
+ * (not a beach, not while Settings is open) drops a pin; its card has a Weather button that fetches the weather right
  * there now and a 24-hour strip: temperature line, cloud cover band, rain bars.
  * Data: Open-Meteo hourly forecast, free, no key. United States locales get °F and mph. */
 (function () {
@@ -80,9 +80,25 @@
     if (my !== gen) return;
     show(lngLat, card(d));
   }
-  function onFail(lngLat, my) {
-    if (my === gen) show(lngLat, '<div class="pf-src">Forecast unavailable right now.</div>');
+  function onFail(lngLat, my, k, err) {
+    delete cache[k]; /* a failed fetch is never kept, so the next press tries again */
+    if (my !== gen) return;
+    var busy = /429/.test(String(err && err.message));
+    show(lngLat, wxBtn(busy ? "Weather service busy (free limit reached). Try again in a minute." : "Forecast unavailable right now."));
   }
+  function wxBtn(note) {
+    return '<div class="pf-src">' + esc(note) + "</div>";
+  }
+  function load(lngLat, my, tries) {
+    var k = lngLat.lat.toFixed(2) + "," + lngLat.lng.toFixed(2);
+    show(lngLat, '<div class="pf-src">Loading forecast…</div>');
+    if (!cache[k]) cache[k] = fetch(url(lngLat.lat, lngLat.lng)).then(readJson);
+    cache[k].then(onData.bind(null, lngLat, my), (err) => {
+      if (tries > 0 && my === gen) { delete cache[k]; setTimeout(() => { if (my === gen) load(lngLat, my, tries - 1); }, 4000); return; }
+      onFail(lngLat, my, k, err);
+    });
+  }
+  /* opt146: a tap drops a pin only; the card's Weather button fetches the forecast on demand */
   function onClick(map, skip, e) {
     if (skip && skip()) return;
     var pop = document.getElementById("settings-pop");
@@ -90,16 +106,21 @@
     var layers = BEACH_LAYERS.concat(window.SunnyLayers ? window.SunnyLayers.tapIds() : []).filter(map.getLayer.bind(map));
     if (layers.length && map.queryRenderedFeatures(e.point, { layers: layers }).length) return;
     var my = ++gen;
-    var k = e.lngLat.lat.toFixed(2) + "," + e.lngLat.lng.toFixed(2);
-    show(e.lngLat, '<div class="pf-src">Loading forecast…</div>');
-    if (!cache[k]) cache[k] = fetch(url(e.lngLat.lat, e.lngLat.lng)).then(readJson);
-    cache[k].then(onData.bind(null, e.lngLat, my), onFail.bind(null, e.lngLat, my));
+    var ll = e.lngLat;
+    show(ll, '<div class="pf-src">Dropped pin</div>');
+  }
+  function onDoc(e) {
+    var b = e.target && e.target.closest && e.target.closest(".pf-wx");
+    if (!b || !popup) return;
+    var ll = (b.getAttribute("data-ll") || "").split(",").map(Number);
+    if (ll.length === 2 && isFinite(ll[0]) && isFinite(ll[1])) load({ lat: ll[0], lng: ll[1] }, ++gen, 1);
   }
   function attach(map, skip) {
     if (!map || !window.maplibregl || !window.maplibregl.Popup) return;
     popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 10 });
     popup._sunnyMap = map;
     map.on("click", onClick.bind(null, map, skip));
+    document.addEventListener("click", onDoc, true);
   }
   window.SunnyPoint = { attach: attach };
 })();
