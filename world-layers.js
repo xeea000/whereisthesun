@@ -329,6 +329,32 @@
     return [p.st ? age("Built", parseInt(p.st, 10)) || "Built " + K.esc(p.st) : "", p.op ? "Operator " + K.esc(p.op) : "",
       p.acc ? "Access " + K.esc(p.acc) : ""];
   };
+  /* opt119: undersea pipelines at all zooms, a static file built from Geofabrik OpenStreetMap extracts (tools/build-pipelines.py) */
+  var PIPE_IDS = ["pipe-line"];
+  function pipeApply(map, on) {
+    K.vis(map, PIPE_IDS, on);
+    if (!on) return;
+    K.loadJson(BASE + "pipelines.geo.json").then((g) => {
+      if (!map.getSource("w-pipes")) map.addSource("w-pipes", { type: "geojson", data: g,
+        attribution: 'Pipelines: <a href="https://download.geofabrik.de/" target="_blank" rel="noopener">Geofabrik</a> · OpenStreetMap (ODbL)' });
+      if (!map.getLayer("pipe-line")) map.addLayer({ id: "pipe-line", type: "line", source: "w-pipes", paint: {
+        "line-color": ["match", ["get", "s"], "gas", "#ff9a3c", "oil", "#c0662b", "#e3c07a"],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 2, 0.8, 9, 2], "line-opacity": 0.9 } }, K.before(map));
+      K.vis(map, PIPE_IDS, L.isOn("pipelines"));
+    }).catch(() => {});
+  }
+  L.add({ id: "pipelines", name: "Undersea pipelines", icon: "🛢️", group: "Ocean", taps: PIPE_IDS, dflt: true, apply: pipeApply,
+    tip: "Undersea oil and gas pipelines at every zoom, from OpenStreetMap (North Sea, Gulf of Mexico, Persian Gulf, Asia, Australia, Brazil, Nigeria)",
+    legend: K.legKeys([["#ff9a3c", "line", "gas"], ["#c0662b", "line", "oil"], ["#e3c07a", "line", "other or not tagged"]]),
+    attach: (map, on) => {
+      idle(map, "pipelines", "pipe-line", pipeApply);
+      map.on("click", "pipe-line", (e) => {
+        var p = e.features[0].properties;
+        K.show(map, e.lngLat, p.n || "Undersea pipeline", [p.s ? "Carries " + K.esc(p.s) : "", p.o ? "Operator " + K.esc(p.o) : ""],
+          ["OpenStreetMap via Geofabrik", "https://www.openstreetmap.org/#map=12/" + e.lngLat.lat.toFixed(4) + "/" + e.lngLat.lng.toFixed(4)]);
+      });
+      pipeApply(map, on);
+    } });
   osmLayer({ id: "osm-undersea", src: "w-osm-sea", ids: ["osm-pipe", "osm-plat"], name: "Undersea pipelines (OSM)", icon: "🛢️", group: "Ocean", minZoom: 9, maxTiles: 15,
     legend: K.legKeys([["#d98c2b", "line", "pipeline"], ["#ffcc33", "dot", "platform"]]),
     tip: "Underwater pipelines and offshore platforms mapped in OpenStreetMap, loads at zoom 9 and closer",
