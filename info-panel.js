@@ -29,7 +29,9 @@
     var ll = p._sLL || p._lngLat;
     var w = ll.lat.toFixed(4) + "," + ll.lng.toFixed(4);
     var at = pinOn ? PIN + " " + ll.lat.toFixed(4) + "°, " + ll.lng.toFixed(4) + "° " : ""; /* Weather stays in every tap card; pin and coordinates follow the switch */
-    return '<div class="tp-ll">' + at + '<button type="button" class="pf-wx" data-ll="' + w + '">Weather</button></div>';
+    var pc = window.SunnyPlusCode ? window.SunnyPlusCode(ll.lat, ll.lng) : ""; /* opt157: Plus Code with Copy */
+    var pcH = pc ? '<span class="pc-code" title="Plus Code (Open Location Code)">' + pc + '</span><button type="button" class="pc-copy" data-c="' + pc + '">Copy</button>' : "";
+    return '<div class="tp-ll">' + at + '<button type="button" class="pf-wx" data-ll="' + w + '">Weather</button>' + pcH + '</div>';
   }
   function syncPin() {
     var p = where();
