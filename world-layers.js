@@ -211,6 +211,7 @@
   var tApply = (map, on) => {
     tMap = map;
     K.vis(map, ["tower-dot"], on);
+    if (window.SunnyFireLook) window.SunnyFireLook.apply();
     if (window.SunnyCaCell) window.SunnyCaCell.apply(); /* opt159: Canadian cell sites (ca-cell.js) follow the Towers switch */
     if (!on) return;
     if (!map.getSource("w-towers")) {
@@ -224,13 +225,16 @@
     tLoad("big");
   };
   var tDetail = (f) => { var k = f.properties.t; return P.detail(tBase(k), tMeta[k], f.properties.i, V); };
-  L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot"], apply: tApply,
+  L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot", "fire-look-dot"], apply: tApply,
     tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ at every zoom, shorter towers (60 m+, United States) from zoom 6. Types are guessed from the owner.",
-    kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true }]),
-    kidSet: () => { if (tMap && tMap.getLayer("tower-dot")) tMap.setFilter("tower-dot", tFilter()); if (window.SunnyCaCell) window.SunnyCaCell.apply(); },
-    legend: K.legKeys(TT.map((t) => [t[2], "dot", t[1]])) + (window.SunnyCaCell ? window.SunnyCaCell.legend : ""),
+    kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true },
+      { id: "towers-fl", name: "Fire lookout towers", dflt: true }]),
+    kidSet: () => { if (tMap && tMap.getLayer("tower-dot")) tMap.setFilter("tower-dot", tFilter()); if (window.SunnyCaCell) window.SunnyCaCell.apply();
+      if (window.SunnyFireLook) window.SunnyFireLook.apply(); },
+    legend: K.legKeys(TT.map((t) => [t[2], "dot", t[1]])) + (window.SunnyCaCell ? window.SunnyCaCell.legend : "") + (window.SunnyFireLook ? window.SunnyFireLook.legend : ""),
     attach: (map) => {
       if (window.SunnyCaCell) window.SunnyCaCell.attach(map);
+      if (window.SunnyFireLook) window.SunnyFireLook.attach(map);
       idle(map, "towers", "tower-dot", tApply);
       map.on("click", "tower-dot", (e) => {
         var f = e.features[0];

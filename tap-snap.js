@@ -11,7 +11,7 @@
     "quake-old": 0, "quake-new": 0, "volc-dot": 0, "storm-now": 0, "torn-dot": 0, "torn-hit": 0, "wave-dot": 0, "storm-track": 0,
     "hist-wonder": 0, "hist-new7": 0, "hist-whs": 0, "hist-temple": 0, "hist-c200": 0, "hist-c500": 0, "hist-c1000": 0, "hist-c1500": 0, "hist-cold": 0, "hist-cnone": 0,
     "lab-space": 0, "lab-life": 0, "lab-earth": 0, "lab-eng": 0, "lab-chem": 0, "lab-agri": 0, "lab-soc": 0, "lab-rel": 0, "lab-mil": 0, "lab-other": 0,
-    "hist-site": 0, "flight-band": 0, "shower-band": 0, "craton-fill": 0, "age-fill": 0, "ap-med": 0, "acc-dot": 0, "tower-dot": 0, "ca-cell-dot": 0,
+    "hist-site": 0, "flight-band": 0, "shower-band": 0, "craton-fill": 0, "age-fill": 0, "ap-med": 0, "acc-dot": 0, "tower-dot": 0, "ca-cell-dot": 0, "fire-look-dot": 0,
     "tx-scope": 0, "tx-radar": 0, "tx-radarm": 0, "osm-plat": 0 }; /* opt99: world layers */
   var radius = (m, id, f) => {
     if (LAYERS[id]) {
