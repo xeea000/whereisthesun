@@ -131,16 +131,42 @@
     if (b) b.click();
     setTimeout(refresh, 80);
   }
+  /* opt103: sections and sub-groups fold with twisty triangles (state saved per path, open by default).
+   * PLACE moves a layer into a "Section/Sub" path without touching the layer's own file. */
+  var PLACE = { skyglow: "Sky & Space/Natural", aurora: "Sky & Space/Natural", eclipses: "Sky & Space/Natural", moon: "Sky & Space/Natural",
+    nightscore: "Sky & Space/Natural", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
+    craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", stations: "Earth" };
+  var SUBS = { "Sky & Space": ["Natural", "Artificial"], Earth: ["", "Geology"] };
+  function fold(parent, path, label, lvl) {
+    var key = "sunny-lp-g-" + path;
+    var open = true;
+    try { open = localStorage.getItem(key) !== "0"; } catch (e) {}
+    var h = el("button", "lp-head lp-fold-h lp-l" + lvl);
+    h.type = "button";
+    var box = el("div", "lp-grp");
+    var set = (o) => { box.hidden = !o; h.textContent = (o ? "▾ " : "▸ ") + label; h.setAttribute("aria-expanded", o ? "true" : "false"); };
+    set(open);
+    h.addEventListener("click", () => { open = !open; set(open); try { localStorage.setItem(key, open ? "1" : "0"); } catch (e) {} });
+    parent.appendChild(h);
+    parent.appendChild(box);
+    return box;
+  }
   function build() {
     var body = panel.querySelector(".lp-body");
     body.textContent = "";
     rows = {};
+    var where = (d) => { return (PLACE[d.id] || d.group || "").split("/"); };
     GROUPS.forEach((g) => {
-      var list = defs.filter((d) => { return d.group === g; });
+      var list = defs.filter((d) => { return where(d)[0] === g && d.name; });
       if (!list.length && g !== "Weather") return;
-      body.appendChild(el("h3", "lp-head", g));
-      if (g === "Weather") body.appendChild(overlayRow());
-      list.forEach((d) => { body.appendChild(row(d)); });
+      var box = fold(body, g, g, 0);
+      if (g === "Weather") box.appendChild(overlayRow());
+      (SUBS[g] || [""]).forEach((sub) => {
+        var sl = list.filter((d) => { return (where(d)[1] || "") === sub; });
+        if (!sl.length) return;
+        var tgt = sub ? fold(box, g + "/" + sub, sub, 1) : box;
+        sl.forEach((d) => { tgt.appendChild(row(d)); });
+      });
     });
     buildSettings();
     refresh();
