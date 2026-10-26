@@ -160,6 +160,9 @@
   function fc(feats) {
     return { type: "FeatureCollection", features: feats || [] };
   }
-  window.SunnyKit = { esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
+  /* opt108: one shared Group nearby markers setting (default on); off drops clustering and zoom gates on point layers */
+  var grouped = () => { try { return localStorage.getItem("sunny-group") !== "0"; } catch (e) { return true; } };
+  var gz = (z) => { return grouped() ? z : 0; };
+  window.SunnyKit = { grouped: grouped, gz: gz, esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc };
 })();

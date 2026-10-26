@@ -47,7 +47,7 @@
           var spec = { id: l.id, type: "circle", source: sid, filter: l.filter || ["in", ["get", "k"], ["literal", l.codes]], paint: {
             "circle-radius": o.radius || ["interpolate", ["linear"], ["zoom"], 1, l.r || 2.5, 8, (l.r || 2.5) * 2.2],
             "circle-color": l.color, "circle-stroke-color": "#101418", "circle-stroke-width": 0.8 } };
-          if (l.minzoom) spec.minzoom = l.minzoom;
+          if (K.gz(l.minzoom || 0)) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
         });
         K.vis(map, ids, L.isOn(o.id));
@@ -137,7 +137,7 @@
   };
   var tView = () => {
     var m = tMap, man = meta.manifest;
-    if (!m || !L.isOn("towers") || m.getZoom() < 6 || !man || !man.towerTiles) return;
+    if (!m || !L.isOn("towers") || m.getZoom() < K.gz(6) || !man || !man.towerTiles) return;
     var b = m.getBounds();
     man.towerTiles.forEach((k) => {
       var p = k.split("_").map(Number);
@@ -243,7 +243,7 @@
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply,
       note: (map) => { return map && map.getZoom() < o.minZoom ? "Zoom in to load" : ""; },
       attach: (map, on) => {
-        loader = K.tiles(map, { key: o.id, minZoom: o.minZoom, maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
+        loader = K.tiles(map, { key: o.id, minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
             var bb = "(" + [b[1], b[0], b[3], b[2]].map((x) => { return x.toFixed(4); }).join(",") + ")";
             return K.overpass("[out:json][timeout:25];(" + o.q.split("BB").join(bb) + ");out geom 400;").then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });

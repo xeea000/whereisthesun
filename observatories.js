@@ -99,7 +99,7 @@
   function addLayers() {
     if (!map.hasImage("obs-icon")) map.addImage("obs-icon", icon(), { pixelRatio: 2 });
     if (!map.hasImage("obs-detector")) map.addImage("obs-detector", detectorIcon(), { pixelRatio: 2 });
-    if (!map.getSource(SRC)) map.addSource(SRC, { type: "geojson", data: data, attribution: ATTRIB, cluster: true, clusterRadius: 36, clusterMaxZoom: 7 });
+    if (!map.getSource(SRC)) map.addSource(SRC, { type: "geojson", data: data, attribution: ATTRIB, cluster: window.SunnyKit.grouped(), clusterRadius: 36, clusterMaxZoom: 7 });
     var before = beforeId();
     if (!map.getLayer("obs-cluster")) {
       map.addLayer({ id: "obs-cluster", type: "circle", source: SRC, filter: ["has", "point_count"],

@@ -40,6 +40,14 @@
       if (row && adv.contains(row)) pop.insertBefore(row, btn);
     };
     pin(); window.addEventListener("load", pin);
+    var gr = document.createElement("div"); /* opt108: Group nearby markers, shared by every point layer; a change reloads the map */
+    gr.className = "set-row";
+    gr.innerHTML = '<label class="ov switch"><input id="toggle-group" type="checkbox"><span class="knob" aria-hidden="true"></span>Group nearby markers</label>' +
+      '<div class="set-hint">Off shows every marker at every zoom. Uses more data.</div>';
+    pop.insertBefore(gr, btn);
+    var g = gr.querySelector("input");
+    g.checked = get("sunny-group", "1") === "1";
+    g.addEventListener("change", () => { put("sunny-group", g.checked ? "1" : "0"); location.reload(); });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();

@@ -257,6 +257,7 @@
     defs.forEach((d) => { if (d.attach) d.attach(map, isOn(d)); });
     map.on("zoomend", refresh);
     refresh();
+    setTimeout(() => { if (window.SunnyLegend) window.SunnyLegend(map); }, 0); /* opt108 legend stack */
   }
   function tapIds() {
     var out = [];
@@ -268,7 +269,7 @@
   window.SunnyLayers = { add: add, attach: attach, refresh: refresh, isOn: (id) => {
     var d = defs.filter((x) => { return x.id === id; })[0];
     return d ? isOn(d) : false;
-  }, tapIds: tapIds, nameOf: (lid) => { /* opt105: friendly layer name for hover labels */
+  }, list: () => { return defs.filter((d) => { return d.name && isOn(d); }); }, tapIds: tapIds, nameOf: (lid) => { /* opt105: friendly layer name for hover labels */
     var d = defs.filter((x) => { return x.taps && x.taps.indexOf(lid) >= 0; })[0];
     return d ? d.name : "";
   } };
