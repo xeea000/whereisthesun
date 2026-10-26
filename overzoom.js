@@ -10,7 +10,7 @@
   var on = () => { try { return localStorage.getItem("sunny-maxdetail") !== "0"; } catch (e) { return true; } };
   var show = () => {
     if (!map) return;
-    var need = on() && map.getZoom() > MAX + 0.4;
+    var need = on() && (map.getZoom() > MAX + 0.4 || (map.getZoom() > 12 && Date.now() - (window.SunnyBaseFake || 0) < 4000));
     if (!pill && need) {
       pill = document.createElement("div");
       pill.id = "max-detail";
@@ -37,6 +37,7 @@
   L.add({ id: "maxdetail-attach", group: "none", attach: (m) => {
     map = m;
     map.on("zoomend", show);
+    map.on("idle", show);
     row(); setTimeout(row, 1500);
     show();
   } });

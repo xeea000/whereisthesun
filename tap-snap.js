@@ -8,7 +8,7 @@
   var LAYERS = { "pack-camps-dot": 0, "pack-plaques-dot": 0, "obs-point": 11, "obs-cluster": 0, "meteor-dot": 0, "craters-dot": 0,
     "fire-dot": 0, "beaches-dot": 0, "beaches-sun": 20, "aurora-dot": 0, "sat-dot": 0,
     "sea-trench": 0, "sea-vent": 0, "sea-mount": 0, "plat-dot": 0, "cable-plan": 0, "stn-polar": 0, "stn-other": 0, "acc-lab": 0, "ap-large": 0, "pipe-hit": 0, "plate-edge": 0,
-    "quake-old": 0, "quake-new": 0, "volc-dot": 0,
+    "quake-old": 0, "quake-new": 0, "volc-dot": 0, "storm-now": 0, "storm-track": 0,
     "hist-wonder": 0, "hist-new7": 0, "hist-whs": 0, "hist-temple": 0, "hist-c200": 0, "hist-c500": 0, "hist-c1000": 0, "hist-c1500": 0, "hist-cold": 0, "hist-cnone": 0,
     "hist-site": 0, "flight-band": 0, "shower-band": 0, "craton-fill": 0, "age-fill": 0, "ap-med": 0, "acc-dot": 0, "lab-dot": 0, "inst-dot": 0, "tower-dot": 0,
     "tx-scope": 0, "tx-radar": 0, "tx-radarm": 0, "osm-plat": 0 }; /* opt99: world layers */

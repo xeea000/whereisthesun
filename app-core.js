@@ -550,6 +550,7 @@ function sunnyStep01() {
       }
     }
   } catch (eViewBoot) {}
+  var B = (u) => { return window.SunnyBaseUrl ? window.SunnyBaseUrl(u) : u; };
   map = new maplibregl.Map({
     container: "map",
     style: {
@@ -558,21 +559,21 @@ function sunnyStep01() {
       sources: {
         osm: {
           type: "raster",
-          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+          tiles: [B("https://tile.openstreetmap.org/{z}/{x}/{y}.png")],
           tileSize: 256,
           attribution: "&copy; OpenStreetMap",
           maxzoom: 19
         },
         "base-sat": {
           type: "raster",
-          tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+          tiles: [B("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}")],
           tileSize: 256,
           attribution: "Esri World Imagery",
           maxzoom: 19
         },
         "base-dark": {
           type: "raster",
-          tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"],
+          tiles: [B("https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png")],
           tileSize: 256,
           attribution: "&copy; CARTO &middot; &copy; OpenStreetMap",
           maxzoom: 20
