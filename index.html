@@ -38,7 +38,7 @@
   <link rel="dns-prefetch" href="https://geo.weather.gc.ca">
   <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?h=5ae31c574f">
   <link rel="stylesheet" href="styles.css?h=468e6b0212">
-  <link rel="stylesheet" href="settings-panel.css?h=55aeb3953c">
+  <link rel="stylesheet" href="settings-panel.css?h=f5be224c45">
   <link rel="stylesheet" href="side-buttons.css?h=de1efe43ac">
   <link rel="stylesheet" href="layers-panel.css?h=3b513d26f9">
   <link rel="stylesheet" href="info-panel.css?h=ed7a47a437">
@@ -77,7 +77,8 @@
         <div id="time-ticks" class="time-ticks" aria-hidden="true"></div>
       </div>
       <div class="tl-col"><span id="time-label">Clouds</span>
-        <label class="bar-chk"><input id="bar-labels" type="checkbox">Labels</label></div>
+        <label class="bar-chk"><input id="bar-labels" type="checkbox">Labels</label>
+        <label class="bar-chk" title="Low data: less detail, fewer Play frames, slower live updates"><input id="bar-low" type="checkbox">Low data</label></div>
       <div class="ov overlay-mode" role="group" aria-label="Overlay">
         <div class="seg" id="overlay-seg">
           <button type="button" class="seg-btn is-on" data-overlay="clouds" aria-pressed="true">Clouds</button>
@@ -235,15 +236,15 @@
   <div id="fps" aria-hidden="true">— fps</div>
   <!-- MapLibre deferred before app.js (opt21: no preload — avoids SW cross-world mismatch) -->
   <script defer src="vendor/maplibre-gl.js?h=be9633c4d8"></script>
-  <script defer src="base-guard.js?h=cf0ddfd01e"></script>
+  <script defer src="base-guard.js?h=45c2453283"></script>
   <script defer src="tap-snap.js?h=e3b39db902"></script>
   <script defer src="points.js?h=bd3ec9c286"></script>
   <script defer src="peek-place.js?h=f0d14e00bc"></script>
   <script defer src="info-panel.js?h=fc61856408"></script>
   <script defer src="beach-card.js?h=0237ca65e1"></script>
   <script defer src="beach-icons.js?h=9bb675dbcd"></script>
-  <script defer src="data-saver.js?h=92b48c076c"></script>
-  <script defer src="vector-base.js?h=4d1c85b8fd"></script>
+  <script defer src="data-saver.js?h=28f8d8cc60"></script>
+  <script defer src="vector-base.js?h=e2411f3d4a"></script>
   <script defer src="light-clouds.js?h=b3980fe855"></script>
   <script defer src="cloud-key.js?h=5d5b626b3c"></script>
   <script defer src="play-handoff.js?h=b695a52a77"></script>
@@ -256,7 +257,7 @@
   <script defer src="wind-gl.js?h=48bdd93d99"></script>
   <script defer src="point-forecast.js?h=faf1994fb8"></script>
   <script defer src="craters.js?h=aeca865098"></script>
-  <script defer src="sky-glow.js?h=f205b6709f"></script>
+  <script defer src="sky-glow.js?h=8c62f2d27a"></script>
   <script defer src="beach-toggle.js?h=29ef62a7e1"></script>
   <script defer src="observatories.js?h=6e1c3a5c0a"></script>
   <script defer src="crown-land.js?h=4f17ab26f8"></script>
@@ -266,7 +267,7 @@
   <script defer src="layer-kit.js?h=d3129cdac5"></script>
   <script defer src="layers-panel.js?h=3ad8d10dc7"></script>
   <script defer src="famous.js?h=ddc2b79136"></script>
-  <script defer src="bar-toggles.js?h=c75bfa5a70"></script>
+  <script defer src="bar-toggles.js?h=e6af9b608f"></script>
   <script defer src="overzoom.js?h=1dc114f61d"></script>
   <script defer src="flight-time.js?h=79218c417c"></script>
   <script defer src="legend-stack.js?h=b35e7720b5"></script>
@@ -278,9 +279,9 @@
   <script defer src="sky-layers.js?h=d5c40cdf04"></script>
   <script defer src="earth-layers.js?h=536a8382bf"></script>
   <script defer src="plates.js?h=192e0fa1b8"></script>
-  <script defer src="quakes.js?h=2d5a0e23cf"></script>
+  <script defer src="quakes.js?h=a47e073cf2"></script>
   <script defer src="volcanoes.js?h=5aede381a6"></script>
-  <script defer src="storms.js?h=07c9d6a5bb"></script>
+  <script defer src="storms.js?h=7df322a672"></script>
   <script defer src="world-layers.js?h=7f639ec86a"></script>
   <script defer src="outdoor-layers.js?h=d931181d64"></script>
   <script defer src="sky-card.js?h=ff1cd47081"></script>
@@ -296,8 +297,8 @@
   <script defer src="app-core.js?h=1b52768a8f"></script>
   <script defer src="app-timeline.js?h=cfc2a3086a"></script>
   <script defer src="app-cloud-layers.js?h=932dc8e2ce"></script>
-  <script defer src="app-play-buffers.js?h=fd9234bb67"></script>
-  <script defer src="app-play-blend.js?h=38be458b77"></script>
+  <script defer src="app-play-buffers.js?h=0d31ad5249"></script>
+  <script defer src="app-play-blend.js?h=fd6939b65c"></script>
   <script defer src="app-cloud-frames.js?h=7132727f13"></script>
   <script defer src="app-beach-store.js?h=2f443c94e4"></script>
   <script defer src="app-beach-fetch.js?h=ff99802b33"></script>

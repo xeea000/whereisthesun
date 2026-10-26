@@ -72,7 +72,8 @@
     tip: "Magnitude 4.5 and up in the past week, live from USGS, refreshed every 30 minutes at most",
     attach: (map, on) => {
       map.on("click", "quake-new", (e) => { card(map, e, e.features[0].properties, true); });
-      setInterval(() => { if (L.isOn("quakeslive") && !document.hidden) liveApply(map, true); }, 30 * 60000 + 5000);
+      var qn = 0;
+      setInterval(() => { if (L.isOn("quakeslive") && !document.hidden && window.SunnyDataSaver.slow(++qn)) liveApply(map, true); }, 30 * 60000 + 5000);
       liveApply(map, on);
     } });
 })();

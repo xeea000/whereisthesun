@@ -83,7 +83,8 @@
           "Updated " + new Date(p.to + "Z").toLocaleString([], { dateStyle: "medium", timeStyle: "short" })], ["GDACS report", p.url]);
       });
       map.on("idle", () => { if (L.isOn("stormsnow") && !map.getLayer("storm-now") && !liveAt) liveApply(map, true); });
-      setInterval(() => { if (L.isOn("stormsnow") && !document.hidden) liveApply(map, true); }, 3600000 + 5000);
+      var sn = 0;
+      setInterval(() => { if (L.isOn("stormsnow") && !document.hidden && window.SunnyDataSaver.slow(++sn)) liveApply(map, true); }, 3600000 + 5000);
       liveApply(map, on);
     } });
 })();

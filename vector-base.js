@@ -56,8 +56,11 @@
     try {
       map.setGlyphs(GLYPHS);
     } catch (e) {}
-    if (!map.getSource("ofm")) map.addSource("ofm", { type: "vector", url: "https://tiles.openfreemap.org/planet", attribution: "OpenFreeMap · OSM" });
-    return Promise.all([getJson(STYLES.roads), getJson(STYLES.dark)]).then((styles) => {
+    var OFM = "https://tiles.openfreemap.org/planet", low = window.SunnyDataSaver && window.SunnyDataSaver.low();
+    /* Low data: tiles stop at zoom 12 and are drawn larger beyond it */
+    var src = low ? getJson(OFM).then((j) => { return { type: "vector", tiles: j.tiles, minzoom: 0, maxzoom: 12, attribution: "OpenFreeMap · OSM" }; })
+      .catch(() => { return { type: "vector", url: OFM, attribution: "OpenFreeMap · OSM" }; }) : Promise.resolve({ type: "vector", url: OFM, attribution: "OpenFreeMap · OSM" });
+    return src.then((o) => { if (!map.getSource("ofm")) map.addSource("ofm", o); return Promise.all([getJson(STYLES.roads), getJson(STYLES.dark)]); }).then((styles) => {
       addLayers(map, "roads", styles[0]);
       addLayers(map, "dark", styles[1]);
       ready = true;

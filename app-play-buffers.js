@@ -224,7 +224,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
       m.addSource(GIBS_SRC, {
         type: "raster",
         tiles: [url],
-        tileSize: 256,
+        tileSize: window.SunnyDataSaver.low() ? 512 : 256, /* Low data: one zoom level coarser */
         maxzoom: 7,
         attribution: "NASA GIBS / NOAA GOES"
       });
@@ -254,7 +254,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     m.addSource(GIBS_SRC, {
       type: "raster",
       tiles: [url],
-      tileSize: 256,
+      tileSize: window.SunnyDataSaver.low() ? 512 : 256,
       maxzoom: 7,
       attribution: "NASA GIBS / NOAA GOES"
     });

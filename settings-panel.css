@@ -110,6 +110,7 @@ body.settings-open .update-banner { display: none; }
   .timeline .tbtn,
   .timeline .tbtn-play { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
   .timeline #time-label { display: none; }
+  .timeline .time-tick:not(.is-start):not(.is-end) .time-tick-lab { display: none; }
   .timeline .bar-chk { flex-direction: column; gap: 1px; font-size: 0.6rem; margin: 0; }
   .timeline .seg-btn { min-height: 34px; padding: 0 9px; }
   .controls { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 64px); right: max(10px, env(safe-area-inset-right)); }

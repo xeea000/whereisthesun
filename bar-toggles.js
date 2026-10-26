@@ -1,5 +1,6 @@
 // workspace/whereisthesun/bar-toggles.js
-/* SUNNY bottom bar check boxes. "Labels" under the time mirrors the Settings Labels switch (#toggle-map) both ways. */
+/* SUNNY bottom bar check boxes. "Labels" under the time mirrors the Settings Labels switch (#toggle-map) both ways.
+ * "Low data" (sunny-lowdata, off by default) reloads the page so every part reads it from the start; see data-saver.js. */
 (() => {
   "use strict";
   var pair = (barId, setId) => {
@@ -10,6 +11,12 @@
     s.addEventListener("change", () => { b.checked = s.checked; });
     setTimeout(() => { b.checked = s.checked; }, 3000);
   };
-  var go = () => { pair("bar-labels", "toggle-map"); };
+  var low = () => {
+    var b = document.getElementById("bar-low");
+    if (!b) return;
+    try { b.checked = localStorage.getItem("sunny-lowdata") === "1"; } catch (e) {}
+    b.addEventListener("change", () => { try { localStorage.setItem("sunny-lowdata", b.checked ? "1" : "0"); } catch (e) {} location.reload(); });
+  };
+  var go = () => { pair("bar-labels", "toggle-map"); low(); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", go); else go();
 })();

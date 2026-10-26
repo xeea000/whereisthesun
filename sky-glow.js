@@ -30,7 +30,8 @@
     else if (!b && base) map.moveLayer(ID);
   }
   function addLayer() {
-    if (!map.getSource(SRC)) map.addSource(SRC, { type: "raster", tiles: [URL], tileSize: 256, maxzoom: 8, attribution: ATTRIB });
+    var ts = window.SunnyDataSaver && window.SunnyDataSaver.low() ? 512 : 256;
+    if (!map.getSource(SRC)) map.addSource(SRC, { type: "raster", tiles: [URL], tileSize: ts, maxzoom: 8, attribution: ATTRIB });
     if (!map.getLayer(ID)) map.addLayer({ id: ID, type: "raster", source: SRC, paint: { "raster-opacity": 0.7, "raster-fade-duration": 0 } }, beforeId());
     if (!map._sgLow) { map._sgLow = true; map.on("idle", keepLow); }
   }

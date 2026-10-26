@@ -20,9 +20,10 @@
   var load = (params, abort) => {
     var m = /^sunnybase:\/\/(\d+)\/(\d+)\/(\d+)\/(.*)$/.exec(params.url);
     var z = +m[1], x = +m[2], y = +m[3], tpl = decodeURIComponent(m[4]), signal = abort && abort.signal;
-    return deep(tpl, z, x, y, signal, 0).then((r) => {
+    var low = window.SunnyDataSaver && window.SunnyDataSaver.low() && z > 12 ? z - 12 : 0;
+    return deep(tpl, z, x, y, signal, low).then((r) => {
       if (!r.up) return r.b.arrayBuffer().then((d) => { return { data: d }; });
-      window.SunnyBaseFake = Date.now();
+      if (!low || r.up > low) window.SunnyBaseFake = Date.now();
       return createImageBitmap(r.b).then((bmp) => {
         var n = 1 << r.up, w = bmp.width / n, c = document.createElement("canvas");
         c.width = c.height = 256;

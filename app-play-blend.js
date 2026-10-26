@@ -351,7 +351,7 @@ var steerState, STEER_TTL_MS, STEER_FAIL_TTL_MS, omPlayGrid, omPlayPromise;
     var lon = sunnyApp_origin ? sunnyApp_origin.lon : null;
     var n;
     var pending = [];
-    for (n = 1; n <= PLAY_PREFETCH; n++) {
+    for (n = 1; n <= (window.SunnyDataSaver.low() ? 1 : PLAY_PREFETCH); n++) {
       var idx = playIndexAtOffset(fromIndex, n);
       if (idx === fromIndex || !window.SunnyDataSaver.keepCloud(idx)) continue;
       var iso = cloudTimes[idx];

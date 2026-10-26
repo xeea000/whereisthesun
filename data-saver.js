@@ -32,8 +32,12 @@
     } catch (e) {}
   }
   /* Frame times kept by Fewer frames: a fixed clock grid, so the same frames stay kept as time moves on */
+  /* Low data (bottom bar): Play keeps hourly cloud and half-hourly radar frames, base maps stop at zoom 12,
+   * cloud pictures are half size and live layers refresh 4 times slower */
+  function low() { try { return localStorage.getItem("sunny-lowdata") === "1"; } catch (e) { return false; } }
   function keepMs(ms, stepMs, isLast) {
-    if (!on("fewer") || isLast || !isFinite(ms)) return true;
+    if ((!on("fewer") && !low()) || isLast || !isFinite(ms)) return true;
+    if (low()) stepMs = stepMs * (stepMs === CLOUD_STEP_MS ? 3 : 2);
     return Math.round(ms / 60000) % Math.round(stepMs / 60000) === 0;
   }
   function keepCloud(i) {
@@ -51,6 +55,7 @@
   }
   /* Zoom-matched picture scale: full size from zoom 5, down to half at zoom 2 and below */
   function imageScale() {
+    if (low()) return 0.5;
     if (!on("zoom")) return 1;
     var z = 5;
     try {
@@ -107,7 +112,8 @@
     var lag = document.getElementById("lag-controls");
     pop.insertBefore(sec, lag || null);
   }
-  window.SunnyDataSaver = { on: on, keepCloud: keepCloud, keepRadar: keepRadar, imageScale: imageScale, mapMoving: mapMoving };
+  window.SunnyDataSaver = { low: low, slow: (n) => { return !low() || n % 4 === 0; },
+    on: on, keepCloud: keepCloud, keepRadar: keepRadar, imageScale: imageScale, mapMoving: mapMoving };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", buildPanel);
   else buildPanel();
 })();
