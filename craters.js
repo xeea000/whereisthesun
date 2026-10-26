@@ -144,7 +144,7 @@
     map = m;
     var t = document.getElementById("toggle-craters");
     if (t) {
-      try { t.checked = localStorage.getItem(KEY) !== "0"; /* opt99: on by default */ } catch (eR) {}
+      try { t.checked = localStorage.getItem(KEY) === "1"; /* opt153: off by default */ } catch (eR) {}
       t.addEventListener("change", onToggle);
     }
     map.on("click", "craters-fill", onClick);

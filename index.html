@@ -3,6 +3,17 @@
 <html lang="en">
 <head>
   <script>
+    /* opt153: map layers start off. Once per browser, every saved layer switch is reset to off; later choices are kept */
+    (function () {
+      try {
+        if (localStorage.getItem("sunny-layers-off-v1")) return;
+        window.SunnyLayersReset = true; /* layers-panel.js turns each registered layer off */
+        ["sunny-wind", "sunny-craters", "sunny-skyglow", "sunny-observatories", "sunny-crown"].forEach(function (k) { localStorage.setItem(k, "0"); });
+        localStorage.setItem("sunny-layers-off-v1", "1");
+      } catch (e) {}
+    })();
+  </script>
+  <script>
     /* opt60: users always stay on the main URL; ?v=optNN is internal cache-bust only */
     (function () {
       try {
@@ -257,7 +268,7 @@
   <script defer src="wind-field.js?h=a95511e1dc"></script>
   <script defer src="wind-gl.js?h=48bdd93d99"></script>
   <script defer src="point-forecast.js?h=499c8722dd"></script>
-  <script defer src="craters.js?h=aeca865098"></script>
+  <script defer src="craters.js?h=961f6df77a"></script>
   <script defer src="sky-glow.js?h=b325551c86"></script>
   <script defer src="beach-toggle.js?h=29ef62a7e1"></script>
   <script defer src="observatories.js?h=5d9fbe537e"></script>
@@ -266,7 +277,7 @@
   <script defer src="vendor/suncalc-2.1.1.js?h=3f2bf4d522"></script>
   <script defer src="vendor/satellite-5.0.0.min.js?h=272c249d24"></script>
   <script defer src="layer-kit.js?h=d3129cdac5"></script>
-  <script defer src="layers-panel.js?h=35b92d1a34"></script>
+  <script defer src="layers-panel.js?h=7555178501"></script>
   <script defer src="famous.js?h=ddc2b79136"></script>
   <script defer src="bar-toggles.js?h=e6af9b608f"></script>
   <script defer src="overzoom.js?h=1dc114f61d"></script>

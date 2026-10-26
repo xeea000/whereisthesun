@@ -19,7 +19,7 @@
     }
   }
   function isOn(d) {
-    return d.get ? !!d.get() : saved(d.id, d.dflt !== false);
+    return d.get ? !!d.get() : saved(d.id, false); /* opt153: every layer starts off; only a saved "1" turns it on */
   }
   function setOn(d, on) {
     if (d.set) d.set(on);
@@ -32,6 +32,7 @@
     refresh();
   }
   function add(d) {
+    if (window.SunnyLayersReset && !d.set) { try { localStorage.setItem("sunny-L-" + d.id, "0"); } catch (e) {} } /* opt153 one-time reset */
     defs.push(d);
     if (panel) build();
     if (map && d.attach) d.attach(map, isOn(d));
