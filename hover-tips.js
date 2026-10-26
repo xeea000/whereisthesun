@@ -42,6 +42,16 @@
   var label = (f) => {
     var ex = window.SunnyHoverExt && window.SunnyHoverExt(f, (html) => { if (cur === f.layer.id + ":" + (f.properties || {}).i) show(lx, ly, html); });
     if (ex) return ex;
+    var cp = f.properties || {}, src = window.map && f.source && window.map.getSource(f.source);
+    if (cp.cluster_id != null && cp.point_count <= 4 && src && src.getClusterLeaves) { /* opt172: small cluster hover lists the real names */
+      var ck = f.layer.id + ":" + cp.i;
+      var lf = (window.SunnyLeafName || {})[f.source]; /* optional per-source resolver: props => Promise<name> */
+      Promise.resolve(src.getClusterLeaves(cp.cluster_id, 4, 0)).then((lv) => Promise.all((lv || []).map((x) => {
+        var q = x.properties || {}; return q.name || q.n || (lf ? lf(q).catch(() => "") : ""); }))).then((ns) => {
+        ns = ns.filter(Boolean);
+        if (ns.length && cur === ck) show(lx, ly, "<b>" + ns.map(esc).join("<br>") + "</b><br><small>" + esc(cp.point_count + " places · zoom in") + "</small>");
+      }).catch(() => {});
+    }
     var reg = window.SunnyHoverName && window.SunnyHoverName[f.layer.id], key = f.layer.id + ":" + (f.properties || {}).i;
     if (reg) { /* async name from the layer's detail file; the hint shows until it arrives */
       reg(f).then((r) => { if (r && cur === key) show(lx, ly, "<b>" + esc(r[0]) + "</b><br><small>" + esc(r[1]) + "</small>"); }).catch(() => {});

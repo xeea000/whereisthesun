@@ -170,6 +170,8 @@
   }
   function attach(m) {
     map = m;
+    window.SunnyLeafName = window.SunnyLeafName || {}; /* opt172: names for small-cluster hover */
+    window.SunnyLeafName[SRC] = (q) => { return meta ? window.SunnyPoints.detail(BASE, meta, q.i, "opt96").then((d) => d.name || "") : Promise.resolve(""); };
     var prev = window.SunnyHoverExt; /* hover shows the site's own name, the class as a hint */
     window.SunnyHoverExt = (f, upd) => {
       if (!f.layer || f.layer.id !== "obs-point") return prev ? prev(f, upd) : null;
