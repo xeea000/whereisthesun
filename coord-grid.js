@@ -7,7 +7,7 @@
   var IDS = ["grid-line", "grid-label"], STEPS = [30, 20, 10, 5, 2, 1, 0.5, 0.25, 0.1, 0.05];
   var SPECIAL = { 0: "Equator", 23.44: "Tropic of Cancer", "-23.44": "Tropic of Capricorn", 66.56: "Arctic Circle", "-66.56": "Antarctic Circle" };
   var step = (map) => {
-    var b = map.getBounds(), span = Math.min(b.getEast() - b.getWest(), 360) / 6;
+    var b = map.getBounds(), span = Math.min(b.getEast() - b.getWest(), 360) / (map.getContainer().clientWidth < 600 ? 3 : 6); /* opt158: phones get about 3 lines across */
     return STEPS.find((s) => s <= span) || STEPS[STEPS.length - 1];
   };
   var fmt = (v, ns) => {

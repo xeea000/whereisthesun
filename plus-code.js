@@ -4,15 +4,18 @@
 (() => {
   "use strict";
   var A = "23456789CFGHJMPQRVWX";
+  /* integer method from the reference library, so results match its encoding test vectors (10-digit codes) */
   window.SunnyPlusCode = (lat, lng) => {
-    var la = Math.min(Math.max(lat, -90), 90) + 90, lo = ((((lng + 180) % 360) + 360) % 360), c = "", r = 20;
-    if (la >= 180) la = 180 - 1e-9;
+    lat = Math.min(Math.max(lat, -90), 90);
+    if (lat === 90) lat -= 0.000125;
+    lng = ((lng + 180) % 360 + 360) % 360 - 180;
+    var la = Math.floor(Math.floor(Math.round((lat + 90) * 2.5e7 * 1e6) / 1e6) / 3125);
+    var lo = Math.floor(Math.floor(Math.round((lng + 180) * 8.192e6 * 1e6) / 1e6) / 1024), c = "";
     for (var i = 0; i < 5; i++) {
-      var a = Math.floor(la / r), b = Math.floor(lo / r);
-      la -= a * r; lo -= b * r; c += A[a] + A[b]; r /= 20;
-      if (i === 3) c += "+";
+      c = A[la % 20] + A[lo % 20] + c;
+      la = Math.floor(la / 20); lo = Math.floor(lo / 20);
     }
-    return c.slice(0, 8) + "+" + c.slice(9);
+    return c.slice(0, 8) + "+" + c.slice(8);
   };
   document.addEventListener("click", (e) => {
     var b = e.target && e.target.closest && e.target.closest(".pc-copy");
