@@ -240,7 +240,7 @@
       K.vis(map, o.ids, on);
       if (on && loader) loader.refresh();
     }
-    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply,
+    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply, legend: o.legend,
       note: (map) => { return map && map.getZoom() < o.minZoom ? "Zoom in to load" : ""; },
       attach: (map, on) => {
         loader = K.tiles(map, { key: o.id, minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
@@ -273,6 +273,7 @@
       p.acc ? "Access " + K.esc(p.acc) : ""];
   };
   osmLayer({ id: "osm-undersea", src: "w-osm-sea", ids: ["osm-pipe", "osm-plat"], name: "Undersea pipelines (OSM)", icon: "🛢️", group: "Ocean", minZoom: 9, maxTiles: 15,
+    legend: K.legKeys([["#d98c2b", "line", "pipeline"], ["#ffcc33", "dot", "platform"]]),
     tip: "Underwater pipelines and offshore platforms mapped in OpenStreetMap, loads at zoom 9 and closer",
     q: 'way["man_made"="pipeline"]["location"="underwater"]BB;nwr["man_made"="offshore_platform"]BB;',
     item: (el) => {

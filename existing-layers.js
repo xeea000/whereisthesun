@@ -19,7 +19,17 @@
       }
     };
   }
+  var K = window.SunnyKit;
+  var LEG = { /* opt110 legends */
+    wind: K.legKeys([["#ebf5ff", "line", "moving lines follow the wind; brighter, longer = stronger"]]),
+    skyglow: K.legRamp("#000,#1b2a55,#c9a64a,#fff6c8", "dark sky", "night lights", "bright"),
+    observatories: K.legKeys([["#7b5cff", "dot", "telescope"], ["#11a3a3", "dot", "neutrino, gravitational-wave or cosmic-ray detector"],
+      ["rgba(123,92,255,0.55)", "dot", "group (number inside)"]]),
+    craters: K.legKeys([["#ff9a3c", "area", "crater rim at true size"], ["#ff9a3c", "dot", "centre"]]),
+    crown: K.legKeys([["rgb(30,170,60)", "area", "Crown land policy area"]])
+  };
   function row(def, ctl) {
+    if (LEG[def.id]) def.legend = LEG[def.id];
     def.get = ctl.get;
     def.set = ctl.set;
     L.add(def);

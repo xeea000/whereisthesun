@@ -245,7 +245,8 @@
   function def(id, name, icon, tip, leg) {
     L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, apply: applyAll, legend: leg });
   }
-  def("moon", "Moon & meteor showers", "🌙", "Moon phase, moonrise and moonset here, and the next meteor shower peak (IMO)");
+  def("moon", "Moon & meteor showers", "🌙", "Moon phase, moonrise and moonset here, and the next meteor shower peak (IMO)",
+    '<div class="ls-k">Labels: moonrise / moonset direction and the next meteor shower radiant. Phase and times in the sky card.</div>');
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data",
     '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#d7301f,#fdcc3a,#1a9850)"></div>' +
     '<div class="sat-rl"><span>0 poor</span><span>score tonight</span><span>10 great</span></div></div>');

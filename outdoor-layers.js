@@ -48,6 +48,7 @@
     }).catch(() => {});
   }
   L.add({ id: "parks", name: "Provincial parks (Ontario)", icon: "🏞️", group: "Outdoors", apply: parkApply,
+    legend: K.legKeys([["rgb(60,160,90)", "area", "operating"], ["rgb(230,120,20)", "area", "non-operating"]]),
     tip: "Ontario provincial parks: green = operating, orange hatch = non-operating. Zoom in; tap for details",
     note: (map, on) => { return on && map && map.getZoom() < 6 ? "zoom in" : ""; },
     attach: (map, on) => {

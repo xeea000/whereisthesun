@@ -163,6 +163,15 @@
   /* opt108: one shared Group nearby markers setting (default on); off drops clustering and zoom gates on point layers */
   var grouped = () => { try { return localStorage.getItem("sunny-group") !== "0"; } catch (e) { return true; } };
   var gz = (z) => { return grouped() ? z : 0; };
-  window.SunnyKit = { grouped: grouped, gz: gz, esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
+  /* opt110: legend html helpers. ramp: gradient bar with end labels; keys: [[colour, "dot"|"line"|"area", label], ...] */
+  var legRamp = (grad, lo, mid, hi) => {
+    return '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,' + grad + ')"></div>' +
+      '<div class="sat-rl"><span>' + lo + "</span><span>" + (mid || "") + "</span><span>" + hi + "</span></div></div>";
+  };
+  var legKeys = (rows) => {
+    return rows.map((r) => { return '<span class="ls-k"><i class="ls-sw ls-' + r[1] + '" style="background:' + r[0] + '"></i>' + r[2] + "</span>"; }).join("");
+  };
+  window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz,
+    esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc };
 })();

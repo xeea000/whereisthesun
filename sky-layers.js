@@ -108,6 +108,7 @@
     }).catch(() => {});
   }
   L.add({ id: "aurora", name: "Aurora forecast", icon: "🟢", group: "Sky & Space", taps: AUR_IDS,
+    legend: K.legRamp("#00ff5a,#ffff00,#ff1e00,#ff00dc", "low", "chance overhead", "high"),
     tip: "NOAA 30-minute aurora forecast: chance of seeing the northern lights overhead",
     apply: aurApply,
     attach: (map, on) => {
