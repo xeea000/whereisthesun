@@ -31,29 +31,56 @@
     }
     return aurLoading;
   }
-  function aurGeo(d) {
-    aurTime = d.time;
-    return K.fc(d.pts.map((p) => {
-      return { type: "Feature", properties: { v: p[2] }, geometry: { type: "Point", coordinates: [p[0], p[1]] } };
-    }));
+  /* opt100: smooth heat band. 1-degree grid sampled bilinearly into a Web Mercator canvas (no dots). */
+  var aurGrid = null;
+  function aurAt(lon, lat) {
+    if (!aurGrid) return 0;
+    var x = ((lon % 360) + 360) % 360, y = lat + 90, x0 = Math.floor(x), y0 = Math.max(0, Math.min(179, Math.floor(y)));
+    var fx = x - x0, fy = y - y0, g = (i, j) => aurGrid[(j) * 360 + (i % 360)] || 0;
+    return (g(x0, y0) * (1 - fx) + g(x0 + 1, y0) * fx) * (1 - fy) + (g(x0, y0 + 1) * (1 - fx) + g(x0 + 1, y0 + 1) * fx) * fy;
   }
-  function aurAdd(map, geo) {
-    if (map.getSource("aurora")) map.getSource("aurora").setData(geo);
-    else map.addSource("aurora", { type: "geojson", data: geo, attribution: 'Aurora: <a href="https://www.swpc.noaa.gov/products/aurora-30-minute-forecast" target="_blank" rel="noopener">NOAA SWPC OVATION</a>' });
+  var RAMP = [[5, [40, 220, 110, 0]], [12, [40, 220, 110, 150]], [30, [230, 235, 60, 180]], [60, [255, 70, 50, 200]], [100, [255, 30, 60, 220]]];
+  function aurColor(v) {
+    if (v < 5) return null;
+    for (var i = 1; i < RAMP.length; i++) if (v <= RAMP[i][0]) {
+      var a = RAMP[i - 1], b = RAMP[i], t = (v - a[0]) / (b[0] - a[0]);
+      return a[1].map((c, k) => c + (b[1][k] - c) * t);
+    }
+    return RAMP[RAMP.length - 1][1];
+  }
+  var MAXLAT = 85.0511;
+  function aurImage(d) {
+    aurTime = d.time;
+    aurGrid = new Float32Array(360 * 181);
+    d.pts.forEach((p) => { aurGrid[(Math.round(p[1]) + 90) * 360 + ((Math.round(p[0]) + 360) % 360)] = p[2]; });
+    var W = 720, H = 720, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var cx = cv.getContext("2d"), im = cx.createImageData(W, H);
+    for (var y = 0; y < H; y++) {
+      var lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / H))) * 180 / Math.PI;
+      for (var x = 0; x < W; x++) {
+        var c = aurColor(aurAt(-180 + (x + 0.5) * 360 / W, lat));
+        if (!c) continue;
+        var o = (y * W + x) * 4; im.data[o] = c[0]; im.data[o + 1] = c[1]; im.data[o + 2] = c[2]; im.data[o + 3] = c[3];
+      }
+    }
+    cx.putImageData(im, 0, 0);
+    return cv.toDataURL("image/png");
+  }
+  function aurAdd(map, url) {
+    var co = [[-180, MAXLAT], [180, MAXLAT], [180, -MAXLAT], [-180, -MAXLAT]];
+    if (map.getSource("aurora")) map.getSource("aurora").updateImage({ url: url, coordinates: co });
+    else map.addSource("aurora", { type: "image", url: url, coordinates: co });
     if (!map.getLayer("aurora-dot")) {
-      map.addLayer({ id: "aurora-dot", type: "circle", source: "aurora", paint: {
-        "circle-radius": ["interpolate", ["exponential", 2], ["zoom"], 1, 2.5, 4, 14, 7, 110],
-        "circle-color": ["interpolate", ["linear"], ["get", "v"], 4, "#2bd66b", 20, "#c6f03a", 40, "#ffb02e", 70, "#ff3d6e"],
-        "circle-opacity": ["interpolate", ["linear"], ["get", "v"], 4, 0.18, 30, 0.42, 70, 0.6],
-        "circle-blur": 0.8 } }, K.before(map));
+      map.addLayer({ id: "aurora-dot", type: "raster", source: "aurora", paint: { "raster-opacity": 0.75, "raster-resampling": "linear", "raster-fade-duration": 0 } }, K.before(map));
     }
   }
+  window.SunnyAurora = { at: (lon, lat) => (L.isOn("aurora") && aurGrid ? aurAt(lon, lat) : 0), time: () => aurTime };
   function aurApply(map, on) {
     K.vis(map, AUR_IDS, on);
     if (!on) return;
     aurData().then((d) => {
       if (!L.isOn("aurora")) return;
-      try { aurAdd(map, aurGeo(d)); } catch (e) {}
+      try { aurAdd(map, aurImage(d)); } catch (e) {}
       K.vis(map, AUR_IDS, L.isOn("aurora"));
     }).catch(() => {});
   }
@@ -63,9 +90,10 @@
     attach: (map, on) => {
       map.on("idle", () => { if (L.isOn("aurora") && !map.getLayer("aurora-dot")) aurApply(map, true); });
       setInterval(() => { if (L.isOn("aurora")) aurApply(map, true); }, 30 * 60000);
-      map.on("click", "aurora-dot", (e) => {
-        var f = e.features[0];
-        K.show(map, e.lngLat, "Aurora chance " + f.properties.v + " %", ["Chance of aurora overhead", aurTime ? "Forecast for " + K.esc(aurTime) + " UTC" : ""], ["NOAA SWPC OVATION aurora forecast", "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast"]);
+      map.on("click", (e) => {
+        var v = window.SunnyAurora.at(e.lngLat.lng, e.lngLat.lat);
+        if (v < 5) return;
+        K.show(map, e.lngLat, "Aurora chance " + Math.round(v) + " %", ["Chance of aurora overhead", aurTime ? "Forecast for " + K.esc(aurTime) + " UTC" : ""], ["NOAA SWPC OVATION aurora forecast", "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast"]);
       });
       aurApply(map, on);
     } });
