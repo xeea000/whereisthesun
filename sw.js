@@ -88,11 +88,11 @@ var PRECACHE = [
   "water-temp.js?h=6917bec6fc",
   "waves.js?h=cfbdb3bac4",
   "ca-cell.js?h=87604440a1",
-  "fire-lookout.js?h=1b8976220a",
+  "fire-lookout.js?h=48723de234",
   "ca-cover.js?h=3793788c5f",
   "world-layers.js?h=645ad0c78d",
   "outdoor-layers.js?h=888e543c92",
-  "parks-ca.js?h=915415a197",
+  "parks-ca.js?h=b2b7b47123",
   "sky-card.js?h=29233a05a1",
   "sats.js?h=7e53ca1d3e",
   "sky-draw.js?h=73f5ab9b32",
@@ -297,7 +297,8 @@ function dataFirst(req, rel, h) {
   var key = absUrl(rel + "?c=" + h);
   return caches.open(DATA).then((c) => {
     return c.match(key).then((hit) => {
-      return hit || fetch(req).then((res) => { if (res.ok) c.put(key, res.clone()).catch(noop); return res; });
+      /* opt174: fetch under the content hash, so the network copy always matches data-hashes.json */
+      return hit || fetch(key).then((res) => { if (res.ok) c.put(key, res.clone()).catch(noop); return res; });
     });
   });
 }

@@ -25,7 +25,7 @@
   var apply = () => {
     if (!map) return;
     var want = on();
-    if (want && !rows) { rows = []; K.loadJson("data/fire-lookouts.json?v=1").then((d) => { rows = d; apply(); }).catch(() => { rows = null; }); return; }
+    if (want && !rows) { rows = []; K.loadJson("data/fire-lookouts.json?v=5c42360a").then((d) => { rows = d; apply(); }).catch(() => { rows = null; }); return; }
     if (want && rows && rows.length) { try { add(); } catch (e) { setTimeout(apply, 2000); return; } }
     K.vis(map, ["fire-look-dot"], want);
   };
