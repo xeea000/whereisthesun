@@ -54,7 +54,7 @@
     if (!on("zoom")) return 1;
     var z = 5;
     try {
-      z = window.map && window.map.getZoom ? window.map.getZoom() : 5;
+      z = window.SunnyPlayPin && window.map ? window.SunnyPlayPin.zoom() : window.map && window.map.getZoom ? window.map.getZoom() : 5;
     } catch (e) {}
     if (z >= 5) return 1;
     return Math.max(0.5, 1 - (5 - z) / 6);

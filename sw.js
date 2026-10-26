@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt96"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt97"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -39,7 +39,7 @@ var PRECACHE = [
   "info-panel.js?h=e7f299c8b0",
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=9bb675dbcd",
-  "data-saver.js?h=9b7caac8c2",
+  "data-saver.js?h=92b48c076c",
   "vector-base.js?h=4d1c85b8fd",
   "light-clouds.js?h=b3980fe855",
   "cloud-key.js?h=5d5b626b3c",
@@ -68,15 +68,16 @@ var PRECACHE = [
   "outdoor-layers.js?h=d659829248",
   "sky-card.js?h=7e841a5414",
   "sky-draw.js?h=e97d615995",
-  "offline.js?h=e9c01bf806",
+  "offline.js?h=f591704655",
   "beach-ref.js?h=2da9abd59c",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=f2cd6bfd0b",
   "sw-ready.js?h=66b3059850",
   "beach-data-v.js?h=6226beb469",
+  "play-pin.js?h=d91f012835",
   "app-core.js?h=054588754b",
   "app-timeline.js?h=cfc2a3086a",
-  "app-cloud-layers.js?h=9a918d7d76",
+  "app-cloud-layers.js?h=932dc8e2ce",
   "app-play-buffers.js?h=fd9234bb67",
   "app-play-blend.js?h=38be458b77",
   "app-cloud-frames.js?h=7132727f13",
@@ -85,8 +86,8 @@ var PRECACHE = [
   "app-beach-search.js?h=953df5657c",
   "app-wind-data.js?h=86668761f0",
   "app-wind-draw.js?h=baf9bba812",
-  "app-radar.js?h=10635e9861",
-  "app-play-clock.js?h=390da40ffd",
+  "app-radar.js?h=477c8db9db",
+  "app-play-clock.js?h=06b09bbc8c",
   "app-scrub.js?h=58f9536381",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",

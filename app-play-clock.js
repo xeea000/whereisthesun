@@ -533,6 +533,7 @@
 function sunnyStep13() {
   map.on("movestart", () => {
     mapGesturing = true;
+    if (window.SunnyPlayPin.start()) { try { windOnGestureStart(); } catch (eW) {} cancelIdleGoesWarm(); return; } /* opt97 */
     try { if (radarCanvasOn) hideRadarCanvas(true); } catch (eRc) {}
     try { windOnGestureStart(); } catch (eWg) {}
     cancelIdleGoesWarm();
@@ -540,6 +541,7 @@ function sunnyStep13() {
   });
   map.on("zoomstart", () => {
     mapGesturing = true;
+    if (window.SunnyPlayPin.start()) return; /* opt97: keep playing, follow the map */
     try { if (radarCanvasOn) hideRadarCanvas(true); } catch (eRz) {}
     try { windOnGestureStart(); } catch (eWz) {}
     cancelIdleGoesWarm();
@@ -547,6 +549,7 @@ function sunnyStep13() {
   });
   map.on("zoomend", () => {
     mapGesturing = false;
+    if (window.SunnyPlayPin.active()) { window.SunnyPlayPin.settle(); return; }
     if (playMode) {
       endPlayMapLock();
       applyCloudRasterResampling();
@@ -564,6 +567,7 @@ function sunnyStep13() {
     applyHires();
   });
   map.on("move", () => {
+    if (window.SunnyPlayPin.active()) { window.SunnyPlayPin.follow(); return; }
     /* opt23: lock only on movestart/zoomstart — residual move must not re-lock after unlock */
     if (!playMode) syncCloudMap(false);
   });
@@ -579,7 +583,9 @@ function sunnyStep13() {
   map.on("moveend", () => {
     mapGesturing = false;
     try { windOnGestureEnd(); } catch (eWe) {}
-    if (playMode) {
+    if (window.SunnyPlayPin.active()) {
+      window.SunnyPlayPin.settle();
+    } else if (playMode) {
       endPlayMapLock();
     } else {
       syncCloudMap(true);

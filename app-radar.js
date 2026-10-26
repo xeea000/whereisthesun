@@ -5,7 +5,7 @@
 var radarTweenSource;
   function radarTileZ() {
     /* 256-px tiles: MapLibre zoom z (512-px) ≈ tile zoom z+1; composite resolution cap */
-    var z = Math.round((map ? map.getZoom() : 3) + (window.SunnyDataSaver.imageScale() < 1 ? 0 : 1)); /* opt88 */
+    var z = Math.round((map ? window.SunnyPlayPin.zoom() : 3) + (window.SunnyDataSaver.imageScale() < 1 ? 0 : 1)); /* opt88 */
     return Math.max(0, Math.min(window.SunnyRadar.MAX_ZOOM, z));
   }
   function radarCompKey(i) {
@@ -142,8 +142,8 @@ var radarTweenSource;
   }
   /* continuous radar playhead → shared engine; false = caller falls back to MapLibre step */
   function paintContinuousRadar() {
-    if (!radarOn() || !radarPast.length || !radarHost || tabHidden || mapGesturing || overlayXfadeActive) {
-      if (radarCanvasOn && (mapGesturing || !radarOn())) hideRadarCanvas(radarOn());
+    if (!radarOn() || !radarPast.length || !radarHost || tabHidden || (mapGesturing && !window.SunnyPlayPin.active()) || overlayXfadeActive) {
+      if (radarCanvasOn && ((mapGesturing && !window.SunnyPlayPin.active()) || !radarOn())) hideRadarCanvas(radarOn());
       return false;
     }
     if (!radarCanvasOn && !playAnimating) return false;

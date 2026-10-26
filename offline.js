@@ -102,7 +102,7 @@
       }
       return Promise.all([next(), next(), next(), next()]);
     }).then(() => {
-      setSaved(r.id, { urls: urls, bytes: bytes, at: new Date().toISOString().slice(0, 10), map: withMap ? plan.maxZ : -1, failed: failed });
+      setSaved(r.id, { urls: urls, bytes: bytes, at: new Date().toLocaleDateString("en-CA", { timeZone: "America/Toronto" }), map: withMap ? plan.maxZ : -1, failed: failed });
     }).catch(() => {
       prog.textContent = "Download failed. Try again on Wi-Fi.";
     }).then(() => {

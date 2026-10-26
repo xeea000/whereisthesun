@@ -129,6 +129,8 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     return [x, y];
   }
   function mapBbox3857() {
+    var pb = window.SunnyPlayPin && window.SunnyPlayPin.box();
+    if (pb) return { minx: pb.minx, miny: pb.miny, maxx: pb.maxx, maxy: pb.maxy }; /* opt97: pinned view */
     var b = map.getBounds();
     var sw = lngLatTo3857(b.getWest(), b.getSouth());
     var ne = lngLatTo3857(b.getEast(), b.getNorth());
