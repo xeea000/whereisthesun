@@ -305,11 +305,12 @@ var radarTween, radarComp, radarCompOrder, RADAR_COMP_CAP, RADAR_COMP_MAX_SIDE, 
     for (i = 0; i < btns.length; i++) {
       b = btns[i];
       mode = b.getAttribute("data-overlay");
-      on = mode === overlayMode;
+      on = !overlayNone && mode === overlayMode;
       if (on) b.classList.add("is-on");
       else b.classList.remove("is-on");
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
+    if (btnPlay) { btnPlay.classList.toggle("is-disabled", overlayNone); btnPlay.title = overlayNone ? "Turn on Clouds or Radar to play" : ""; }
   }
   function setCloudSliderDisabled(disabled) {
     if (!cloudOpacityEl) return;

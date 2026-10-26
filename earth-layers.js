@@ -3,7 +3,7 @@
  *   Wildfires   Canadian Wildland Fire Information System (NRCan) satellite hotspots from the
  *               last 24 hours, North America, no key (NASA FIRMS needs a key). About 17 KB,
  *               at most once per 30 minutes. Open Government Licence - Canada.
- *   Meteorites  observed meteorite falls, data/meteorite-falls.json from NASA Meteorite Landings
+ *   Meteorites  observed meteorite falls, data/met (points + shards from data/meteorite-falls.json), NASA
  *               (Meteoritical Society), public domain. Static.
  *   Geology     Macrostrat bedrock geology vector tiles (CC BY 4.0), zoom 5 and closer only;
  *               tap for rock type, age and unit name (Macrostrat API). */
@@ -66,15 +66,17 @@
       });
       fireApply(map, on);
     } });
-  /* meteorite falls */
+  /* meteorite falls: tiny points file, detail shard fetched on tap (opt96) */
+  var MET = "data/met/falls";
+  var metMeta = null;
   function metApply(map, on) {
     K.vis(map, ["meteor-dot"], on);
     if (!on) return;
-    K.loadJson("data/meteorite-falls.json").then((d) => {
+    K.loadJson(MET + ".p.json").then((d) => {
+      metMeta = d;
       if (!map.getSource("meteorites")) {
-        map.addSource("meteorites", { type: "geojson", attribution: 'Meteorites: <a href="https://www.lpi.usra.edu/meteor/" target="_blank" rel="noopener">Meteoritical Society</a> via NASA', data: K.fc(d.falls.map((f) => {
-          return { type: "Feature", properties: { n: f[0], c: f[1], m: f[2], y: f[3] }, geometry: { type: "Point", coordinates: [f[5], f[4]] } };
-        })) });
+        map.addSource("meteorites", { type: "geojson", attribution: 'Meteorites: <a href="https://www.lpi.usra.edu/meteor/" target="_blank" rel="noopener">Meteoritical Society</a> via NASA',
+          data: K.fc(window.SunnyPoints.toFeatures(d)) });
       }
       if (!map.getLayer("meteor-dot")) {
         map.addLayer({ id: "meteor-dot", type: "circle", source: "meteorites", paint: {
@@ -93,10 +95,13 @@
     attach: (map, on) => {
       idleAdd(map, "meteorites", "meteor-dot", metApply);
       map.on("click", "meteor-dot", (e) => {
-        var p = e.features[0].properties;
-        var rec = "https://www.lpi.usra.edu/meteor/metbull.php?sea=" + encodeURIComponent(p.n) + "&srt=name&lrec=50";
-        K.show(map, e.lngLat, p.n + " meteorite", ["Seen falling" + (p.y ? " in " + K.esc(p.y) : ""), "Type " + K.esc(p.c),
-          p.m != null && p.m !== "null" ? "Found: " + mass(+p.m) : ""], ["Meteoritical Bulletin record", rec]);
+        var ll = e.features[0].geometry.coordinates;
+        var pp = K.show(map, ll, "", [window.SunnyPoints.skeleton("Meteorite fall")], "Meteoritical Bulletin");
+        window.SunnyPoints.detail(MET, metMeta, e.features[0].properties.i, "opt96").then((p) => {
+          var rec = "https://www.lpi.usra.edu/meteor/metbull.php?sea=" + encodeURIComponent(p.n) + "&srt=name&lrec=50";
+          if (pp.isOpen()) pp.setHTML(K.card(p.n + " meteorite", ["Seen falling" + (p.y ? " in " + K.esc(p.y) : ""), "Type " + K.esc(p.c),
+            p.m != null && p.m !== "" ? "Found: " + mass(+p.m) : ""], ["Meteoritical Bulletin record", rec]));
+        }).catch(() => { if (pp.isOpen()) pp.setHTML(K.card("Meteorite fall", ["Could not load details. Tap again when online."], "Meteoritical Bulletin")); });
       });
       metApply(map, on);
     } });

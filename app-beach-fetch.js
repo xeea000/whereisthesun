@@ -488,6 +488,8 @@
   function showPopup(b, lngLat, extra, imgUrl) {
     var ll = lngLat || [b.lon, b.lat];
     var html = popupHtml(b, extra, imgUrl);
+    var ring = window.SunnyBeachCard ? window.SunnyBeachCard.html(b) : "";
+    if (ring) html = html.replace(/(<div class="pf-src">)/, ring + "$1");
     if (popup) {
       try {
         popup.setLngLat(ll).setHTML(html);

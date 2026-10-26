@@ -1,6 +1,6 @@
 // workspace/whereisthesun/observatories.js
 /* SUNNY sightseeing layer (opt90): telescopes and observatories worldwide.
- * Data: data/observatories.json, built once by tools/build-observatories.js from
+ * Data: data/obs (points file plus detail shards, opt96) split from data/observatories.json, built once by tools/build-observatories.js from
  * OpenStreetMap (ODbL), plus Wikidata (CC0) radio arrays and neutrino, gravitational-wave
  * and cosmic-ray detectors via tools/build-astro-extra.js (opt91). Fetched only when the switch is first turned on. Sites cluster
  * when zoomed out; each site is a small telescope icon. Tap for name, type, size,
@@ -15,13 +15,12 @@
   var loading = null;
   var map = null;
   var popup = null;
+  var meta = null;
+  var BASE = "data/obs/sites";
+  /* opt96: only the tiny points file loads; a tap fetches that site's detail shard */
   function toGeo(d) {
-    var feats = [];
-    for (var i = 0; i < d.sites.length; i++) {
-      var s = d.sites[i];
-      feats.push({ type: "Feature", properties: s, geometry: { type: "Point", coordinates: [s.lon, s.lat] } });
-    }
-    return { type: "FeatureCollection", features: feats };
+    meta = d;
+    return { type: "FeatureCollection", features: window.SunnyPoints.toFeatures(d).map((f) => { f.properties.cat = f.properties.k; return f; }) };
   }
   function readJson(res) {
     if (!res.ok) throw new Error("observatories " + res.status);
@@ -32,7 +31,7 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/observatories.json?d=opt95").then(readJson).then(keep);
+    if (!loading) loading = fetch(BASE + ".p.json?d=opt96").then(readJson).then(keep);
     return loading;
   }
   /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */
@@ -189,8 +188,14 @@
   function onClick(e) {
     var f = e.features && e.features[0];
     if (!f) return;
-    if (!popup) popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 12 });
-    popup.setLngLat(f.geometry.coordinates).setHTML(popupHtml(f.properties)).addTo(map);
+    var ll = f.geometry.coordinates;
+    var pp = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 12 });
+    pp.setLngLat(ll).setHTML(window.SunnyPoints.skeleton("Observatory")).addTo(map);
+    window.SunnyPoints.detail(BASE, meta, f.properties.i, "opt96").then((d) => {
+      d.lon = ll[0];
+      d.lat = ll[1];
+      if (pp.isOpen()) pp.setHTML(popupHtml(d));
+    }).catch(() => { if (pp.isOpen()) pp.setHTML('<div class="pf-now">Could not load details. Tap again when online.</div>'); });
   }
   function onCluster(e) {
     var f = e.features && e.features[0];

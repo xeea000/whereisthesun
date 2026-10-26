@@ -332,7 +332,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     var targetOp = gibsEffectiveOpacity();
     try {
       m.setPaintProperty(GIBS_LAYER, "raster-fade-duration", HI_RES_FADE_MS);
-      m.setPaintProperty(GIBS_LAYER, "raster-opacity", targetOp);
+      m.setPaintProperty(GIBS_LAYER, "raster-opacity", overlayNone ? 0 : targetOp);
     } catch (eFd) {}
     setStaticGibsTiles(url);
     restackCloudRasters();

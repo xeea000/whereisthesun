@@ -15,6 +15,7 @@
 "use strict";
 var fs = require("fs");
 var path = require("path");
+var SP = require("./split-points.js");
 var CACHE = process.argv[2];
 var OHT = process.argv[3];
 var PCA = process.argv[4];
@@ -186,6 +187,9 @@ function uniq(rows) {
     return true;
   }
 }
+function listDir(d) {
+  return fs.readdirSync(path.join(__dirname, "..", d)).sort().map((f) => { return d + "/" + f; });
+}
 function sharedSize(f) {
   var body = fs.readFileSync(path.join(__dirname, "..", f));
   return { url: f, gz: require("zlib").gzipSync(body).length };
@@ -213,17 +217,17 @@ async function main() {
     }
     fs.mkdirSync(path.join(OUT, R.id), { recursive: true });
     var files = {};
-    [["camps", camps, "lon,lat,name,kind,backcountry,fee,website,operator,osm"], ["plaques", plaques, "lon,lat,name,kind,inscription,date,website,src,osm"]].forEach(write);
+    files.camps = SP.split(path.join(OUT, R.id, "camps"), camps.map((r) => {
+      return { lon: r[0], lat: r[1], code: r[3], row: [r[2], r[4], r[5], r[6], r[7], r[8]] };
+    }), "name,backcountry,fee,website,operator,osm");
+    files.plaques = SP.split(path.join(OUT, R.id, "plaques"), plaques.map((r) => {
+      return { lon: r[0], lat: r[1], code: r[7], row: [r[2], r[3], r[4], r[5], r[6], r[8]] };
+    }), "name,kind,inscription,date,website,osm");
     index.regions.push({ id: R.id, name: R.name, bbox: box, files: files });
-    console.log(R.id, camps.length, plaques.length);
-    function write(f) {
-      var body = JSON.stringify({ cols: f[2], rows: f[1] });
-      fs.writeFileSync(path.join(OUT, R.id, f[0] + ".json"), body);
-      files[f[0]] = { n: f[1].length, bytes: body.length, gz: require("zlib").gzipSync(body).length };
-    }
+    console.log(R.id, JSON.stringify(files));
   }
   /* shared data the offline download also saves, with sizes so the phone can show MB first */
-  index.shared = ["data/observatories.json", "data/impact-craters.json", "data/meteorite-falls.json", "data/eclipses.json"].map(sharedSize);
+  index.shared = ["data/impact-craters.json", "data/eclipses.json"].concat(listDir("data/obs"), listDir("data/met")).map(sharedSize);
   fs.writeFileSync(path.join(OUT, "index.json"), JSON.stringify(index));
 }
 main();

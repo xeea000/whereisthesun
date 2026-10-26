@@ -4,7 +4,8 @@
  * opens is shown here as a card instead. Cards opened by the same tap stack into one merged card,
  * so stacked layers (geology under Crown Land, say) all show their details together.
  * Other parts add text blocks with SunnyInfo.section(id, title, html) (the Tonight block uses it).
- * Closed by default, remembers open or closed, and shows a small dot when there is new info. */
+ * opt96: never opens by itself. A tap shows a small peek card with a More button; the tab glimmers
+ * and shows a dot when there is new info. Opens only from the tab or More. */
 (() => {
   "use strict";
   var panel, body, cardsEl, secEl, tab, dot;
@@ -28,11 +29,42 @@
     tab.textContent = on ? "›" : "‹";
     tab.appendChild(dot);
     tab.setAttribute("aria-expanded", on ? "true" : "false");
-    if (on) dot.hidden = true;
+    if (on) { dot.hidden = true; tab.classList.remove("ip-new"); }
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (e) {}
+    if (peek) renderPeek();
   }
   function news() {
-    if (!isOpen()) dot.hidden = false;
+    if (isOpen()) return;
+    dot.hidden = false;
+    tab.classList.remove("ip-new");
+    void tab.offsetWidth;
+    tab.classList.add("ip-new");
+  }
+  /* opt96: a tap shows a small peek card near the bottom; More opens the panel. Never auto-opens. */
+  var peek = null;
+  function renderPeek() {
+    if (!peek) {
+      peek = el("div", "ip-peek");
+      peek.id = "ip-peek";
+      document.body.appendChild(peek);
+    }
+    var live = cards.filter((c) => { return c.html; });
+    if (!live.length || isOpen()) { peek.hidden = true; return; }
+    var tmp = el("div");
+    tmp.innerHTML = live[0].html;
+    var src = tmp.querySelector(".pf-src");
+    if (src) src.remove();
+    peek.innerHTML = '<div class="pk-body"></div><div class="pk-foot"><span class="pk-src"></span>' +
+      '<button type="button" class="pk-more">More ›</button><button type="button" class="pk-x" aria-label="Close">×</button></div>';
+    var ring = tmp.querySelector(".bx-ring"), h2 = tmp.querySelector("h2");
+    peek.classList.toggle("pk-tall", !!ring);
+    peek.querySelector(".pk-body").innerHTML = ring ? (h2 ? h2.outerHTML : "") + ring.outerHTML : tmp.innerHTML;
+    if (src) peek.querySelector(".pk-src").appendChild(src);
+    if (live.length > 1) peek.querySelector(".pk-more").textContent = "More (+" + (live.length - 1) + ") ›";
+    peek.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+    peek.querySelector(".pk-more").addEventListener("click", () => { setOpen(true); });
+    peek.querySelector(".pk-x").addEventListener("click", () => { cards.slice().forEach((c) => { c.p.remove(); }); });
+    peek.hidden = false;
   }
   function build() {
     panel = el("aside", "ip-panel");
@@ -45,6 +77,11 @@
     dot = el("span", "ip-dot");
     dot.hidden = true;
     var head = el("div", "ip-head", "Info");
+    var close = el("button", "ip-close", "×");
+    close.type = "button";
+    close.setAttribute("aria-label", "Close the info panel");
+    close.addEventListener("click", () => { setOpen(false); });
+    head.appendChild(close);
     body = el("div", "ip-body");
     cardsEl = el("div", "ip-cards");
     secEl = el("div", "ip-secs");
@@ -57,9 +94,7 @@
     panel.appendChild(body);
     document.body.appendChild(panel);
     tab.addEventListener("click", () => { setOpen(!isOpen()); });
-    var saved = null;
-    try { saved = localStorage.getItem(KEY); } catch (e) {}
-    setOpen(saved === "1");
+    setOpen(false);
     document.addEventListener("pointerdown", (e) => {
       if (!panel.contains(e.target)) tapGen++;
     }, true);
@@ -94,11 +129,13 @@
     if (hit) hit.html = p._sHtml;
     else cards.push({ p: p, html: p._sHtml });
     renderCards();
-    if (Date.now() - (window.sunnyPinTapAt || 0) > 1500) setOpen(true);
+    renderPeek();
+    if (!hit) news();
   }
   function drop(p) {
     cards = cards.filter((c) => { return c.p !== p; });
     if (cardsEl) renderCards();
+    if (peek) renderPeek();
   }
   function patch() {
     var P = window.maplibregl && window.maplibregl.Popup && window.maplibregl.Popup.prototype;

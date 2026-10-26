@@ -388,6 +388,26 @@ var radarTweenSource;
       if (!tabHidden && cloudTimes.length) setCloudFrame(cloudIndex);
     } catch (eFrame) {}
   }
+  /* opt96: tapping the lit Clouds or Radar button again turns both off; remembered. */
+  function setOverlayNone(on, silent, mode) {
+    if (on) {
+      if (playAnimating) stopPlay();
+      if (overlayMode === "radar") setOverlayMode("clouds", { force: true, silent: true, instant: true });
+      overlayNone = true;
+      try { hideRadarCanvas(true); } catch (eH) {}
+      try { stopRadarRefresh(); } catch (eS) {}
+      setMapLibreCloudsHidden(true);
+      if (map && map.getLayer("iem-vis")) try { map.setLayoutProperty("iem-vis", "visibility", "none"); } catch (eI) {}
+      if (!silent) setStatus("Clouds and Radar off.");
+    } else {
+      overlayNone = false;
+      setOverlayMode(mode || overlayMode, { force: true });
+      setMapLibreCloudsHidden(false);
+      if (map && map.getLayer("iem-vis")) try { map.setLayoutProperty("iem-vis", "visibility", "visible"); } catch (eI) {}
+    }
+    saveSetting("sunny-overlay-none", on ? "1" : "0");
+    syncOverlaySeg();
+  }
   function setOverlayMode(mode, opts) {
     opts = opts || {};
     if (mode !== "clouds" && mode !== "radar") return;

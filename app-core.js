@@ -11,6 +11,7 @@ var overlaySeg, rangeSeg, sunnyApp_origin, homeCountry, beaches, waitingForTap, 
 var userMarker, destMarker, popup, hoverId, dwellTimer, playTimer, cloudTimes, cloudIndex;
 var hourlyCache, currentWxCache, CURRENT_WX_TTL_MS, wikiCache, cloudOpacity, _co, searchingSunny, overlayIds;
 var BASEMAP_KEY, OPACITY_KEY, LABELS_KEY, INTL_KEY, RADAR_KEY, OVERLAY_KEY, WIND_KEY, LOOP_KEY;
+var overlayNone = false; /* opt96: Clouds and Radar both off */
 var SPEED_KEY, RANGE_KEY, LOOP_START_KEY, _sunnySavedLoopStartFrac, overlayMode, playLoop, playSpeed, cloudOpacitySavedForRadar;
 var OVERLAY_XFADE_MS, overlayXfadeRaf, overlayXfadeGen, overlayXfadeActive, VIEW_KEY, BASEMAP_IDS, basemapMode, MOVE_DEBOUNCE_MS;
 var viewSaveTimer, settingsRestored, savedBasemap, savedOp, opN, savedLabels, savedIntl, savedOverlay;

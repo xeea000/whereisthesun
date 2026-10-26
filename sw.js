@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt95"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt96"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,10 +32,13 @@ var PRECACHE = [
   "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=de1efe43ac",
   "layers-panel.css?h=22dafdb7c6",
-  "info-panel.css?h=07ad7014ed",
+  "info-panel.css?h=c131f3b4a1",
   "vendor/maplibre-gl.js?h=be9633c4d8",
-  "info-panel.js?h=cc748fd062",
-  "beach-icons.js?h=b08e97bda4",
+  "tap-snap.js?h=5bfcd17fb8",
+  "points.js?h=bd3ec9c286",
+  "info-panel.js?h=e7f299c8b0",
+  "beach-card.js?h=0237ca65e1",
+  "beach-icons.js?h=9bb675dbcd",
   "data-saver.js?h=9b7caac8c2",
   "vector-base.js?h=4d1c85b8fd",
   "light-clouds.js?h=b3980fe855",
@@ -52,39 +55,39 @@ var PRECACHE = [
   "craters.js?h=5145d0d840",
   "sky-glow.js?h=67ea06339b",
   "beach-toggle.js?h=29ef62a7e1",
-  "observatories.js?h=00d5442db7",
+  "observatories.js?h=d8f1e358b2",
   "crown-land.js?h=4f17ab26f8",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
-  "layer-kit.js?h=75ee7a2b2e",
+  "layer-kit.js?h=6755344adb",
   "layers-panel.js?h=f6dc3d4033",
   "existing-layers.js?h=9f6ba55b3e",
   "sky-layers.js?h=adfaed2f60",
-  "earth-layers.js?h=0b15f41f97",
-  "outdoor-layers.js?h=819f426616",
+  "earth-layers.js?h=93d282598f",
+  "outdoor-layers.js?h=d659829248",
   "sky-card.js?h=7e841a5414",
   "sky-draw.js?h=e97d615995",
-  "offline.js?h=ecb2c8df32",
+  "offline.js?h=e9c01bf806",
   "beach-ref.js?h=2da9abd59c",
   "wind-play-fade.js?h=e342e19b7e",
   "frame-tween.js?h=f2cd6bfd0b",
   "sw-ready.js?h=66b3059850",
   "beach-data-v.js?h=6226beb469",
-  "app-core.js?h=4603976dda",
+  "app-core.js?h=054588754b",
   "app-timeline.js?h=cfc2a3086a",
-  "app-cloud-layers.js?h=d867f3ff92",
-  "app-play-buffers.js?h=13c014bb98",
+  "app-cloud-layers.js?h=9a918d7d76",
+  "app-play-buffers.js?h=fd9234bb67",
   "app-play-blend.js?h=38be458b77",
-  "app-cloud-frames.js?h=c1f1afe3e7",
+  "app-cloud-frames.js?h=7132727f13",
   "app-beach-store.js?h=2f443c94e4",
-  "app-beach-fetch.js?h=7461979134",
+  "app-beach-fetch.js?h=ff99802b33",
   "app-beach-search.js?h=953df5657c",
   "app-wind-data.js?h=86668761f0",
-  "app-wind-draw.js?h=f8483c2264",
-  "app-radar.js?h=42414e10ae",
-  "app-play-clock.js?h=49e4b1f99a",
-  "app-scrub.js?h=0e89dbd731",
+  "app-wind-draw.js?h=baf9bba812",
+  "app-radar.js?h=10635e9861",
+  "app-play-clock.js?h=390da40ffd",
+  "app-scrub.js?h=58f9536381",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",
@@ -221,7 +224,7 @@ function isTile(u) {
 function isStaticData(u) {
   if (u.origin !== self.location.origin) return false;
   var p = u.pathname;
-  return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json" || p.slice(-23) === "/data/observatories.json";
+  return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json" || p.slice(-23) === "/data/observatories.json" || p.indexOf("/data/obs/") !== -1 || p.indexOf("/data/met/") !== -1;
 }
 function isBeachData(u) {
   return u.origin === self.location.origin && u.pathname.indexOf("/data/") !== -1 && u.searchParams.has("h");

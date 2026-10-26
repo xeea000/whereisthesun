@@ -386,7 +386,11 @@ function sunnyStep14() {
       }
       if (!t || t === overlaySeg) return;
       var mode = t.getAttribute("data-overlay");
-      if (mode) setOverlayMode(mode);
+      if (!mode) return;
+      if (mode === overlayMode && !overlayNone) { setOverlayNone(true); return; }
+      var was = overlayNone;
+      if (was) setOverlayNone(false, false, mode);
+      else setOverlayMode(mode);
     });
   })();
   (() => {

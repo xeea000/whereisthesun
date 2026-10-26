@@ -260,6 +260,7 @@
     } catch (e3) {}
     try {
       setOverlayMode(overlayMode, { force: true, silent: true, deferFetch: true });
+      if (localStorage.getItem("sunny-overlay-none") === "1") setOverlayNone(true, true);
     } catch (eRadarR) {}
     try {
       var raw = localStorage.getItem(VIEW_KEY);
@@ -501,6 +502,7 @@
     }
   }
   function togglePlay() {
+    if (overlayNone && !playAnimating) { setStatus("Turn on Clouds or Radar to play."); return; }
     /* opt45/opt47: if animating → always stop; else start. Never "pressed but no timer → resume". */
     if (playAnimating) {
       stopPlay();

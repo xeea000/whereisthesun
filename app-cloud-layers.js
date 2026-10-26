@@ -76,7 +76,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     /* opt63: tiles are already cloud-only (cloud-key.js); neutral paint so static matches Play */
     var fadeDur = (layerId === "iem-vis") ? 320 : HI_RES_FADE_MS; /* opt50: GIBS fade-in over pop */
     return {
-      "raster-opacity": opacity == null ? 0 : opacity,
+      "raster-opacity": opacity == null || overlayNone ? 0 : opacity,
       "raster-resampling": cloudResamplingForLayer(layerId || GIBS_LAYER),
       "raster-fade-duration": fadeDur,
       "raster-brightness-min": 0,

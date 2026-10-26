@@ -64,7 +64,7 @@
     return index;
   }
   function packUrl(ix, id, layer) {
-    return "data/packs/" + id + "/" + layer + ".json?h=" + ix.built;
+    return "data/packs/" + id + "/" + layer + ".p.json?h=" + ix.built;
   }
   function overlaps(b, v) {
     return !(b[2] < v.getWest() || b[0] > v.getEast() || b[3] < v.getSouth() || b[1] > v.getNorth());
@@ -88,14 +88,8 @@
       have.forEach((id) => { feats = feats.concat(mem[id]); });
       map.getSource(src).setData(K.fc(feats));
     }
-    function toFeats(j) {
-      var cols = j.cols.split(",");
-      return j.rows.map((r) => {
-        var p = {};
-        for (var i = 2; i < cols.length; i++) p[cols[i]] = r[i];
-        return { type: "Feature", properties: p, geometry: { type: "Point", coordinates: [r[0], r[1]] } };
-      });
-    }
+    var metas = {};
+    var built = "";
     function refresh(map) {
       if (!L.isOn(o.id) || map.getZoom() < o.minZoom) return;
       packIndex().then((ix) => {
@@ -106,7 +100,9 @@
         want.forEach((id) => {
           if (mem[id] || loading[id]) return;
           loading[id] = fetch(packUrl(ix, id, o.id)).then((r) => { return r.json(); }).then((j) => {
-            mem[id] = toFeats(j);
+            metas[id] = j;
+            built = ix.built;
+            mem[id] = window.SunnyPoints.toFeatures(j, { r: id });
             draw(map, want);
           }).catch(() => {}).then(() => { delete loading[id]; });
         });
@@ -124,7 +120,16 @@
       attach: (map, on) => {
         map.on("moveend", () => { refresh(map); });
         map.on("idle", () => { if (L.isOn(o.id) && !map.getLayer(ids[0])) apply(map, true); });
-        map.on("click", ids[0], (e) => { o.tap(map, e, e.features[0].properties); });
+        map.on("click", ids[0], (e) => {
+          var f = e.features[0].properties;
+          var ll = e.features[0].geometry.coordinates;
+          var pp = K.show(map, ll, "", [window.SunnyPoints.skeleton(o.label(f.k))], o.name);
+          window.SunnyPoints.detail("data/packs/" + f.r + "/" + o.id, metas[f.r], f.i, built).then((d) => {
+            d.kind = d.kind || f.k;
+            d.src = f.k;
+            if (pp.isOpen()) pp.setHTML(o.html(d));
+          }).catch(() => { if (pp.isOpen()) pp.setHTML(K.card(o.label(f.k), ["Could not load details. Check your connection and tap again."], o.name)); });
+        });
         apply(map, on);
       } });
   }
@@ -138,22 +143,24 @@
   var OSM_ATTR = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
   packLayer({ id: "camps", name: "Campsites & lookouts", icon: "⛺", group: "Outdoors", minZoom: 7, attr: OSM_ATTR,
     tip: "Campgrounds, backcountry sites and fire lookout towers (OpenStreetMap), saved per province or region. Zoom in to see",
-    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 15, 7], "circle-color": ["match", ["get", "kind"], "l", "#e0482a", "#3aa35b"],
+    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 15, 7], "circle-color": ["match", ["get", "k"], "l", "#e0482a", "#3aa35b"],
       "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 },
-    tap: (map, e, p) => {
-      K.show(map, e.lngLat, p.name, [p.kind === "l" ? "Lookout tower" : (+p.backcountry ? "Backcountry campsite" : "Campground"),
+    label: (k) => { return k === "l" ? "Lookout tower" : "Campsite"; },
+    html: (p) => {
+      return K.card(p.name || "Campsite", [p.kind === "l" ? "Lookout tower" : (+p.backcountry ? "Backcountry campsite" : "Campground"),
         p.operator ? "Run by " + K.esc(p.operator) : "", p.fee ? "Fee: " + K.esc(p.fee) : "", link(p.website, "Website")], ["OpenStreetMap (ODbL)", osmUrl(p.osm)]);
     } });
   var PLQ_SRC = { h: ["Ontario Heritage Trust plaque list", ""], p: ["Parks Canada", ""] };
   packLayer({ id: "plaques", name: "Historic plaques & sites", icon: "🪧", group: "History", minZoom: 9,
     attr: OSM_ATTR + ', <a href="https://www.heritagetrust.on.ca/" target="_blank" rel="noopener">Ontario Heritage Trust</a>, <a href="https://parks.canada.ca/" target="_blank" rel="noopener">Parks Canada</a>',
     tip: "Historical plaques, monuments, Ontario Heritage Trust plaques and national historic sites. Zoom in to see",
-    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 2.5, 16, 6.5], "circle-color": ["match", ["get", "src"], "p", "#b0302a", "h", "#1e6bff", "#5a3fb0"],
+    paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 2.5, 16, 6.5], "circle-color": ["match", ["get", "k"], "p", "#b0302a", "h", "#1e6bff", "#5a3fb0"],
       "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 },
-    tap: (map, e, p) => {
+    label: (k) => { return k === "p" ? "National historic site" : k === "h" ? "Heritage plaque" : "Historic plaque"; },
+    html: (p) => {
       var kind = String(p.kind || "").replace(/_/g, " ");
       var src = p.src === "o" ? ["OpenStreetMap (ODbL)", osmUrl(p.osm)] : [PLQ_SRC[p.src][0], p.website];
-      K.show(map, e.lngLat, p.name, [kind ? K.esc(kind.charAt(0).toUpperCase() + kind.slice(1)) : "", p.date ? "Date " + K.esc(p.date) : "",
+      return K.card(p.name || "Historic plaque", [kind ? K.esc(kind.charAt(0).toUpperCase() + kind.slice(1)) : "", p.date ? "Date " + K.esc(p.date) : "",
         p.inscription ? '<i class="lp-inscr">' + K.esc(p.inscription) + "</i>" : "", p.src === "o" ? link(p.website, "More") : ""], src);
     } });
 })();

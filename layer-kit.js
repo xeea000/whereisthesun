@@ -18,12 +18,17 @@
     var a = s[1] ? '<a href="' + esc(s[1]) + '" target="_blank" rel="noopener">' + esc(s[0]) + "</a>" : esc(s[0]);
     return '<div class="pf-src">Source: ' + a + "</div>";
   }
+  function card(title, lines, src) {
+    return '<div class="pf-now"><span class="pf-facts"><b>' + esc(title) + "</b>" +
+      lines.filter(Boolean).map((l) => { return "<br>" + l; }).join("") + "</span></div>" + srcHtml(src);
+  }
   function show(map, lngLat, title, lines, src) {
     var html = '<div class="pf-now"><span class="pf-facts"><b>' + esc(title) + "</b>" +
       lines.filter(Boolean).map((l) => { return "<br>" + l; }).join("") +
       '</span></div>' + srcHtml(src);
     popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "280px", className: "pf-popup", offset: 8 });
     popup.setLngLat(lngLat).setHTML(html).addTo(map);
+    return popup;
   }
   function before(map) {
     var ids = ["obs-cluster", "craters-fill", "beaches-fill", "beaches-line", "beaches-dot"];
@@ -155,6 +160,6 @@
   function fc(feats) {
     return { type: "FeatureCollection", features: feats || [] };
   }
-  window.SunnyKit = { esc: esc, show: show, before: before, vis: vis, getStore: getStore, putStore: putStore,
+  window.SunnyKit = { esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc };
 })();

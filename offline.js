@@ -1,7 +1,7 @@
 // workspace/whereisthesun/offline.js
 /* SUNNY "Save for offline" (opt95), at the bottom of the layers sidebar. Lists each province or USA
  * region with its download size, and saves on request only (never by itself): the region's
- * campsite and plaque packs, the shared observatories, craters, meteorites and eclipses files,
+ * campsite and plaque packs (points plus every detail shard, so taps work offline), the shared observatories, craters, meteorites and eclipses files,
  * and optionally OpenFreeMap vector map tiles over the region up to a capped zoom. Shows the MB
  * first, warns on mobile data when the phone says so, shows progress, and can delete a region.
  * Saved files live in their own cache (sunny-offline-1); the service worker uses them only when
@@ -51,7 +51,7 @@
   }
   function packBytes(r, ix) {
     var n = 0;
-    Object.keys(r.files).forEach((k) => { n += r.files[k].gz; });
+    Object.keys(r.files).forEach((k) => { n += r.files[k].gz + (r.files[k].dgz || 0); });
     (ix.shared || []).forEach((s) => { n += s.gz; });
     return n;
   }
@@ -71,7 +71,12 @@
     if (onMobileData()) msg += "\n\nYou look to be on mobile data. This will use your data plan. Wi-Fi is better.";
     if (!window.confirm(msg)) return;
     busy = true;
-    var urls = ["data/packs/index.json"].concat(Object.keys(r.files).map((k) => { return "data/packs/" + r.id + "/" + k + ".json?h=" + ix.built; }));
+    var urls = ["data/packs/index.json"];
+    Object.keys(r.files).forEach((k) => {
+      var b = "data/packs/" + r.id + "/" + k;
+      urls.push(b + ".p.json?h=" + ix.built);
+      for (var d = 0; d < (r.files[k].shards || 0); d++) urls.push(b + ".d" + d + ".json?h=" + ix.built);
+    });
     (ix.shared || []).forEach((s) => { urls.push(s.url); });
     var prog = row.querySelector(".off-prog");
     var go = withMap ? tileTemplate().then((t) => {

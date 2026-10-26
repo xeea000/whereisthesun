@@ -203,7 +203,7 @@ var labelsIdleHealArmed, labelsHealBusy;
     /* opt14/opt33: short fade on IEM softens handoff; GOES stays snappy via applyCloudPaint */
     var fade = (layerId === "iem-vis") ? 320 : 0;
     var paint = {
-      "raster-opacity": opacity,
+      "raster-opacity": overlayNone ? 0 : opacity,
       "raster-resampling": cloudResamplingForLayer(layerId),
       "raster-fade-duration": fade
     };

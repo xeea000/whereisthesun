@@ -119,16 +119,17 @@
     g.beginPath(); g.arc(0, -2, 1.1, 0, 7); g.fillStyle = "rgba(255,255,255,.85)"; g.fill();
     g.restore();
   };
-  var draw = (s) => {
-    var full = mode !== "simple";
+  var draw = (s, px, asCanvas, forceFull) => {
+    var full = forceFull || mode !== "simple";
+    px = px || PX;
     var c = document.createElement("canvas");
-    c.width = c.height = 64 * PX;
+    c.width = c.height = 64 * px;
     var g = c.getContext("2d");
-    g.scale(PX, PX);
+    g.scale(px, px);
     if (!s) {
       g.beginPath(); g.arc(32, 32, 13, 0, 7); g.fillStyle = "#8a8a8a"; g.fill();
       g.lineWidth = 1.5; g.strokeStyle = "#111"; g.stroke();
-      return g.getImageData(0, 0, c.width, c.height);
+      return asCanvas ? c : g.getImageData(0, 0, c.width, c.height);
     }
     if (full) {
       g.beginPath(); g.arc(32, 32, 30, 0, 7); g.fillStyle = "#151515"; g.fill();
@@ -154,7 +155,7 @@
       pin(g, 0, 1, "#e8342e");
       s.ev.forEach((e) => { pin(g, (+e.slice(1) / 4) * Math.PI / 6, 0.85, e.charAt(0) === "s" ? "#ff8a3d" : "#ffd54a"); });
     }
-    return g.getImageData(0, 0, c.width, c.height);
+    return asCanvas ? c : g.getImageData(0, 0, c.width, c.height);
   };
   var image = (m, s) => {
     var k = keyOf(s);
@@ -188,7 +189,7 @@
     if (!m.getLayer("beaches-sun") && m.getLayer("beaches-dot")) {
       m.addLayer({ id: "beaches-sun", type: "symbol", source: "beach-suns",
         layout: { "icon-image": ["get", "i"], "icon-allow-overlap": true, "icon-ignore-placement": true,
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.35, 6, 0.5, 9, 0.62, 13, 0.75] } }, "beaches-dot");
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8] } }, "beaches-dot");
       m.setPaintProperty("beaches-dot", "circle-opacity", 0);
       m.setPaintProperty("beaches-dot", "circle-stroke-opacity", 0);
       var vis = m.getLayoutProperty("beaches-dot", "visibility");
@@ -257,5 +258,18 @@
     if ((m.getLayoutProperty("beaches-sun", "visibility") || "visible") !== v) m.setLayoutProperty("beaches-sun", "visibility", v);
   }, 2500);
   setInterval(() => { paint(lastList); }, 5 * 60000);
-  window.SunnyBeachIcons = { paint: paint, setMode: setMode, state: state, draw: draw };
+  /* Hourly cloud and weather code for the next 12 hours (falls back to the current cloud). */
+  var hourly = (b) => {
+    var w = wx[bin(b.lat, b.lon)], now = Date.now(), out = [];
+    var i0 = w ? Math.max(0, Math.floor((now - w.start) / 3600000)) : 0;
+    var c = b.cloud;
+    if (c == null && window.sunnyCachedWx) c = (window.sunnyCachedWx(b.lat, b.lon) || {}).cloud;
+    for (var h = 0; h < 12; h++) {
+      var ok = w && w.cl[i0 + h] != null;
+      out.push({ t: now + h * 3600000, cl: ok ? w.cl[i0 + h] : c, code: ok ? w.code[i0 + h] : (c == null ? null : codeFromCloud(c)) });
+    }
+    return out;
+  };
+  var glyphUrl = (code, day) => { var im = ICONS[GLYPH(code, day)]; return im ? im.src : ""; };
+  window.SunnyBeachIcons = { paint: paint, setMode: setMode, state: state, draw: draw, hourly: hourly, glyphUrl: glyphUrl, light: light };
 })();

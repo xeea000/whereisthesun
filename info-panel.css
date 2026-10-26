@@ -23,3 +23,39 @@
 @media (max-width: 600px) {
   .ip-panel { top: 48px; bottom: 120px; }
 }
+.sk-line{display:block;height:10px;margin:7px 0;border-radius:5px;background:linear-gradient(90deg,#3a3f47 25%,#596170 50%,#3a3f47 75%);background-size:200% 100%;animation:sk 1.1s linear infinite}
+.sk-short{width:60%}
+@keyframes sk{from{background-position:200% 0}to{background-position:-200% 0}}
+.ip-panel { max-width: 85vw; }
+.ip-close { position: absolute; right: 6px; top: 4px; border: 0; background: none; color: #e8eef6; font-size: 24px; line-height: 1; padding: 4px 10px; cursor: pointer; }
+.ip-tab.ip-new { background: linear-gradient(100deg, rgba(18, 22, 30, 0.92) 30%, rgba(255, 211, 77, 0.55) 50%, rgba(18, 22, 30, 0.92) 70%); background-size: 300% 100%; animation: ipglim 1.6s ease-in-out 3; }
+@keyframes ipglim { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.ip-peek { position: fixed; left: 50%; transform: translateX(-50%); bottom: 136px; width: min(360px, calc(100vw - 24px)); z-index: 21; background: rgba(18, 22, 30, 0.95); color: #e8eef6; border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); font: 13px/1.35 system-ui, sans-serif; padding: 9px 12px 6px; }
+.ip-peek[hidden] { display: none; }
+.ip-peek .pk-body { max-height: 74px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.ip-peek .pk-body img, .ip-peek .pk-body svg { display: none; }
+.ip-peek .pk-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.ip-peek .pk-src { flex: 1; font-size: 10px; opacity: 0.7; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ip-peek .pk-src .pf-src { margin: 0; }
+.ip-peek a { color: #8fc4ff; }
+.ip-peek .pk-more { border: 0; border-radius: 14px; background: #ffd34d; color: #111; font-weight: 700; padding: 6px 12px; cursor: pointer; }
+.ip-peek .pk-x { border: 0; background: none; color: #e8eef6; font-size: 22px; padding: 0 6px; cursor: pointer; }
+.is-disabled#btn-play, button.is-disabled { opacity: 0.4; }
+.ip-peek.pk-tall .pk-body { max-height: 62vh; overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
+.ip-peek.pk-tall .pk-body h2 { margin: 0 0 4px; font-size: 15px; }
+.bx-ring .bc-ring { position: relative; width: 210px; height: 190px; margin: 0 auto; }
+.bx-ring img.bx-big { display: block !important; position: absolute; left: 35px; top: 15px; width: 140px; height: 140px; }
+.bx-ring .bc-l { position: absolute; font-size: 11px; line-height: 1.1; text-align: center; color: #cfd8e3; }
+.bx-ring .bc-l b { display: block; color: #fff; }
+.bx-ring .bc-n { left: 0; right: 0; top: -2px; }
+.bx-ring .bc-n b { display: inline; margin-left: 3px; }
+.bx-ring .bc-s { left: 0; right: 0; bottom: 0; }
+.bx-ring .bc-s b { display: inline; margin-left: 3px; }
+.bx-ring .bc-e { right: 0; top: 72px; }
+.bx-ring .bc-w { left: 0; top: 72px; }
+.bx-ring .bc-facts { font-size: 12.5px; margin: 4px 0; }
+.bx-ring .bc-key { font-size: 10.5px; opacity: 0.7; margin-top: 3px; }
+.bx-ring .bc-strip { display: flex; gap: 2px; overflow-x: auto; }
+.bx-ring .bc-h { flex: 1 0 36px; text-align: center; font-size: 10px; }
+.bx-ring .bc-h img { display: block !important; width: 30px; height: 30px; margin: 0 auto; }
+.bx-ring .bc-h i { display: block; height: 30px; }
