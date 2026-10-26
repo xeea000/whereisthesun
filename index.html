@@ -38,7 +38,7 @@
   <link rel="dns-prefetch" href="https://geo.weather.gc.ca">
   <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?h=5ae31c574f">
   <link rel="stylesheet" href="styles.css?h=468e6b0212">
-  <link rel="stylesheet" href="settings-panel.css?h=9ecd891207">
+  <link rel="stylesheet" href="settings-panel.css?h=55aeb3953c">
   <link rel="stylesheet" href="side-buttons.css?h=de1efe43ac">
   <link rel="stylesheet" href="layers-panel.css?h=3b513d26f9">
   <link rel="stylesheet" href="info-panel.css?h=ed7a47a437">
@@ -76,7 +76,8 @@
         <div id="loop-splitter" class="loop-splitter" role="slider" aria-label="Loop start" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"></div>
         <div id="time-ticks" class="time-ticks" aria-hidden="true"></div>
       </div>
-      <span id="time-label">Clouds</span>
+      <div class="tl-col"><span id="time-label">Clouds</span>
+        <label class="bar-chk"><input id="bar-labels" type="checkbox">Labels</label></div>
       <div class="ov overlay-mode" role="group" aria-label="Overlay">
         <div class="seg" id="overlay-seg">
           <button type="button" class="seg-btn is-on" data-overlay="clouds" aria-pressed="true">Clouds</button>
@@ -265,6 +266,7 @@
   <script defer src="layer-kit.js?h=d3129cdac5"></script>
   <script defer src="layers-panel.js?h=3ad8d10dc7"></script>
   <script defer src="famous.js?h=ddc2b79136"></script>
+  <script defer src="bar-toggles.js?h=c75bfa5a70"></script>
   <script defer src="overzoom.js?h=1dc114f61d"></script>
   <script defer src="flight-time.js?h=79218c417c"></script>
   <script defer src="legend-stack.js?h=b35e7720b5"></script>
@@ -283,7 +285,7 @@
   <script defer src="outdoor-layers.js?h=d931181d64"></script>
   <script defer src="sky-card.js?h=ff1cd47081"></script>
   <script defer src="sats.js?h=7e53ca1d3e"></script>
-  <script defer src="sky-draw.js?h=3b04eeb876"></script>
+  <script defer src="sky-draw.js?h=9a81dfb492"></script>
   <script defer src="offline.js?h=f591704655"></script>
   <script defer src="beach-ref.js?h=dab3a52757"></script>
   <script defer src="wind-play-fade.js?h=e342e19b7e"></script>

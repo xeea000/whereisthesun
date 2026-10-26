@@ -279,6 +279,17 @@
       });
     }).catch(() => { gridKey = ""; });
   }
+  /* score squares and meteor bands sit just above the cloud pictures, so clouds never hide them */
+  function above() {
+    var ls = map.getStyle().layers, top = -1;
+    ls.forEach((l, i) => { if (/^(gibs|iem-vis|light-cloud|lc-)/.test(l.id)) top = i; });
+    if (top < 0) return;
+    var nxt = ls[top + 1] && ls[top + 1].id;
+    ["sky-grid", "sky-grid-line", "shower-band"].forEach((id) => {
+      var i = ls.findIndex((l) => l.id === id);
+      if (i >= 0 && i < top) { try { map.moveLayer(id, nxt); } catch (e) {} }
+    });
+  }
   function apply() {
     if (!map) return;
     K.vis(map, ["sky-night", "sky-moon"], L.isOn("moon"));
@@ -288,6 +299,7 @@
   L.add({ id: "skydraw-attach", group: "none", taps: ["sky-grid"], attach: (m) => {
     map = m;
     map.on("moveend", () => { setTimeout(grid, 500); });
+    map.on("idle", above);
     setInterval(() => { if (L.isOn("sats") || L.isOn("moon")) redraw(); }, 20000);
     setTimeout(apply, 1500);
   }, apply: apply });
