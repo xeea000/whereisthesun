@@ -11,13 +11,14 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt108"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt109"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
 var FRAMES = "sunny-frames-1";
+var DATA = "sunny-data-1"; /* opt109: static data files kept forever, keyed by content hash */
 var OFFLINE = "sunny-offline-1"; /* opt95: regions saved from "Save for offline", never pruned here */
-var KEEP = [CACHE, STATIC, FRAMES, OFFLINE];
+var KEEP = [CACHE, STATIC, FRAMES, DATA, OFFLINE];
 var STATIC_MAX = 900;
 var FRAMES_MAX = 400;
 var FRAME_MAX_AGE_MS = 26 * 3600 * 1000;
@@ -159,7 +160,7 @@ function claimAll() {
   return self.clients.claim();
 }
 function onActivate(event) {
-  event.waitUntil(caches.keys().then(dropUnknownCaches).then(pruneApp).then(claimAll));
+  event.waitUntil(caches.keys().then(dropUnknownCaches).then(pruneApp).then(pruneData).then(claimAll));
 }
 function netFetch(req, opts) {
   return fetch(req, opts);
@@ -257,7 +258,53 @@ function ageOutFrames() {
   }
   return caches.open(FRAMES).then(sweep).catch(noop);
 }
+/* opt109: data-hashes.json (tools/data-hashes.js) maps each data file to its content hash; one copy per build. */
+var hashes = null;
+function dataHashes() {
+  if (hashes) return hashes;
+  var key = absUrl("data-hashes.json?b=" + BUILD);
+  hashes = caches.open(DATA).then((c) => {
+    return c.match(key).then((hit) => {
+      return hit || fetch(key).then((res) => { if (!res.ok) throw new Error(res.status); c.put(key, res.clone()); return res; });
+    });
+  }).then((r) => { return r.json(); }).catch(() => { hashes = null; return {}; });
+  return hashes;
+}
+function relData(u) {
+  var base = new URL("./", self.location.href).pathname;
+  return u.origin === self.location.origin && u.pathname.indexOf(base + "data/") === 0 ? u.pathname.slice(base.length) : "";
+}
+function dataFirst(req, rel, h) {
+  var key = absUrl(rel + "?c=" + h);
+  return caches.open(DATA).then((c) => {
+    return c.match(key).then((hit) => {
+      return hit || fetch(req).then((res) => { if (res.ok) c.put(key, res.clone()).catch(noop); return res; });
+    });
+  });
+}
+/* Drops data files whose hash changed and older hash lists. */
+function pruneData() {
+  return dataHashes().then((h) => {
+    if (!Object.keys(h).length) return null;
+    return caches.open(DATA).then((c) => {
+      return c.keys().then((keys) => {
+        return Promise.all(keys.map((k) => {
+          var u = new URL(k.url), rel = relData(u), b = u.searchParams.get("b");
+          if (b) return b === BUILD ? null : c.delete(k);
+          return rel && h[rel] === u.searchParams.get("c") ? null : c.delete(k);
+        }));
+      });
+    });
+  });
+}
 function route(req, u) {
+  var rel = relData(u);
+  if (rel) {
+    return dataHashes().then((h) => { return h[rel] ? dataFirst(req, rel, h[rel]) : routeOld(req, u); });
+  }
+  return routeOld(req, u);
+}
+function routeOld(req, u) {
   if (u.pathname.slice(-13) === "/version.json") return netFetch(req, { cache: "no-store" });
   if (isSettledFrame(u)) {
     if (Date.now() - lastAgeOut > 600000) {
