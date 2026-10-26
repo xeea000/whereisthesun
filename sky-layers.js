@@ -116,6 +116,7 @@
       map.on("idle", () => { if (L.isOn("aurora") && !map.getLayer("aurora-dot")) aurApply(map, true); });
       setInterval(() => { if (L.isOn("aurora")) aurApply(map, true); }, 30 * 60000);
       map.on("click", (e) => {
+        if (window.SunnyTapSnap && window.SunnyTapSnap.hit(e)) return;
         var v = window.SunnyAurora.at(e.lngLat.lng, e.lngLat.lat);
         if (v < 5) return;
         K.show(map, e.lngLat, "Aurora chance " + Math.round(v) + " %", ["Chance of aurora overhead", aurTime ? "Forecast for " + K.esc(aurTime) + " UTC" : ""], ["NOAA SWPC OVATION aurora forecast", "https://www.swpc.noaa.gov/products/aurora-30-minute-forecast"]);

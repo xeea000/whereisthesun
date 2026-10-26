@@ -24,6 +24,10 @@
       return r + 1;
     } catch (e) { return 6; }
   };
+  /* click priority: once a tap lands on a dot, area layers (fills, lines, pictures) stay quiet for that tap */
+  var hits = new WeakSet();
+  var hit = (e) => { return !!(e && hits.has(e.originalEvent || e)); };
+  var AREA = { fill: 1, line: 1, raster: 1, heatmap: 1, "fill-extrusion": 1 };
   var snap = (m, ev) => {
     var ids = Object.keys(LAYERS).filter((id) => { return m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== "none"; });
     if (!ids.length) return;
@@ -37,6 +41,7 @@
       var hit = Math.max(22, 3 * radius(m, f.layer.id, f));
       if (d <= hit && d < bestD) { bestD = d; best = q; }
     });
+    if (best) hits.add(ev.originalEvent || ev);
     if (!best || bestD < 1) return;
     var np = Object.create(Object.getPrototypeOf(p));
     np.x = best.x;
@@ -48,16 +53,26 @@
     var M = window.maplibregl && window.maplibregl.Map;
     if (!M || M.prototype._sunnySnap) return;
     M.prototype._sunnySnap = true;
-    var orig = M.prototype.fire;
+    var orig = M.prototype.fire, on = M.prototype.on;
     Object.assign(M.prototype, {
       fire(ev, props) {
-        if (ev && typeof ev === "object" && ev.type === "click" && ev.point) {
-          try { snap(this, ev); } catch (e) {}
+        var c = typeof ev === "string" ? props : ev; /* hover-box fires ("click", props) */
+        if (c && typeof c === "object" && (c.type === "click" || ev === "click") && c.point) {
+          try { snap(this, c); } catch (e) {}
         }
         return orig.call(this, ev, props);
+      },
+      on(type, layer, fn) {
+        if (type !== "click" || typeof layer !== "string" || typeof fn !== "function") return on.apply(this, arguments);
+        var m = this;
+        return on.call(this, type, layer, (...a) => {
+          var l = m.getLayer(layer);
+          if (l && AREA[l.type] && hit(a[0])) return undefined;
+          return fn.apply(m, a);
+        });
       }
     });
   };
   patch();
-  window.SunnyTapSnap = { snap: snap };
+  window.SunnyTapSnap = { snap: snap, hit: hit };
 })();

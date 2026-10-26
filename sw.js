@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt137"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt138"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -36,7 +36,7 @@ var PRECACHE = [
   "info-panel.css?h=ed7a47a437",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
-  "tap-snap.js?h=63f447bb00",
+  "tap-snap.js?h=d764bd7afb",
   "points.js?h=bd3ec9c286",
   "peek-place.js?h=f0d14e00bc",
   "info-panel.js?h=fc61856408",
@@ -74,9 +74,9 @@ var PRECACHE = [
   "advanced.js?h=ef030f80f5",
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
-  "hover-box.js?h=68b52683d9",
-  "sky-layers.js?h=5fe8a31a22",
-  "earth-layers.js?h=536a8382bf",
+  "hover-box.js?h=8fe3f76718",
+  "sky-layers.js?h=a4e092c437",
+  "earth-layers.js?h=0f84ec2b4a",
   "plates.js?h=192e0fa1b8",
   "quakes.js?h=a47e073cf2",
   "volcanoes.js?h=5aede381a6",
