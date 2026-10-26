@@ -174,4 +174,63 @@
       });
       geoApply(map, on);
     } });
+  /* opt115: rock age, the same Macrostrat tiles coloured by the oldest age of each unit in ICS (International Commission on Stratigraphy) colours */
+  var ICS = [["Quaternary", 0, "#f9f97f"], ["Neogene", 2.58, "#ffe619"], ["Paleogene", 23, "#fd9a52"], ["Cretaceous", 66, "#7fc64e"], ["Jurassic", 145, "#34b2c9"],
+    ["Triassic", 201, "#812b92"], ["Permian", 252, "#f04028"], ["Carboniferous", 299, "#67a599"], ["Devonian", 359, "#cb8c37"], ["Silurian", 419, "#b3e1b6"],
+    ["Ordovician", 444, "#009270"], ["Cambrian", 485, "#7fa056"], ["Proterozoic", 539, "#f73563"], ["Archean", 2500, "#f0047f"], ["Hadean", 4000, "#ae027e"]];
+  var icsStep = ["step", ["coalesce", ["get", "best_age_bottom"], 0], ICS[0][2]];
+  ICS.slice(1).forEach((c) => { icsStep.push(c[1], c[2]); });
+  var icsName = (ma) => { var n = ICS[0][0]; ICS.forEach((c) => { if (ma >= c[1]) n = c[0]; }); return n; };
+  function ageApply(map, on) {
+    K.vis(map, ["age-fill"], on);
+    if (!on) return;
+    try {
+      if (!map.getSource("geology")) {
+        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 5, maxzoom: 12,
+          attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' });
+      }
+      if (!map.getLayer("age-fill")) map.addLayer({ id: "age-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 5, paint: { "fill-color": icsStep, "fill-opacity": 0.5 } }, K.before(map));
+    } catch (e) {}
+    K.vis(map, ["age-fill"], L.isOn("rockage"));
+  }
+  L.add({ id: "rockage", name: "Rock age", icon: "⏳", group: "Earth", taps: ["age-fill"], dflt: false,
+    tip: "Age of the bedrock in ICS colours (Macrostrat). Zoom in to see it; tap for the period",
+    legend: K.legKeys(ICS.slice().reverse().map((c) => { return [c[2], "area", c[0] + (c[1] ? ", from " + c[1].toLocaleString() + " Ma" : "")]; })),
+    note: (map, on) => { return on && map && map.getZoom() < 5 ? "zoom in" : ""; }, apply: ageApply,
+    attach: (map, on) => {
+      idleAdd(map, "rockage", "age-fill", ageApply);
+      map.on("click", "age-fill", (e) => {
+        var p = e.features[0].properties;
+        K.show(map, e.lngLat, icsName(+p.best_age_bottom || 0) + " rock", [age(p), K.esc([p.lith_class1, p.lith_type1].filter(Boolean).join(", "))],
+          ["Macrostrat (CC BY 4.0)", "https://macrostrat.org/map/loc/" + e.lngLat.lng.toFixed(4) + "/" + e.lngLat.lat.toFixed(4)]);
+      });
+      ageApply(map, on);
+    } });
+  /* opt115: cratons, the ancient cores of the continents (Archean basement, older than 2.5 Ga). Hasterok et al. 2022, GPL-3.0, 34 KB gzipped */
+  var CR_SRC = ["Hasterok et al. 2022, global_tectonics", "https://github.com/dhasterok/global_tectonics"];
+  function cratonApply(map, on) {
+    K.vis(map, ["craton-fill", "craton-line"], on);
+    if (!on) return;
+    K.loadJson("data/world/cratons.geo.json").then((g) => {
+      if (!map.getSource("cratons")) map.addSource("cratons", { type: "geojson", data: g,
+        attribution: 'Cratons: <a href="' + CR_SRC[1] + '" target="_blank" rel="noopener">Hasterok et al. 2022</a>' });
+      if (!map.getLayer("craton-fill")) map.addLayer({ id: "craton-fill", type: "fill", source: "cratons", paint: {
+        "fill-color": ["match", ["get", "w"], 1, "#c98bdb", "#f0047f"], "fill-opacity": 0.22 } }, K.before(map));
+      if (!map.getLayer("craton-line")) map.addLayer({ id: "craton-line", type: "line", source: "cratons", paint: {
+        "line-color": ["match", ["get", "w"], 1, "#c98bdb", "#f0047f"], "line-width": 1, "line-opacity": 0.8 } }, K.before(map));
+      K.vis(map, ["craton-fill", "craton-line"], L.isOn("cratons"));
+    }).catch(() => {});
+  }
+  L.add({ id: "cratons", name: "Cratons", icon: "🪨", group: "Earth", taps: ["craton-fill"], dflt: true,
+    tip: "The oldest cores of the continents, with Archean basement older than 2.5 billion years (Hasterok et al. 2022)",
+    legend: K.legKeys([["#f0047f", "area", "craton, older than 2.5 Ga"], ["#c98bdb", "area", "Archean basement, reworked later"]]), apply: cratonApply,
+    attach: (map, on) => {
+      idleAdd(map, "cratons", "craton-fill", cratonApply);
+      map.on("click", "craton-fill", (e) => {
+        var p = e.features[0].properties;
+        K.show(map, e.lngLat, p.n, ["Age: older than 2.5 Ga (Archean)", K.esc(p.t ? p.t.charAt(0).toUpperCase() + p.t.slice(1) : "") + (p.c ? " · " + K.esc(p.c) : ""),
+          p.w ? "Reworked later" + (p.o && p.o !== "cratonic" ? " (" + K.esc(p.o) + ")" : "") : "Stable since the Archean"], CR_SRC);
+      });
+      cratonApply(map, on);
+    } });
 })();
