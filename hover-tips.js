@@ -81,6 +81,9 @@
         if (window.SunnyTapSnap) fs = window.SunnyTapSnap.near(m, e.point, fs);
         var ok = fs.filter((g) => g.layer && !SKIP[g.source] && !SKIPL[g.layer.id] && g.layer.type !== "raster");
         var f = ok.find((g) => /circle|symbol/.test(g.layer.type)) || ok.find((g) => g.layer.type === "line") || ok[0]; /* dots win over lines, lines over areas */
+        if (f && f.layer.id === "famous-star") { /* opt166: the star stands for the dot under it; name that dot, as a tap does */
+          var dot = ok.find((g) => g !== f && g.layer.type === "circle"); if (dot) f = dot;
+        }
         if (!f && window.SunnyAurora) {
           var ll = m.unproject(e.point), v = window.SunnyAurora.at(ll.lng, ll.lat);
           if (v >= 5) { cv.style.cursor = "pointer"; return show(e.originalEvent.clientX, e.originalEvent.clientY, "<b>Aurora chance " + Math.round(v) + " %</b><br><small>NOAA aurora forecast</small>"); }

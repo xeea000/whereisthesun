@@ -224,6 +224,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
       m.addSource(GIBS_SRC, {
         type: "raster",
         tiles: [url],
+        bounds: gibsBounds(url),
         tileSize: window.SunnyDataSaver.low() ? 512 : 256, /* Low data: one zoom level coarser */
         maxzoom: window.SunnyDataSaver && window.SunnyDataSaver.low() ? 5 : 7,
         attribution: "NASA GIBS / NOAA GOES"
@@ -245,6 +246,10 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     cloudSourcesReady = true;
     restackCloudRasters();
   }
+  /* opt167: only ask GIBS for tiles inside the satellite's view disk (outside it every tile is a 404) */
+  function gibsBounds(url) {
+    return /GOES-West/.test(url) ? [-180, -81, -56, 81] : [-156, -81, 6, 81];
+  }
   function rebuildStaticGibs(url) {
     var m = cloudTargetMap();
     if (!m) return;
@@ -254,6 +259,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     m.addSource(GIBS_SRC, {
       type: "raster",
       tiles: [url],
+      bounds: gibsBounds(url),
       tileSize: window.SunnyDataSaver.low() ? 512 : 256,
       maxzoom: window.SunnyDataSaver && window.SunnyDataSaver.low() ? 5 : 7,
       attribution: "NASA GIBS / NOAA GOES"

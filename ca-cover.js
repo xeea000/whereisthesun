@@ -4,7 +4,7 @@
  *   reach = largest band reach among its transmit frequencies: under 1 GHz (600/700/850 MHz) 8 km, 1-2.7 GHz (PCS/AWS/2100) 3 km,
  *   3-6 GHz (3500 MHz) 1.2 km, 20 GHz+ (mmWave) 0.3 km; then capped by the radio horizon 4.12 km x (sqrt(structure height m) + sqrt(1.5 m handset)),
  *   using 30 m when the height is not given. Drawn as a heatmap whose radius is that reach, so it is strongest at the site, fades to the edge
- *   and adds up where sites overlap. Zoom 8 and closer. */
+ *   and adds up where sites overlap; sites within 0.01° merge and the radius stops at 180 px close in (opt167). Zoom 8 and closer. */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit, C = window.SunnyCaCell, map = null;
@@ -17,13 +17,17 @@
     return Math.min(r, 4120 * (Math.sqrt(h || 30) + Math.sqrt(1.5)));
   };
   var build = () => {
-    var techOk = {}, out = [];
+    var techOk = {}, out = [], cell = {};
     TG.forEach((g) => { if (kOn(g[0])) g[2].forEach((t) => { techOk[t] = 1; }); });
     C.all().forEach((f) => {
       var bands = 0;
       f.rad.forEach((x) => { if (techOk[x[1]] && kOn("c" + x[0])) bands |= x[2]; });
       var r = bands ? reachOf(bands, f.properties.h) : 0;
-      if (r) out.push({ type: "Feature", geometry: f.geometry, properties: { r: Math.round(r) } });
+      if (!r) return;
+      /* opt167: sites in the same 0.01° cell (about 1 km) merge into one point, so a dense city draws hundreds of points, not thousands */
+      var c = f.geometry.coordinates, k = Math.round(c[0] * 100) + ":" + Math.round(c[1] * 100), o = cell[k];
+      if (o) { o.properties.n++; o.properties.r = Math.max(o.properties.r, Math.round(r)); return; }
+      out.push(cell[k] = { type: "Feature", geometry: f.geometry, properties: { r: Math.round(r), n: 1 } });
     });
     return K.fc(out);
   };
@@ -34,10 +38,11 @@
   };
   var add = () => {
     if (map.getSource("ca-cov")) return;
-    map.addSource("ca-cov", { type: "geojson", data: K.fc([]), attribution: "Cell coverage estimate from ISED site data" });
+    map.addSource("ca-cov", { type: "geojson", data: K.fc([]), buffer: 512, attribution: "Cell coverage estimate from ISED site data" });
     map.addLayer({ id: "ca-cov-heat", type: "heatmap", source: "ca-cov", minzoom: 8, paint: {
-      "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, ["*", ["get", "r"], 256 * PX], 15, ["*", ["get", "r"], 32768 * PX]],
-      "heatmap-weight": 0.7, "heatmap-intensity": 0.8, "heatmap-opacity": 0.6,
+      /* opt167: radius capped at 180 px (a huge radius per point crashed phones in cities and smeared at tile edges) */
+      "heatmap-radius": ["interpolate", ["exponential", 2], ["zoom"], 8, ["min", 180, ["*", ["get", "r"], 256 * PX]], 15, ["min", 180, ["*", ["get", "r"], 32768 * PX]]],
+      "heatmap-weight": ["min", 2, ["*", 0.7, ["sqrt", ["get", "n"]]]], "heatmap-intensity": 0.8, "heatmap-opacity": 0.6,
       "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.03, "rgba(215,48,39,0.4)", 0.15, "rgba(254,224,139,0.6)",
         0.4, "rgba(26,152,80,0.7)", 1, "rgba(0,104,55,0.85)"] } }, K.before(map));
   };
