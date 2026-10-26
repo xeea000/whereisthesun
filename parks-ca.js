@@ -19,7 +19,9 @@
   var NOTE = { ONo: "Status: Ontario LIO, Provincial Park Regulated", ONn: "Status: Ontario LIO, Provincial Park Regulated",
     BCo: "Status: BC Parks API lists an active operating season", BCn: "Status: BC Parks API lists no operating season or services",
     ABo: "Status: Alberta Parks facility points (campground, day use, visitor centre) inside",
-    ABn: "Status: no Alberta Parks facility points inside (no facilities listed)" };
+    ABn: "Status: no Alberta Parks facility points inside (no facilities listed)",
+    QCo: "Status: established Québec national park (CPCAD type; these run visitor services)",
+    QCn: "Status: Québec national park reserve, not yet an operating park (CPCAD type)" };
   var stNote = (r) => { return NOTE[r[3] + r[4]] || (r[4] === "u" ? "Operating status not in open data" : ""); };
   var row = (p) => { return data.r[p.i]; };
   var title = (r) => { return r[2]; };
@@ -65,7 +67,7 @@
   L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
     kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
     legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
-    tip: "1,347 provincial and territorial parks (CPCAD). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points). Outlines from zoom 6; tap for details",
+    tip: "1,347 provincial and territorial parks (CPCAD). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines from zoom 6; tap for details",
     attach: (m) => {
       map = m;
       if (hooked) return; hooked = true;
