@@ -11,6 +11,31 @@
   var popup = null;
   var gen = 0;
   var cache = Object.create(null);
+  var MARINE = "https://marine-api.open-meteo.com/v1/marine";
+  var mcache = Object.create(null);
+  /* opt151: water temperature and waves at the spot (Open-Meteo Marine, free); land or small lakes give nothing */
+  function marine(lat, lon) {
+    var k = lat.toFixed(2) + "," + lon.toFixed(2);
+    if (!mcache[k]) mcache[k] = fetch(MARINE + "?latitude=" + lat.toFixed(3) + "&longitude=" + lon.toFixed(3) +
+      "&current=sea_surface_temperature,wave_height,wave_period,wave_direction").then(readJson).catch(() => { delete mcache[k]; return null; });
+    return mcache[k];
+  }
+  function seaRow(m) {
+    var c = m && m.current;
+    if (!c) return "";
+    var out = [];
+    if (c.sea_surface_temperature != null) {
+      var t = c.sea_surface_temperature;
+      out.push("Water " + (US ? Math.round(t * 1.8 + 32) + "°F" : t.toFixed(1) + "°C"));
+    }
+    if (c.wave_height != null) {
+      var wh = US ? (c.wave_height * 3.281).toFixed(1) + " ft" : c.wave_height.toFixed(1) + " m";
+      out.push("Waves " + wh +
+        (c.wave_period != null ? " every " + Math.round(c.wave_period) + " s" : "") + (c.wave_direction != null ? " from " + compass(c.wave_direction) : ""));
+    }
+    var src = ' <span class="pf-src">(<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener">Open-Meteo Marine</a>)</span>';
+    return out.length ? '<div class="pf-sea">' + esc(out.join(" · ")) + src + "</div>" : "";
+  }
   function esc(s) {
     return String(s).replace(/[&<>"]/g, escChar);
   }
@@ -79,6 +104,7 @@
   function onData(lngLat, my, d) {
     if (my !== gen) return;
     show(lngLat, card(d));
+    marine(lngLat.lat, lngLat.lng).then((m) => { var r = seaRow(m); if (r && my === gen) show(lngLat, card(d) + r); });
   }
   function onFail(lngLat, my, k, err) {
     delete cache[k]; /* a failed fetch is never kept, so the next press tries again */
