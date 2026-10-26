@@ -10,6 +10,7 @@
     ["Eastlink", "#00b5e2"], ["Xplore", "#8bc34a"], ["TBayTel", "#795548"], ["Ice Wireless", "#9fd8ff"], ["Other", "#9e9e9e"]];
   var kidOn = () => { try { return localStorage.getItem("sunny-L-towers-ca") !== "0"; } catch (e) { return true; } };
   var on = () => { return window.SunnyLayers && window.SunnyLayers.isOn("towers") && kidOn(); };
+  var need = () => { return on() || !!(window.SunnyCaCover && window.SunnyCaCover.on()); }; /* opt160: coverage uses the same tiles */
   var get = (url) => { /* the Cache API keeps tiles across visits; falls back to a plain fetch */
     if (!window.caches) return fetch(url).then((r) => { if (!r.ok) throw r.status; return r.json(); });
     return caches.open("sunny-ca-cell").then((c) => c.match(url).then((hit) => hit || fetch(url).then((r) => {
@@ -22,19 +23,22 @@
     if (!map || !map.getSource("ca-cell")) return;
     var all = []; Object.keys(feats).forEach((k) => { all = all.concat(feats[k]); });
     map.getSource("ca-cell").setData(K.fc(all));
+    if (window.SunnyCaCover) window.SunnyCaCover.redraw();
   };
   var tile = (k) => {
     if (asked[k]) return; asked[k] = 1;
-    get(BASE + k + ".json?d=" + man.date).then((rows) => {
+    get(BASE + k + ".json?d=" + man.date + (man.rev ? "r" + man.rev : "")).then((rows) => {
       feats[k] = rows.map((r) => { var b = r[2]; return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] },
-        properties: { c: first(b), n: names(b).length, b: b, t: r[3], h: r[4], s: r[5], l: r[6] || "", o: r[7] || "" } }; });
+        properties: { c: first(b), n: names(b).length, b: b, t: r[3], h: r[4], s: r[5], l: r[6] || "", o: r[7] || "",
+        bd: (r[8] || []).reduce((a, x) => a | x[2], 0) }, rad: r[8] || [] }; });
       set();
     }).catch(() => { delete asked[k]; });
   };
   var view = () => {
-    if (!map || !on() || !man || map.getZoom() < 8) return;
+    if (!map || !need() || !man || map.getZoom() < 8) return;
     var b = map.getBounds();
-    man.tiles.forEach((k) => { var p = k.split("_").map(Number); if (p[0] < b.getNorth() && p[0] + 1 > b.getSouth() && p[1] < b.getEast() && p[1] + 1 > b.getWest()) tile(k); });
+    man.tiles.forEach((k) => { var p = k.split("_").map(Number); /* margin: coverage reaches past the edge */
+      if (p[0] < b.getNorth() + 0.1 && p[0] + 1.1 > b.getSouth() && p[1] < b.getEast() + 0.15 && p[1] + 1.15 > b.getWest()) tile(k); });
   };
   var color = ["match", ["get", "c"]].concat([].concat.apply([], BR.map((x, i) => [i, x[1]])), ["#9e9e9e"]);
   var add = () => {
@@ -46,11 +50,12 @@
   };
   var title = (p) => { return names(p.b).filter((x) => x !== "Other").concat(p.o ? [p.o] : []).join(", ") || "Cell site"; };
   var lines = (p) => { return [(p.h ? "<b>" + p.h + " m</b> · " : "") + K.esc(ST[p.s] || "Structure not given"), K.esc(techs(p.t).join(" · ")),
-    p.l ? K.esc(p.l) : "", p.n > 1 ? "Shared by " + p.n + " licensees" : ""]; };
+    p.l ? K.esc(p.l) : "", p.n > 1 ? "Shared by " + p.n + " licensees" : "",
+    p.bd && window.SunnyCaCover ? "Reach about " + (window.SunnyCaCover.reach(p.bd, p.h) / 1000).toFixed(1) + " km <small>(estimate, not official coverage)</small>" : ""]; };
   var apply = () => {
     if (!map) return;
     var want = on();
-    if (want) {
+    if (need()) {
       try { add(); } catch (e) { setTimeout(apply, 2000); return; } /* style not ready yet */
       if (!man) K.loadJson(BASE + "manifest.json?v=" + Date.now().toString().slice(0, 6)).then((m) => { man = m; view(); }).catch(() => {});
       else view();
@@ -71,6 +76,8 @@
         (f.properties.h ? f.properties.h + " m · " : "") + (ST[f.properties.s] || "") ]);
       apply();
     },
-    apply: apply
+    apply: apply,
+    all: () => { var a = []; Object.keys(feats).forEach((k) => { a = a.concat(feats[k]); }); return a; },
+    brands: BR, tech: () => { return man ? man.tech : []; }
   };
 })();
