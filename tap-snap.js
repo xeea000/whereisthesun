@@ -7,8 +7,8 @@
   "use strict";
   var LAYERS = { "pack-camps-dot": 0, "pack-plaques-dot": 0, "obs-point": 11, "obs-cluster": 0, "meteor-dot": 0, "craters-dot": 0,
     "fire-dot": 0, "beaches-dot": 0, "beaches-sun": 20, "aurora-dot": 0, "sat-dot": 0,
-    "sea-trench": 0, "sea-vent": 0, "sea-mount": 0, "plat-dot": 0, "stn-polar": 0, "stn-other": 0, "mast-300": 0, "mast-150": 0, "mast-all": 0,
-    "tx-scope": 0, "tx-radar": 0, "osm-plat": 0, "osm-tower": 0 }; /* opt99: world layers */
+    "sea-trench": 0, "sea-vent": 0, "sea-mount": 0, "plat-dot": 0, "stn-polar": 0, "stn-other": 0, "tower-dot": 0,
+    "tx-scope": 0, "tx-radar": 0, "osm-plat": 0 }; /* opt99: world layers */
   var radius = (m, id, f) => {
     if (LAYERS[id]) {
       if (id === "beaches-sun") return 32 * (m.getZoom() < 6 ? 0.45 : m.getZoom() < 9 ? 0.55 : 0.65);

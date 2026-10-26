@@ -28,7 +28,7 @@
     if (hb) return "<b>" + esc(hb) + "</b>";
     var p = f.properties || {};
     var name = p.name || p.n || p.title || p.NAME || p.Name || p.label || p.nm || "";
-    var type = nice(f.layer.id) || nice(f.source);
+    var type = (window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id) || nice(f.source); /* opt105 */
     if (p.point_count) return "<b>" + p.point_count + " places</b><br><small>" + esc(type) + " · zoom in</small>";
     var kind = p.k || p.cat || p.type || ""; if (String(kind).length < 3) kind = "";
     if (!name && kind) { name = nice(kind); kind = ""; }

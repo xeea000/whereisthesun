@@ -4,9 +4,9 @@
  *   Seafloor     trenches, seamounts, guyots, ridges, canyons, abyssal plains, hydrothermal vents (Wikidata, CC0)
  *   Cables       submarine cables, TeleGeography Submarine Cable Map (CC BY-NC-SA 3.0), lines + details on tap
  *   Platforms    offshore platforms still standing (BOEM, public domain) plus oil platforms on Wikidata
- *   OSM undersea pipelines and platforms, zoom 9+, and OSM communication towers, zoom 11+ (Overpass, ODbL)
+ *   OSM undersea pipelines and platforms, zoom 9+, (Overpass, ODbL)
  *   Stations     research stations (Wikidata) and Antarctic facilities (COMNAP)
- *   Transmission tall TV and radio masts (opt102: data/world/masts.*, dot size by height), radio telescopes
+ *   Transmission tall TV and radio masts (opt102: data/world/masts.*, dot size by height; opt105 Towers with types and tiles), radio telescopes
  *                and radar sites (Wikidata) */
 (() => {
   "use strict";
@@ -14,7 +14,7 @@
   if (!K || !L || !P) return;
   var NOW = new Date().getFullYear();
   var BASE = "data/world/";
-  var V = "opt102"; /* bump when tools/build-world.js or build-cables.js output changes */
+  var V = "opt105"; /* bump when tools/build-world.js or build-cables.js output changes */
   var meta = {};
   var cap = (s) => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
   var age = (verb, y) => {
@@ -31,7 +31,9 @@
     map.on("idle", () => { if (L.isOn(id) && !map.getLayer(layer)) fn(map, true); });
   }
   /* shared points source per file; layers per category */
+  var hoverOf = {};
   function pointLayer(o) {
+    o.layers.forEach((l) => { hoverOf[l.id] = o; });
     function apply(map, on) {
       var ids = o.layers.map((l) => { return l.id; });
       K.vis(map, ids, on);
@@ -85,7 +87,6 @@
     attrib: 'Platforms: <a href="https://www.data.boem.gov/" target="_blank" rel="noopener">BOEM</a>, Wikidata', src: ["BOEM platform structures", "https://www.data.boem.gov/Main/PlatformStructures.aspx"],
     layers: [{ id: "plat-dot", codes: ["boem", "wd"], color: "#ffcc33", r: 2 }],
     lines: (r, k) => {
-      var BT = { FIXED: "Fixed platform", CAIS: "Caisson", WP: "Well protector", TLP: "Tension-leg platform", SPAR: "Spar", MOPU: "Mobile production unit", SEMI: "Semi-submersible", SUBS: "Subsea" };
       return [K.esc(k === "boem" ? BT[r.kind] || "Structure type " + r.kind : cap(r.kind)), place(r), age("Installed", r.year),
         r.depth !== "" ? "Water depth " + K.esc(r.depth) + " m" : "", r.operator ? "Operator " + K.esc(r.operator) : "",
         r.wiki === "manned" ? "Crewed around the clock" : "", wikiLine(r)];
@@ -107,34 +108,86 @@
     };
   };
   var TXA = 'Transmission: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>';
-  /* opt102 masts: own file (tools/build-masts.js: Wikidata + OSM + FCC ASR). Point code "h<m>" is the height
-   * bucket, so the dot grows with height before any detail loads. */
-  var MH = ["to-number", ["slice", ["get", "k"], 1]];
-  var mastKind = (r) => { return cap(r.kind || "mast"); };
-  var mastName = (r) => { return r.name || r.operator || "Unnamed mast"; };
+  /* opt105 Towers: one layer for broadcast masts, cell towers, microwave and other towers (tools/build-masts.js).
+   * Code = type letter + height bucket. 150 m+ load once for all zooms; shorter ones stream per 10 degree tile from zoom 6. */
+  var TT = [["b", "TV & radio broadcast", "#ff5a2a"], ["c", "Cell / LTE", "#4fc3f7"], ["m", "Microwave & utility", "#b388ff"], ["o", "Other", "#ffc2a6"]];
+  var TN = {}; TT.forEach((t) => { TN[t[0]] = t[1]; });
+  var tOn = (t) => { try { return localStorage.getItem("sunny-L-towers-" + t) !== "0"; } catch (e) { return true; } };
+  var tFilter = () => { return ["in", ["slice", ["get", "k"], 0, 1], ["literal", TT.filter((t) => tOn(t[0])).map((t) => t[0])]]; };
+  var tColor = ["match", ["slice", ["get", "k"], 0, 1]].concat([].concat.apply([], TT.map((t) => [t[0], t[2]])), ["#ffc2a6"]);
+  var mastName = (r) => { return r.name || r.operator || "Unnamed tower"; };
   var MSRC = { wd: (r) => { return ["Wikidata " + r.ref, "https://www.wikidata.org/wiki/" + r.ref]; },
     osm: (r) => { return ["OpenStreetMap " + r.ref, "https://www.openstreetmap.org/" + r.ref]; },
     fcc: (r) => { var p = String(r.ref).split(":"); return ["FCC ASR " + p[0], "https://wireless2.fcc.gov/UlsApp/AsrSearch/asrRegistration.jsp?regKey=" + p[1]]; } };
-  pointLayer({ id: "masts", file: "masts", name: "Tall TV & radio masts", icon: "🗼", group: "Transmission",
-    tip: "TV towers and tall radio masts; bigger dot = taller. 300 m+ show everywhere, 150 m+ from zoom 4, the rest from zoom 5 (Wikidata, OpenStreetMap, FCC ASR)",
-    attrib: 'Masts: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, OSM, FCC ASR', src: ["Wikidata, OpenStreetMap, FCC ASR", "https://www.fcc.gov/uls/transactions/daily-weekly"],
-    title: mastName, srcOf: (r) => { return (MSRC[r.src] || MSRC.wd)(r); },
-    radius: ["interpolate", ["linear"], ["zoom"], 1, ["+", 1.4, ["/", MH, 150]], 8, ["+", 3, ["/", MH, 55]]],
-    layers: [{ id: "mast-300", filter: [">=", MH, 300], color: "#ff5a2a" }, { id: "mast-150", filter: ["all", [">=", MH, 150], ["<", MH, 300]], color: "#ff9a6b", minzoom: 4 },
-      { id: "mast-all", filter: ["<", MH, 150], color: "#ffc2a6", minzoom: 5 }],
-    lines: (r) => {
-      return ["<b>" + (r.height !== "" ? Number(r.height).toLocaleString() + " m" : "Height unknown") + "</b> · " + K.esc(mastKind(r)), K.esc(r.country || ""), age("Built", r.year),
-        r.name && r.operator ? "Operator " + K.esc(r.operator) : "", wikiLine(r)];
+  var tMeta = {}, tFeats = {}, tMap = null;
+  var tBase = (k) => { return k === "big" ? BASE + "masts" : BASE + "towers-t/" + k + "/t"; };
+  var tLines = (r, k) => {
+    return ["<b>" + (r.height !== "" ? Number(r.height).toLocaleString() + " m" : "Height unknown") + "</b> · " + K.esc(TN[String(k)[0]] || "Tower"),
+      K.esc(cap(r.kind || "tower")), K.esc(r.country || ""), age("Built", r.year), r.name && r.operator ? "Owner " + K.esc(r.operator) : "", wikiLine(r)];
+  };
+  var tSet = () => {
+    if (!tMap || !tMap.getSource("w-towers")) return;
+    var all = []; Object.keys(tFeats).forEach((k) => { all = all.concat(tFeats[k]); });
+    tMap.getSource("w-towers").setData(K.fc(all));
+  };
+  var tLoad = (k) => {
+    if (tMeta[k]) return;
+    tMeta[k] = 1;
+    K.loadJson(tBase(k) + ".p.json?h=" + V).then((d) => { tMeta[k] = d; tFeats[k] = P.toFeatures(d, { t: k }); tSet(); }).catch(() => { delete tMeta[k]; });
+  };
+  var tView = () => {
+    var m = tMap, man = meta.manifest;
+    if (!m || !L.isOn("towers") || m.getZoom() < 6 || !man || !man.towerTiles) return;
+    var b = m.getBounds();
+    man.towerTiles.forEach((k) => {
+      var p = k.split("_").map(Number);
+      if (p[0] < b.getNorth() && p[0] + 10 > b.getSouth() && p[1] < b.getEast() && p[1] + 10 > b.getWest()) tLoad(k);
+    });
+  };
+  var TH = ["to-number", ["slice", ["get", "k"], 1]];
+  var tApply = (map, on) => {
+    tMap = map;
+    K.vis(map, ["tower-dot"], on);
+    if (!on) return;
+    if (!map.getSource("w-towers")) {
+      map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR" });
+      map.addLayer({ id: "tower-dot", type: "circle", source: "w-towers", filter: tFilter(), paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, ["+", 1, ["/", TH, 170]], 6, ["+", 1.6, ["/", TH, 90]], 12, ["+", 3, ["/", TH, 40]]],
+        "circle-color": tColor, "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
+      map.on("moveend", tView);
+    }
+    K.loadJson(BASE + "manifest.json?h=" + V).then((m) => { meta.manifest = m; tView(); }).catch(() => {});
+    tLoad("big");
+  };
+  var tDetail = (f) => { var k = f.properties.t; return P.detail(tBase(k), tMeta[k], f.properties.i, V); };
+  L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot"], apply: tApply,
+    tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ at every zoom, shorter towers (60 m+, United States) from zoom 6. Types are guessed from the owner.",
+    kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }),
+    kidSet: () => { if (tMap && tMap.getLayer("tower-dot")) tMap.setFilter("tower-dot", tFilter()); },
+    attach: (map) => {
+      idle(map, "towers", "tower-dot", tApply);
+      map.on("click", "tower-dot", (e) => {
+        var f = e.features[0];
+        var pp = K.show(map, f.geometry.coordinates, "", [P.skeleton("Tower")], ["FCC ASR, Wikidata", "https://www.fcc.gov/uls/transactions/daily-weekly"]);
+        tDetail(f).then((r) => { if (pp.isOpen()) pp.setHTML(K.card(mastName(r), tLines(r, f.properties.k), (MSRC[r.src] || MSRC.wd)(r))); })
+          .catch(() => { if (pp.isOpen()) pp.setHTML(K.card("Tower", ["Could not load details. Tap again when online."], null)); });
+      });
     } });
+  var BT = { FIXED: "Fixed platform", CAIS: "Caisson", WP: "Well protector", TLP: "Tension-leg platform", SPAR: "Spar", MOPU: "Mobile production unit", SEMI: "Semi-submersible", SUBS: "Subsea" };
+  /* opt105: hover labels with the real name and type for towers and every points layer (was "Plat", "Mast 300") */
   window.SunnyHoverExt = (f, upd) => {
-    var id = f.layer && f.layer.id;
-    if (!/^mast-/.test(id) || !meta.masts) return null;
-    var h = +String(f.properties.k).slice(1);
-    var base = "<br><small>" + (h ? h + (h >= 400 ? "+" : "–" + (h + 24)) + " m · " : "") + "tall mast</small>";
-    P.detail(BASE + "masts", meta.masts, f.properties.i, V).then((r) => {
-      upd("<b>" + K.esc(mastName(r)) + "</b><br><small>" + (r.height !== "" ? r.height + " m · " : "") + K.esc(mastKind(r)) + "</small>");
+    var id = f.layer && f.layer.id, k = String(f.properties.k || "");
+    if (id === "tower-dot" && tMeta[f.properties.t]) {
+      tDetail(f).then((r) => { upd("<b>" + K.esc(mastName(r)) + "</b><br><small>" + (r.height !== "" ? r.height + " m · " : "") + K.esc(TN[k[0]] || "Tower") + "</small>"); }).catch(() => {});
+      return "<b>" + K.esc(TN[k[0]] || "Tower") + "</b><br><small>about " + k.slice(1) + " m</small>";
+    }
+    var o = hoverOf[id];
+    if (!o || !meta[o.file]) return null;
+    P.detail(BASE + o.file, meta[o.file], f.properties.i, V).then((r) => {
+      var ty = o.id === "platforms" ? (k === "boem" ? BT[r.kind] || "Offshore platform" : cap(r.kind || "offshore platform")) : cap(r.kind || o.name);
+      upd("<b>" + K.esc((o.title ? o.title(r) : r.name) || o.name) + "</b><br><small>" + K.esc(ty) + (r.operator ? " · " + K.esc(r.operator) : "") + "</small>");
     }).catch(() => {});
-    return "<b>Tall mast</b>" + base;
+    return "<b>" + K.esc(o.name) + "</b>";
   };
   pointLayer({ id: "radioscopes", file: "transmission", name: "Radio telescopes", icon: "📡", group: "Transmission",
     tip: "Radio telescopes and arrays (Wikidata)", attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
@@ -239,14 +292,4 @@
     },
     title: (p) => { return p.ty === "pipeline" ? "Undersea pipeline" : "Offshore platform"; },
     lines: (p) => { return [p.ty === "pipeline" ? "Underwater pipeline" + (p.sub ? ", carries " + K.esc(p.sub) : "") : "Offshore platform"].concat(common(p)); } });
-  osmLayer({ id: "osm-towers", src: "w-osm-tow", ids: ["osm-tower"], name: "Cell & radio towers (OSM)", icon: "📶", group: "Transmission", minZoom: 11, maxTiles: 6,
-    tip: "Communication towers and masts mapped in OpenStreetMap, loads at zoom 11 and closer",
-    q: 'nwr["man_made"~"^(mast|tower)$"]["tower:type"="communication"]BB;',
-    item: (el) => { var g = ptOf(el); return g ? { t: tg(el), g: g } : null; },
-    add: (map) => {
-      if (!map.getLayer("osm-tower")) map.addLayer({ id: "osm-tower", type: "circle", source: "w-osm-tow", paint: {
-        "circle-radius": 4, "circle-color": "#ff7b54", "circle-stroke-color": "#fff", "circle-stroke-width": 1 } }, K.before(map));
-    },
-    title: () => { return "Communication tower"; },
-    lines: (p) => { return [K.esc(cap(p.ty)) + (p.sub ? " (" + K.esc(p.sub) + ")" : ""), p.h ? "Height " + K.esc(p.h) + " m" : ""].concat(common(p)); } });
 })();

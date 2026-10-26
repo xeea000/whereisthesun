@@ -256,5 +256,8 @@
   window.SunnyLayers = { add: add, attach: attach, refresh: refresh, isOn: (id) => {
     var d = defs.filter((x) => { return x.id === id; })[0];
     return d ? isOn(d) : false;
-  }, tapIds: tapIds };
+  }, tapIds: tapIds, nameOf: (lid) => { /* opt105: friendly layer name for hover labels */
+    var d = defs.filter((x) => { return x.taps && x.taps.indexOf(lid) >= 0; })[0];
+    return d ? d.name : "";
+  } };
 })();
