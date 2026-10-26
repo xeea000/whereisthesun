@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt124"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt125"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -35,7 +35,7 @@ var PRECACHE = [
   "layers-panel.css?h=3b513d26f9",
   "info-panel.css?h=ed7a47a437",
   "vendor/maplibre-gl.js?h=be9633c4d8",
-  "tap-snap.js?h=092404c149",
+  "tap-snap.js?h=571e02137d",
   "points.js?h=bd3ec9c286",
   "peek-place.js?h=f0d14e00bc",
   "info-panel.js?h=fc61856408",
@@ -63,7 +63,7 @@ var PRECACHE = [
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
   "layer-kit.js?h=d3129cdac5",
-  "layers-panel.js?h=31c6beeadb",
+  "layers-panel.js?h=3ad8d10dc7",
   "famous.js?h=ddc2b79136",
   "overzoom.js?h=986a281673",
   "flight-time.js?h=f715e313ca",
@@ -72,11 +72,12 @@ var PRECACHE = [
   "advanced.js?h=ef030f80f5",
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
-  "hover-box.js?h=d4ab2cd4da",
+  "hover-box.js?h=68b52683d9",
   "sky-layers.js?h=d5c40cdf04",
   "earth-layers.js?h=536a8382bf",
-  "plates.js?h=b536ae551d",
+  "plates.js?h=6126feb49c",
   "quakes.js?h=2d5a0e23cf",
+  "volcanoes.js?h=5aede381a6",
   "world-layers.js?h=7f639ec86a",
   "outdoor-layers.js?h=d931181d64",
   "sky-card.js?h=2866daf674",

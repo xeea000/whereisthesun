@@ -46,7 +46,11 @@
   function feats(m, p) {
     var ids = Object.keys(labels).concat(tapIds(), ["beaches-dot", "beaches-sun"]).filter((id, i, a) => a.indexOf(id) === i && m.getLayer(id));
     if (!ids.length) return [];
-    try { return m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ids }); } catch (e) { return []; }
+    var fs = [];
+    try { fs = m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ids }); } catch (e) { return []; }
+    /* a dot or line under the pointer beats the area it sits in */
+    var sharp = fs.filter((f) => { return f.layer.type !== "fill"; });
+    return sharp.length ? sharp : fs;
   }
   function overNow() { return last && last.fs.length; }
   function hook() {

@@ -57,7 +57,13 @@
     } });
   /* plate motion streaks */
   var gl = null, cv = null, raf = 0, lastT = 0, mapRef = null;
-  var field = { sample: (lon, lat) => { var s = at(lon, lat); return s && (s.u || s.v) ? { u: s.u / 3, v: s.v / 3 } : null; } };
+  /* a streak stops where it runs into a plate coming the other way, so it does not pile up on the boundary */
+  var field = { sample: (lon, lat) => {
+    var s = at(lon, lat); if (!s || !(s.u || s.v)) return null;
+    var k = grid.step / Math.hypot(s.u, s.v), t = at(lon + s.u * k / Math.max(0.2, Math.cos(lat * Math.PI / 180)), lat + s.v * k);
+    if (t && t.u * s.u + t.v * s.v < 0) return null;
+    return { u: s.u / 3, v: s.v / 3 };
+  } };
   var tick = (t) => {
     raf = requestAnimationFrame(tick);
     if (document.hidden || !gl) return;
