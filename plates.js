@@ -46,7 +46,8 @@
           K.esc(KIND[p.k][1].split(": ")[1].replace(/^./, (c) => { return c.toUpperCase(); })), "Moving about " + Math.round(p.v) + " mm a year against each other"], SRC);
       });
       map.on("click", "plate-fill", (e) => {
-        if (map.queryRenderedFeatures(e.point, { layers: ["plate-edge"] }).length) return;
+        var top = map.queryRenderedFeatures(e.point).filter((f) => { return f.layer.type !== "raster" && f.layer.type !== "background"; })[0];
+        if (top && top.layer.id !== "plate-fill") return;
         var p = e.features[0].properties, s = at(e.lngLat.lng, e.lngLat.lat);
         var rows = [K.esc(p.name) + " plate"];
         if (s) rows.push("Here it moves about " + Math.round(Math.hypot(s.u, s.v)) + " mm a year, toward " + Math.round((Math.atan2(s.u, s.v) * 180 / Math.PI + 360) % 360) + "°");
