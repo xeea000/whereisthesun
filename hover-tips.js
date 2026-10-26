@@ -81,6 +81,8 @@
         if (window.SunnyTapSnap) fs = window.SunnyTapSnap.near(m, e.point, fs);
         var ok = fs.filter((g) => g.layer && !SKIP[g.source] && !SKIPL[g.layer.id] && g.layer.type !== "raster");
         var f = ok.find((g) => /circle|symbol/.test(g.layer.type)) || ok.find((g) => g.layer.type === "line") || ok[0]; /* dots win over lines, lines over areas */
+        var pk = window.SunnyTapSnap && window.SunnyTapSnap.pick(m, e.point);
+        if (pk && !SKIPL[pk.layer.id]) f = pk; /* opt169: hover names the item a tap here would open */
         if (f && f.layer.id === "famous-star") { /* opt166: the star stands for the dot under it; name that dot, as a tap does */
           var dot = ok.find((g) => g !== f && g.layer.type === "circle"); if (dot) f = dot;
         }

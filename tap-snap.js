@@ -45,6 +45,17 @@
   };
   var hit = (e) => { return !!(e && hits.has(e.originalEvent || e)); };
   var AREA = { fill: 1, line: 1, raster: 1, heatmap: 1, "fill-extrusion": 1 };
+  /* opt169: the dot a tap at p would snap to; hover uses the same pick */
+  var pick = (m, p) => {
+    var ids = Object.keys(LAYERS).filter((id) => { return m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== "none"; });
+    if (!ids.length) return null;
+    var R = 60, best = null, bestD = 1e9;
+    m.queryRenderedFeatures([[p.x - R, p.y - R], [p.x + R, p.y + R]], { layers: ids }).forEach((f) => {
+      var d = dist(m, f, p);
+      if (d <= Math.max(22, 3 * radius(m, f.layer.id, f)) && d < bestD) { bestD = d; best = f; }
+    });
+    return best;
+  };
   var snap = (m, ev) => {
     var ids = Object.keys(LAYERS).filter((id) => { return m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== "none"; });
     if (!ids.length) return;
@@ -99,5 +110,5 @@
     });
   };
   patch();
-  window.SunnyTapSnap = { snap: snap, hit: hit, near: near };
+  window.SunnyTapSnap = { snap: snap, hit: hit, near: near, pick: pick };
 })();
