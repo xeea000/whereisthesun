@@ -205,43 +205,48 @@
     var dark = lum == null ? 1 : 1 - Math.min(1, lum / 160) * 0.85;
     return Math.round(10 * (1 - sum / n / 100) * moon * dark);
   }
+  /* opt107: fixed world-aligned squares (they no longer slide with the view), sized by zoom, at every zoom.
+   * Each square's clouds are fetched once an hour and reused while panning. */
+  var cellStore = {};
+  function step() { var z = map.getZoom(); return z < 3 ? 10 : z < 5 ? 4 : z < 7 ? 2 : z < 9 ? 1 : 0.5; }
   function grid() {
-    if (!map || !L.isOn("nightscore") || map.getZoom() < 4 || !window.SunCalc) {
+    if (!map || !L.isOn("nightscore") || !window.SunCalc) {
       K.vis(map, ["sky-grid", "sky-grid-line"], false);
       return;
     }
     K.vis(map, ["sky-grid", "sky-grid-line"], true);
-    var b = map.getBounds();
-    var w = b.getWest(), e = b.getEast(), s = b.getSouth(), n = b.getNorth();
-    var key = [w, s, e, n].map((v) => { return v.toFixed(1); }).join(",");
+    var b = map.getBounds(), d = step();
+    var w = Math.max(-180, Math.floor(b.getWest() / d) * d), e = Math.min(180, Math.ceil(b.getEast() / d) * d);
+    var s = Math.max(-80, Math.floor(b.getSouth() / d) * d), n = Math.min(80, Math.ceil(b.getNorth() / d) * d);
+    while ((e - w) / d * ((n - s) / d) > 60) d *= 2; /* at most about 60 squares per view */
+    w = Math.floor(w / d) * d; s = Math.floor(s / d) * d;
+    var key = [w, s, e, n, d].join(",");
     if (key === gridKey) return;
     gridKey = key;
     var cells = [];
-    for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) {
-      cells.push({ w: w + (e - w) * i / 4, e: w + (e - w) * (i + 1) / 4, s: s + (n - s) * j / 4, n: s + (n - s) * (j + 1) / 4 });
-    }
-    cells.forEach((c) => { c.lat = (c.s + c.n) / 2; c.lng = (c.w + c.e) / 2; });
-    var ck = "grid-" + key;
-    var cached = K.getStore(ck);
-    var cp = cached ? Promise.resolve(cached) : fetch("https://api.open-meteo.com/v1/forecast?latitude=" + cells.map((c) => { return c.lat.toFixed(2); }).join(",") +
-      "&longitude=" + cells.map((c) => { return c.lng.toFixed(2); }).join(",") + "&hourly=cloud_cover&forecast_days=2&timezone=GMT&timeformat=unixtime")
+    for (var x = w; x < e; x += d) for (var y = s; y < n; y += d) cells.push({ w: x, e: x + d, s: y, n: y + d, lat: y + d / 2, lng: x + d / 2, k: d + ":" + x + ":" + y });
+    var need = cells.filter((c) => { return !cellStore[c.k] && !K.getStore("ns-" + c.k); });
+    var cp = !need.length ? Promise.resolve() : fetch("https://api.open-meteo.com/v1/forecast?latitude=" + need.map((c) => { return c.lat.toFixed(2); }).join(",") +
+      "&longitude=" + need.map((c) => { return c.lng.toFixed(2); }).join(",") + "&hourly=cloud_cover&forecast_days=2&timezone=GMT&timeformat=unixtime")
       .then((r) => { return r.json(); }).then((j) => {
-        var arr = (Array.isArray(j) ? j : [j]).map((x) => { return { t: x.hourly.time, c: x.hourly.cloud_cover }; });
-        K.putStore(ck, arr, 3600000);
-        return arr;
+        (Array.isArray(j) ? j : [j]).forEach((x, k) => {
+          if (!x || !x.hourly) return;
+          var v = { t: x.hourly.time, c: x.hourly.cloud_cover };
+          cellStore[need[k].k] = v; K.putStore("ns-" + need[k].k, v, 3600000);
+        });
       });
-    cp.then((arr) => {
+    cp.then(() => {
       return Promise.all(cells.map((c) => { return S().darkness(c.lat, c.lng).catch(() => { return null; }); })).then((lums) => {
         if (key !== gridKey) return;
         var f = cells.map((c, k) => {
-          var v = arr[k] ? scoreOf(arr[k], lums[k], c.lat, c.lng) : null;
+          var cc = cellStore[c.k] || K.getStore("ns-" + c.k), v = cc ? scoreOf(cc, lums[k], c.lat, c.lng) : null;
           return { type: "Feature", properties: { v: v == null ? -1 : v }, geometry: { type: "Polygon", coordinates: [[[c.w, c.s], [c.e, c.s], [c.e, c.n], [c.w, c.n], [c.w, c.s]]] } };
         });
         if (!map.getSource("sky-grid")) {
           map.addSource("sky-grid", { type: "geojson", data: K.fc(f) });
-          map.addLayer({ id: "sky-grid", type: "fill", source: "sky-grid", maxzoom: 8, filter: [">=", ["get", "v"], 0],
-            paint: { "fill-color": ["interpolate", ["linear"], ["get", "v"], 0, "#d7301f", 5, "#fdcc3a", 10, "#1a9850"], "fill-opacity": 0.3 } }, K.before(map));
-          map.addLayer({ id: "sky-grid-line", type: "line", source: "sky-grid", maxzoom: 8, paint: { "line-color": "#fff", "line-opacity": 0.25, "line-width": 1 } }, K.before(map));
+          map.addLayer({ id: "sky-grid", type: "fill", source: "sky-grid", filter: [">=", ["get", "v"], 0],
+            paint: { "fill-color": ["interpolate", ["linear"], ["get", "v"], 0, "#d7301f", 5, "#fdcc3a", 10, "#1a9850"], "fill-opacity": 0.35, "fill-antialias": false } }, K.before(map));
+          map.addLayer({ id: "sky-grid-line", type: "line", source: "sky-grid", filter: [">=", ["get", "v"], 0], paint: { "line-color": "#fff", "line-opacity": 0.2, "line-width": 0.6 } }, K.before(map));
           map.on("click", "sky-grid", (ev) => {
             var v = ev.features[0].properties.v;
             K.show(map, ev.lngLat, "Night-sky score " + v + "/10", ["Tonight in this square: clouds, the moon and how dark the sky is",
@@ -251,7 +256,7 @@
           map.getSource("sky-grid").setData(K.fc(f));
         }
       });
-    }).catch(() => {});
+    }).catch(() => { gridKey = ""; });
   }
   function apply() {
     if (!map) return;

@@ -97,6 +97,11 @@
       sl.appendChild(i); sl.appendChild(sw); r.appendChild(sl);
     } else { r.appendChild(i); r.appendChild(sw); }
     rows[d.id] = { row: r, input: i, note: note };
+    if (!d.kids && d.legend) { /* opt107: a plain row can carry a small legend under it */
+      var lw = el("div", "lp-fold"), lg = el("div", "lp-leg");
+      lg.innerHTML = d.legend; lw.appendChild(r); lw.appendChild(lg);
+      return lw;
+    }
     if (!d.kids) return r;
     /* opt102: twisty sub-section (e.g. Satellites groups), each child saved as sunny-L-<kid id> */
     var w = el("div", "lp-fold");
@@ -126,6 +131,7 @@
       kl.appendChild(document.createTextNode(" " + k.name));
       box.appendChild(kl);
     });
+    if (d.legend) box.insertAdjacentHTML("beforeend", d.legend); /* opt107: small legend under the groups */
     w.appendChild(r);
     w.appendChild(box);
     return w;

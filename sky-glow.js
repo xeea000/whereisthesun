@@ -16,14 +16,21 @@
     var t = document.getElementById("toggle-skyglow");
     return !!(t && t.checked);
   }
+  /* opt107: the night-lights tint sits right above the base map, under every other overlay */
   function beforeId() {
-    var ids = ["obs-cluster", "craters-fill", "beaches-fill"];
-    for (var i = 0; i < ids.length; i++) if (map.getLayer(ids[i])) return ids[i];
+    var ls = map.getStyle().layers || [];
+    for (var i = 0; i < ls.length; i++) if (ls[i].id !== ID && ls[i].type !== "background" && ls[i].source !== "ofm") return ls[i].id;
     return undefined;
+  }
+  function keepLow() {
+    if (!map || !map.getLayer(ID)) return;
+    var b = beforeId(), ls = map.getStyle().layers, me = ls.findIndex((l) => l.id === ID), bi = ls.findIndex((l) => l.id === b);
+    if (b && bi >= 0 && bi < me) map.moveLayer(ID, b);
   }
   function addLayer() {
     if (!map.getSource(SRC)) map.addSource(SRC, { type: "raster", tiles: [URL], tileSize: 256, maxzoom: 8, attribution: ATTRIB });
     if (!map.getLayer(ID)) map.addLayer({ id: ID, type: "raster", source: SRC, paint: { "raster-opacity": 0.7, "raster-fade-duration": 0 } }, beforeId());
+    if (!map._sgLow) { map._sgLow = true; map.on("idle", keepLow); }
   }
   function makeLegend() {
     legend = document.createElement("div");
