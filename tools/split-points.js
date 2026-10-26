@@ -48,10 +48,31 @@ if (require.main === module) {
   if (which === "obs") {
     const d = JSON.parse(fs.readFileSync(path.join(root, "observatories.json"), "utf8"));
     const cols = "name,kind,cat,operator,link,scopes,type,diameter_m,qid,note";
-    const r = split(path.join(root, "obs", "sites"), d.sites.map((s) => {
-      return { lat: s.lat, lon: s.lon, code: s.cat, row: cols.split(",").map((k) => { return s[k] == null ? "" : s[k]; }) };
+    /* four classes; radio sites already on the Radio telescopes layer (same Wikidata item or within 2 km) are left out */
+    const t = JSON.parse(fs.readFileSync(path.join(root, "world", "transmission.p.json"), "utf8")), scopes = [];
+    let a = 0, o = 0;
+    for (let i = 0; i < t.n; i++) {
+      a += t.lat[i]; o += t.lon[i];
+      if (t.codes[t.c[i]] !== "scope") continue;
+      const row = JSON.parse(fs.readFileSync(path.join(root, "world", "transmission.d" + Math.floor(i / t.S) + ".json"), "utf8"))[i % t.S];
+      scopes.push({ lat: a / 1e5, lon: o / 1e5, qid: row[7] });
+    }
+    const near = (s) => {
+      return scopes.some((q) => { return (s.qid && q.qid === s.qid) || Math.hypot(q.lat - s.lat, (q.lon - s.lon) * Math.cos(s.lat * Math.PI / 180)) < 0.018; }); };
+      const cls = (s) => {
+      if (/neutrino|gravitational|cosmic/.test(s.cat)) return "detector";
+      if (s.kind === "dark-sky") return "darksky";
+      if (s.kind === "observing-site" || s.kind === "planetarium") return "stargaze";
+      return "scope";
+    };
+    const count = {};
+    const keep = d.sites.filter((s) => { return !(s.cat === "radio" && near(s)); });
+    const r = split(path.join(root, "obs", "sites"), keep.map((s) => {
+      const c = cls(s);
+      count[c] = (count[c] || 0) + 1;
+      return { lat: s.lat, lon: s.lon, code: c, row: cols.split(",").map((k) => { return s[k] == null ? "" : s[k]; }) };
     }), cols, 150);
-    console.log("obs", JSON.stringify(r));
+    console.log("obs", d.sites.length - keep.length, "radio duplicates left out", JSON.stringify(count), JSON.stringify(r));
   } else if (which === "met") {
     const d = JSON.parse(fs.readFileSync(path.join(root, "meteorite-falls.json"), "utf8"));
     const r = split(path.join(root, "met", "falls"), d.falls.map((f) => {

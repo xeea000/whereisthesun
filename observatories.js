@@ -3,7 +3,7 @@
  * Data: data/obs (points file plus detail shards, opt96) split from data/observatories.json, built once by tools/build-observatories.js from
  * OpenStreetMap (ODbL), plus Wikidata (CC0) radio arrays and neutrino, gravitational-wave
  * and cosmic-ray detectors via tools/build-astro-extra.js (opt91). Fetched only when the switch is first turned on. Sites cluster
- * when zoomed out; each site is a small telescope icon. Tap for name, type, size,
+ * when zoomed out; each site is a dot coloured by class (telescope, detector, Dark Sky place, stargazing site). Tap for name, type, size,
  * operator and link. Toggle: Settings, Sightseeing, Observatories. */
 (function () {
   "use strict";
@@ -31,65 +31,8 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch(BASE + ".p.json?d=opt96").then(readJson).then(keep);
+    if (!loading) loading = fetch(BASE + ".p.json?d=opt137").then(readJson).then(keep);
     return loading;
-  }
-  /* a 22 px detector glyph for neutrino, gravitational-wave and cosmic-ray sites: teal disc, white rings */
-  function detectorIcon() {
-    var c = document.createElement("canvas");
-    c.width = 44;
-    c.height = 44;
-    var g = c.getContext("2d");
-    g.fillStyle = "#11a3a3";
-    g.strokeStyle = "rgba(255,255,255,0.9)";
-    g.lineWidth = 2;
-    g.beginPath();
-    g.arc(22, 22, 20, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-    g.strokeStyle = "#fff";
-    g.lineWidth = 2.5;
-    [6, 12].forEach(ring.bind(null, g));
-    g.fillStyle = "#fff";
-    g.beginPath();
-    g.arc(22, 22, 2.5, 0, Math.PI * 2);
-    g.fill();
-    return g.getImageData(0, 0, 44, 44);
-  }
-  function ring(g, r) {
-    g.beginPath();
-    g.arc(22, 22, r, 0, Math.PI * 2);
-    g.stroke();
-  }
-  /* a 22 px telescope glyph: tube on a tripod, white on violet */
-  function icon() {
-    var c = document.createElement("canvas");
-    c.width = 44;
-    c.height = 44;
-    var g = c.getContext("2d");
-    g.fillStyle = "#7b5cff";
-    g.strokeStyle = "rgba(255,255,255,0.9)";
-    g.lineWidth = 2;
-    g.beginPath();
-    g.arc(22, 22, 20, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-    g.fillStyle = "#fff";
-    g.save();
-    g.translate(22, 18);
-    g.rotate(-0.5);
-    g.fillRect(-12, -4, 22, 8);
-    g.fillRect(10, -5, 4, 10);
-    g.restore();
-    g.lineWidth = 2.5;
-    g.strokeStyle = "#fff";
-    g.beginPath();
-    g.moveTo(22, 20);
-    g.lineTo(15, 34);
-    g.moveTo(22, 20);
-    g.lineTo(29, 34);
-    g.stroke();
-    return g.getImageData(0, 0, 44, 44);
   }
   function beforeId() {
     var ids = ["beaches-fill", "beaches-line", "beaches-dot"];
@@ -97,8 +40,6 @@
     return undefined;
   }
   function addLayers() {
-    if (!map.hasImage("obs-icon")) map.addImage("obs-icon", icon(), { pixelRatio: 2 });
-    if (!map.hasImage("obs-detector")) map.addImage("obs-detector", detectorIcon(), { pixelRatio: 2 });
     if (!map.getSource(SRC)) map.addSource(SRC, { type: "geojson", data: data, attribution: ATTRIB, cluster: window.SunnyKit.grouped(), clusterRadius: 36, clusterMaxZoom: 7 });
     var before = beforeId();
     if (!map.getLayer("obs-cluster")) {
@@ -107,9 +48,22 @@
           "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 2, 7, 50, 13, 500, 20] } }, before);
     }
     if (!map.getLayer("obs-point")) {
-      map.addLayer({ id: "obs-point", type: "symbol", source: SRC, filter: ["!", ["has", "point_count"]],
-        layout: { "icon-image": ["match", ["get", "cat"], ["neutrino", "gravitational-wave", "cosmic-ray"], "obs-detector", "obs-icon"], "icon-size": 1, "icon-allow-overlap": true } }, before);
+      map.addLayer({ id: "obs-point", type: "circle", source: SRC, filter: pointFilter(),
+        paint: { "circle-color": ["match", ["get", "cat"]].concat(CLS.map((c) => { return [c[0], c[2]]; }).flat(), ["#7b5cff"]),
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 3, 8, 6], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } }, before);
     }
+  }
+  /* four classes, each with its own switch under the Observatories row (sunny-L-observatories-<class>) */
+  var CLS = [["scope", "Telescope (optical or radio)", "#7b5cff"], ["detector", "Detector (neutrino, gravitational wave, cosmic ray)", "#11a3a3"],
+    ["darksky", "Dark Sky Reserve or Park", "#1c2b6b"], ["stargaze", "Stargazing site or planetarium", "#ffd34d"]];
+  function kidOn(c) {
+    try { return localStorage.getItem("sunny-L-observatories-" + c) !== "0"; } catch (e) { return true; }
+  }
+  function pointFilter() {
+    return ["all", ["!", ["has", "point_count"]], ["in", ["get", "cat"], ["literal", CLS.map((c) => { return c[0]; }).filter(kidOn)]]];
+  }
+  function refresh() {
+    if (map && map.getLayer("obs-point")) map.setFilter("obs-point", pointFilter());
   }
   function keepOrder() {
     var before = beforeId();
@@ -227,5 +181,5 @@
     map.on("idle", onIdle);
     apply();
   }
-  window.SunnyObservatories = { attach: attach, popupHtml: popupHtml };
+  window.SunnyObservatories = { attach: attach, popupHtml: popupHtml, refresh: refresh, CLS: CLS };
 })();
