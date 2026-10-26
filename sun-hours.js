@@ -7,7 +7,7 @@
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
-  var ID = "sunh", N = 150, MINZ = 13, R = Math.PI / 180, timer = null, last = null, run = 0;
+  var viewKey = "", ID = "sunh", N = 150, NZ = [150, 240], MINZ = 13, R = Math.PI / 180, timer = null, last = null, run = 0;
   var RAMP = [[0, "#1b1f5e"], [2, "#3b3fa0"], [4, "#7a4aa8"], [6, "#c0567f"], [8, "#ef8a3c"], [10, "#ffc93a"], [12, "#fff3a0"]];
   var DEM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/";
   var sunAt = (t, lat, lon) => {
@@ -43,7 +43,7 @@
     });
   };
   /* buildings and woods drawn into the inner N x N cells, height in metres = grey value * 2 */
-  var objects = (map, x0, y0, c) => {
+  var objects = (map, x0, y0, c, cm, trees) => {
     var cv = document.createElement("canvas"); cv.width = cv.height = N;
     var g = cv.getContext("2d"), q = (lay) => { try { return map.querySourceFeatures(ID + "-omt", { sourceLayer: lay }); } catch (e) { return []; } };
     var ring = (r) => { r.forEach((p, i) => { var u = (mx(p[0]) - x0) / c, v = (my(p[1]) - y0) / c; if (i) g.lineTo(u, v); else g.moveTo(u, v); }); g.closePath(); };
@@ -55,31 +55,51 @@
     q("landcover").filter((f) => { return f.properties.class === "wood"; }).forEach((f) => { poly(f, 12); });
     var bs = q("building").map((f) => { return [f, +f.properties.render_height || 8]; });
     bs.sort((a, b) => { return a[1] - b[1]; }).forEach((b) => { poly(b[0], b[1]); });
+    (trees || []).forEach((t) => { /* single OSM trees: 10 m, crown about 8 m across */
+      var u = (mx(t[1]) - x0) / c, v = (my(t[0]) - y0) / c;
+      g.fillStyle = "rgb(5,5,5)"; g.beginPath(); g.arc(u, v, Math.max(0.5, 4 / cm), 0, 7); g.fill();
+    });
     var px = g.getImageData(0, 0, N, N).data, o = new Float32Array(N * N);
     for (var k = 0; k < N * N; k++) o[k] = px[k * 4] * 2;
-    return { h: o, nb: bs.length };
+    return { h: o, nb: bs.length, nt: (trees || []).length };
+  };
+  var treeKey = "", treeList = null;
+  var treesFor = (b, z) => {
+    if (z < 15) return Promise.resolve(null);
+    var k = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map((v) => { return v.toFixed(3); }).join(",");
+    if (k === treeKey) return Promise.resolve(treeList);
+    var q = "[out:json][timeout:15];node[natural=tree](" + k + ");out skel;";
+    var t = K.overpass(q).then((j) => { treeKey = k; treeList = j.elements.map((e) => { return [e.lat, e.lon]; }); return treeList; }).catch(() => { return null; });
+    return Promise.race([t, new Promise((ok) => { setTimeout(() => { ok(null); }, 8000); })]);
   };
   var compute = (map) => {
-    var my0 = ++run, b = map.getBounds(), z = map.getZoom();
+    var b0 = map.getBounds(), vk = b0.toArray().join(",") + map.getZoom().toFixed(2);
+    if (vk === viewKey) return; /* the map also fires moveend without moving; keep the run in flight */
+    viewKey = vk;
+    var my0 = ++run, b = b0, z = map.getZoom();
     if (z < MINZ - 0.01) { clear(map); return; }
+    N = z >= 15 ? NZ[1] : NZ[0];
     var x0 = mx(b.getWest()), x1 = mx(b.getEast()), y0 = my(b.getNorth()), y1 = my(b.getSouth());
     var c = Math.max(x1 - x0, y1 - y0) / N, ox = x0 - N * c, oy = y0 - N * c, lat = map.getCenter().lat, lon = map.getCenter().lng;
     var cm = c * 40075016.7 * Math.cos(lat * R), dz = Math.max(8, Math.min(12, Math.floor(z) - 2));
-    terrain(ox, oy, c, dz).then((h) => {
+    Promise.all([terrain(ox, oy, c, dz), treesFor(b, z)]).then((tt) => {
+      var h = tt[0];
       if (my0 !== run) return;
-      var ob = objects(map, x0, y0, c), M = 3 * N, sun = [], day = new Date(); day.setHours(0, 0, 0, 0);
+      var ob = objects(map, x0, y0, c, cm, tt[1]), M = 3 * N, sun = [], day = new Date(); day.setHours(0, 0, 0, 0);
+      var k;
       for (var t = 0; t < 96; t++) { var s = sunAt(day.getTime() + t * 9e5 + 4.5e5, lat, lon); if (s.alt > 0.005) sun.push([Math.sin(s.az), -Math.cos(s.az), Math.tan(s.alt)]); }
       for (var j = 0; j < N; j++) for (var i = 0; i < N; i++) h[(j + N) * M + i + N] += ob.h[j * N + i];
+      var hmax = -1e9; for (k = 0; k < M * M; k++) if (h[k] > hmax) hmax = h[k];
       var hrs = new Float32Array(N * N), top = 0;
       for (j = 0; j < N; j++) for (i = 0; i < N; i++) {
         var gi = (j + N) * M + i + N, h0 = h[gi] + 1, lit = 0;
-        for (var k = 0; k < sun.length; k++) {
+        for (k = 0; k < sun.length; k++) {
           var dx = sun[k][0], dy = sun[k][1], tn = sun[k][2], d = 0.7, st = 0.7, sh = false;
           while (true) {
             var u = Math.round(i + N + dx * d), v = Math.round(j + N + dy * d);
             if (u < 0 || v < 0 || u >= M || v >= M) break;
             var need = h0 + d * cm * tn;
-            if (need > 9000) break;
+            if (need > hmax) break; /* nothing in the grid is that tall */
             if (h[v * M + u] > need) { sh = true; break; }
             d += st; st = Math.min(st * 1.08, 6);
           }
@@ -87,8 +107,8 @@
         }
         hrs[j * N + i] = lit / 4; if (lit / 4 > top) top = lit / 4;
       }
-      last = { x0: x0, y0: y0, c: c, hrs: hrs, day: sun.length / 4, nb: ob.nb };
-      draw(map, x0, y0, c, hrs);
+      last = { x0: x0, y0: y0, c: c, n: N, hrs: hrs, day: sun.length / 4, nb: ob.nb, nt: ob.nt };
+      draw(map, x0, y0, c, hrs, z);
     }).catch((e) => { console.error("sun hours", e); });
   };
   var col = (v) => {
@@ -99,7 +119,7 @@
     return [255, 243, 160];
   };
   var inv = (y) => { return Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / R; };
-  var draw = (map, x0, y0, c, hrs) => {
+  var draw = (map, x0, y0, c, hrs, z) => {
     var cv = document.createElement("canvas"); cv.width = cv.height = N;
     var g = cv.getContext("2d"), im = g.createImageData(N, N);
     for (var k = 0; k < N * N; k++) { var cc = col(hrs[k]); im.data[k * 4] = cc[0]; im.data[k * 4 + 1] = cc[1]; im.data[k * 4 + 2] = cc[2]; im.data[k * 4 + 3] = 255; }
@@ -109,11 +129,15 @@
     if (src) src.updateImage({ url: cv.toDataURL(), coordinates: co });
     else {
       map.addSource(ID, { type: "image", url: cv.toDataURL(), coordinates: co });
-      map.addLayer({ id: ID, type: "raster", source: ID, paint: { "raster-opacity": 0.6, "raster-resampling": "nearest" } }, K.before(map));
+      map.addLayer({ id: ID, type: "raster", source: ID, paint: { "raster-opacity": 0.6 } }, K.before(map));
+      map.addSource(ID + "-hit", { type: "geojson", data: K.fc([]) });
+      map.addLayer({ id: ID + "-hit", type: "fill", source: ID + "-hit", paint: { "fill-opacity": 0 } });
     }
-    K.vis(map, [ID], true);
+    map.setPaintProperty(ID, "raster-resampling", z >= 15 ? "linear" : "nearest"); /* smooth when cells are a few metres */
+    map.getSource(ID + "-hit").setData(K.fc([{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [co.concat([co[0]])] } }]));
+    K.vis(map, [ID, ID + "-hit"], true);
   };
-  var clear = (map) => { last = null; K.vis(map, [ID], false); };
+  var clear = (map) => { last = null; viewKey = ""; K.vis(map, [ID, ID + "-hit"], false); };
   var ensure = (map) => {
     if (map.getSource(ID + "-omt")) return;
     map.addSource(ID + "-omt", { type: "vector", url: "https://tiles.openfreemap.org/planet",
@@ -125,7 +149,7 @@
     var go = () => { var ok = false; try { ok = map.isSourceLoaded(ID + "-omt"); } catch (e) {} if (ok || ++tries > 12) compute(map); else timer = setTimeout(go, 500); };
     timer = setTimeout(go, 900); };
   var apply = (map, on) => {
-    if (!on) { run++; clearTimeout(timer); if (map.getLayer(ID)) K.vis(map, [ID, ID + "-q-building", ID + "-q-landcover"], false); return; }
+    if (!on) { run++; viewKey = ""; clearTimeout(timer); if (map.getLayer(ID)) K.vis(map, [ID, ID + "-hit", ID + "-q-building", ID + "-q-landcover"], false); return; }
     try { ensure(map); } catch (e) { setTimeout(() => { if (L.isOn("sunhours")) apply(map, true); }, 2000); return; }
     K.vis(map, [ID + "-q-building", ID + "-q-landcover"], true);
     later(map);
@@ -133,25 +157,21 @@
   var at = (ll) => {
     if (!last) return null;
     var i = Math.floor((mx(ll.lng) - last.x0) / last.c), j = Math.floor((my(ll.lat) - last.y0) / last.c);
-    return i < 0 || j < 0 || i >= N || j >= N ? null : last.hrs[j * N + i];
+    return i < 0 || j < 0 || i >= last.n || j >= last.n ? null : last.hrs[j * last.n + i];
   };
   var fmt = (v) => { return (Math.round(v * 4) / 4).toFixed(2).replace(/\.?0+$/, "") + " h"; };
-  window.SunnySunHours = { at: at, last: () => { return last; } };
-  L.add({ id: "sunhours", name: "Sun hours (estimate)", icon: "⏱️", group: "Sky & Space", taps: [], dflt: true, apply: apply,
+  window.SunnySunHours = { at: at, fmt: fmt, last: () => { return last; } };
+  L.add({ id: "sunhours", name: "Sun hours (estimate)", icon: "⏱️", group: "Sky & Space", taps: [ID + "-hit"], dflt: true, apply: apply,
     legend: K.legRamp(RAMP.map((r) => { return r[1]; }).join(","), "0 h", "6 h", "12+ h"),
     tip: "Estimated hours of direct sun today on a clear day, with shade from hills, buildings and woods. Zoom 13 or closer; tap for the value",
     attach: (map, on) => {
       map.on("moveend", () => { if (L.isOn("sunhours")) later(map); });
-      map.on("mousemove", (e) => { /* desktop hover: the value under the pointer as the map's tooltip */
-        var v = L.isOn("sunhours") ? at(e.lngLat) : null, cv = map.getCanvas(), t = v == null ? "" : "Sun hours: about " + fmt(v) + " (estimate)";
-        if (cv.title !== t) cv.title = t;
-      });
-      map.on("click", (e) => {
-        if (!L.isOn("sunhours")) return;
+      map.on("click", ID + "-hit", (e) => {
         var v = at(e.lngLat);
         if (v == null) return;
         K.show(map, e.lngLat, "About " + fmt(v) + " of direct sun today", ["Open sky here would give " + fmt(last.day),
-          "Estimate: clear sky, terrain plus " + last.nb + " buildings in view; trees 12 m, in leaf", "Zoom 13 or closer; redrawn when the map moves"],
+          "Estimate: clear sky, terrain, " + last.nb + " building shapes" + (last.nt ? ", " + last.nt + " single trees" : "") + "; woods 12 m, in leaf",
+          "Zoom 13 or closer; redrawn when the map moves"],
           ["AWS Terrarium terrain, OpenFreeMap (OSM) buildings", "https://registry.opendata.aws/terrain-tiles/"]);
       });
       apply(map, on);

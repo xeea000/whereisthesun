@@ -96,6 +96,12 @@
         if (f && f.layer.id === "famous-star") { /* opt166: the star stands for the dot under it; name that dot, as a tap does */
           var dot = ok.find((g) => g !== f && g.layer.type === "circle"); if (dot) f = dot;
         }
+        if (f && f.layer.id === "sunh-hit" && window.SunnySunHours) { /* the value under the pointer, not a name */
+          var sv = window.SunnySunHours.at(m.unproject(e.point));
+          if (sv == null) { hide(); return; }
+          var st = "<b>About " + window.SunnySunHours.fmt(sv) + " of direct sun today</b><br><small>Sun hours estimate</small>";
+          return show(e.originalEvent.clientX, e.originalEvent.clientY, st);
+        }
         if (!f && window.SunnyAurora) {
           var ll = m.unproject(e.point), v = window.SunnyAurora.at(ll.lng, ll.lat);
           if (v >= 5) { cv.style.cursor = "pointer"; return show(e.originalEvent.clientX, e.originalEvent.clientY, "<b>Aurora chance " + Math.round(v) + " %</b><br><small>NOAA aurora forecast</small>"); }
