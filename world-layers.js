@@ -155,10 +155,12 @@
     lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
   /* Travel: airports */
   pointLayer({ id: "airports", file: "airports", name: "Airports", icon: "✈️", group: "Travel", dflt: true,
-    tip: "Large airports and medium airports with scheduled flights (OurAirports, public domain)",
+    tip: "Large airports and medium airports with scheduled flights; in Canada also every small airfield and water aerodrome (OurAirports, public domain)",
     attrib: 'Airports: <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a>', src: ["OurAirports", "https://ourairports.com/data/"],
-    legend: K.legKeys([["#e8eef7", "dot", "large airport"], ["#9aa7bd", "dot", "medium airport, scheduled flights"]]),
-    layers: [{ id: "ap-large", codes: ["large"], color: "#e8eef7", r: 3.6 }, { id: "ap-med", codes: ["medium"], color: "#9aa7bd", r: 2.4 }],
+    legend: K.legKeys([["#e8eef7", "dot", "large airport"], ["#9aa7bd", "dot", "medium airport, scheduled flights"],
+      ["#7fa8d6", "dot", "Canada: other airport or airfield (zoom 5+)"], ["#4dd0e1", "dot", "Canada: water aerodrome (zoom 5+)"]]),
+    layers: [{ id: "ap-large", codes: ["large"], color: "#e8eef7", r: 3.6 }, { id: "ap-med", codes: ["medium"], color: "#9aa7bd", r: 2.4 },
+      { id: "ap-ca", codes: ["camed", "casmall"], color: "#7fa8d6", r: 1.8, minzoom: 5 }, { id: "ap-casea", codes: ["casea"], color: "#4dd0e1", r: 1.8, minzoom: 5 }],
     lines: (r) => {
       return [[r.iata, r.icao].filter(Boolean).map(K.esc).join(" · "), [r.city, r.country].filter(Boolean).map(K.esc).join(", "),
         r.elev !== "" ? "Elevation " + Number(r.elev).toLocaleString() + " ft" : "", wikiLine(r)];
