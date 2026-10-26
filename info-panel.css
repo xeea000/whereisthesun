@@ -59,3 +59,10 @@
 .bx-ring .bc-h { flex: 1 0 36px; text-align: center; font-size: 10px; }
 .bx-ring .bc-h img { display: block !important; width: 30px; height: 30px; margin: 0 auto; }
 .bx-ring .bc-h i { display: block; height: 30px; }
+.tap-pin { width: 24px; height: 34px; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+.tap-pin svg { width: 24px; height: 34px; display: block; }
+.tp-ll { display: flex; align-items: center; gap: 4px; font-size: 11px; opacity: 0.85; margin-bottom: 3px; }
+.tp-ll .tp-svg, .ip-peek .pk-body .tp-ll svg { display: inline-block; width: 10px; height: 14px; flex: none; }
+.ip-peek .pk-x { min-width: 44px; min-height: 44px; margin: -10px -8px -10px 0; touch-action: manipulation; }
+body:not(.loc-on) .user-dot { display: none; }
+#btn-locate.is-on { background: #3b82f6; color: #fff; }

@@ -14,6 +14,49 @@
   var lastGen = -1;
   var sections = {};
   var KEY = "sunny-ip-open";
+  /* opt98: a red map pin marks the tapped spot while its card is open; the card shows the same pin and coordinates. */
+  var PIN = '<svg class="tp-svg" viewBox="0 0 24 34" aria-hidden="true"><path d="M12 1C6 1 1.5 5.5 1.5 11.3 1.5 19 12 33 12 33S22.5 19 22.5 11.3C22.5 5.5 18 1 12 1z" fill="#ea4335" stroke="#a50e0e" stroke-width="1.2"/><circle cx="12" cy="11.5" r="4" fill="#7a0b0b"/></svg>';
+  var PIN_KEY = "sunny-tap-pin";
+  var pinOn = localStorage.getItem(PIN_KEY) !== "0";
+  var pin = null;
+  function where() {
+    var c = cards.filter((x) => { return x.html && (x.p._sLL || x.p._lngLat); })[0];
+    return c ? c.p : null;
+  }
+  function coordHtml() {
+    var p = where();
+    if (!p || !pinOn) return "";
+    var ll = p._sLL || p._lngLat;
+    return '<div class="tp-ll">' + PIN + " " + ll.lat.toFixed(4) + "°, " + ll.lng.toFixed(4) + "°</div>";
+  }
+  function syncPin() {
+    var p = where();
+    if (!p || !pinOn || !p._map || !window.maplibregl.Marker) {
+      if (pin) { pin.remove(); pin = null; }
+      return;
+    }
+    if (!pin) {
+      var e = el("div", "tap-pin");
+      e.innerHTML = PIN;
+      pin = new window.maplibregl.Marker({ element: e, anchor: "bottom" });
+    }
+    pin.setLngLat(p._sLL || p._lngLat).addTo(p._map);
+  }
+  function pinSwitch() {
+    var pop = document.getElementById("settings-pop");
+    if (!pop || document.getElementById("toggle-tap-pin")) return;
+    var row = el("div", "set-row");
+    row.innerHTML = '<label class="sun-opt"><input id="toggle-tap-pin" type="checkbox"> Pin where I tap</label>';
+    var cb = row.querySelector("input");
+    cb.checked = pinOn;
+    cb.addEventListener("change", () => {
+      pinOn = cb.checked;
+      try { localStorage.setItem(PIN_KEY, pinOn ? "1" : "0"); } catch (e) {}
+      syncPin(); renderCards(); renderPeek();
+    });
+    var last = pop.querySelector(".set-group:last-of-type") || pop;
+    last.appendChild(row);
+  }
   function el(tag, cls, txt) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -59,11 +102,14 @@
     var ring = tmp.querySelector(".bx-ring"), h2 = tmp.querySelector("h2");
     peek.classList.toggle("pk-tall", !!ring);
     peek.querySelector(".pk-body").innerHTML = ring ? (h2 ? h2.outerHTML : "") + ring.outerHTML : tmp.innerHTML;
+    peek.querySelector(".pk-body").insertAdjacentHTML("afterbegin", coordHtml());
     if (src) peek.querySelector(".pk-src").appendChild(src);
     if (live.length > 1) peek.querySelector(".pk-more").textContent = "More (+" + (live.length - 1) + ") ›";
     peek.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
     peek.querySelector(".pk-more").addEventListener("click", () => { setOpen(true); });
-    peek.querySelector(".pk-x").addEventListener("click", () => { cards.slice().forEach((c) => { c.p.remove(); }); });
+    var px = peek.querySelector(".pk-x");
+    px.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
+    px.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); cards.slice().forEach((c) => { c.p.remove(); }); });
     peek.hidden = false;
   }
   function build() {
@@ -104,6 +150,7 @@
     var live = cards.filter((c) => { return c.html; });
     if (!live.length) return;
     var box = el("div", "ip-card");
+    box.insertAdjacentHTML("beforeend", coordHtml());
     var x = el("button", "ip-x", "×");
     x.type = "button";
     x.setAttribute("aria-label", "Close");
@@ -130,18 +177,24 @@
     else cards.push({ p: p, html: p._sHtml });
     renderCards();
     renderPeek();
+    syncPin();
     if (!hit) news();
   }
   function drop(p) {
     cards = cards.filter((c) => { return c.p !== p; });
     if (cardsEl) renderCards();
     if (peek) renderPeek();
+    syncPin();
   }
   function patch() {
     var P = window.maplibregl && window.maplibregl.Popup && window.maplibregl.Popup.prototype;
     if (!P || P._sunny) return;
     P._sunny = true;
     Object.assign(P, {
+      setLngLat(ll) {
+        this._sLL = window.maplibregl.LngLat.convert(ll);
+        return this;
+      },
       setHTML(h) {
         this._sHtml = h;
         if (this._sOpen) put(this);
@@ -157,6 +210,7 @@
       },
       addTo(map) {
         this._map = map;
+        this.remove = P.remove; /* opt98: maplibre makes remove an instance field, which hid this patch, so X did nothing */
         this._sOpen = true;
         put(this);
         return this;
@@ -201,5 +255,7 @@
   patch();
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { patch(); if (!panel) build(); });
   else build();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pinSwitch);
+  else pinSwitch();
   window.SunnyInfo = { section: section, open: setOpen, isOpen: isOpen, src: srcLink };
 })();

@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt97"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt98"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,11 +32,11 @@ var PRECACHE = [
   "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=de1efe43ac",
   "layers-panel.css?h=22dafdb7c6",
-  "info-panel.css?h=c131f3b4a1",
+  "info-panel.css?h=2dd737311b",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "tap-snap.js?h=5bfcd17fb8",
   "points.js?h=bd3ec9c286",
-  "info-panel.js?h=e7f299c8b0",
+  "info-panel.js?h=12be4b6b07",
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=9bb675dbcd",
   "data-saver.js?h=92b48c076c",
@@ -88,7 +88,7 @@ var PRECACHE = [
   "app-wind-draw.js?h=baf9bba812",
   "app-radar.js?h=477c8db9db",
   "app-play-clock.js?h=06b09bbc8c",
-  "app-scrub.js?h=58f9536381",
+  "app-scrub.js?h=6eb88b2551",
   "app.js?h=d9c14cf1bc",
   "update-banner.js?h=e3362c1916",
   "settings-panel.js?h=0e2b6b8551",

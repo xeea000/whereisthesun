@@ -160,7 +160,14 @@ function sunnyStep14() {
     saveLastLocate(e.lngLat.lat, e.lngLat.lng);
     loadAround(e.lngLat.lat, e.lngLat.lng);
   });
-  btnLocate.addEventListener("click", locate);
+  btnLocate.addEventListener("click", () => { /* opt98: Locate is a toggle; the blue dot only shows while it is on */
+    var on = !document.body.classList.contains("loc-on");
+    document.body.classList.toggle("loc-on", on);
+    btnLocate.classList.toggle("is-on", on);
+    btnLocate.setAttribute("aria-pressed", on ? "true" : "false");
+    if (on) locate();
+    else { clearLocateWatch(); setStatus(""); }
+  });
   if (btnAll) btnAll.addEventListener("click", showAllBeaches);
   btnSun.addEventListener("click", goNearestBeaches);
   if (toggleSunny) {
