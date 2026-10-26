@@ -156,9 +156,13 @@ function sunnyStep14() {
   if (window.SunnyCrownLand) window.SunnyCrownLand.attach(map); /* opt75: Ontario Crown land overlay */
   if (window.SunnyLayers) window.SunnyLayers.attach(map); /* opt94: layers sidebar and new layers */
   map.on("click", (e) => {
-    if (!waitingForTap) return;
+    if (!waitingForTap) return; /* opt154: a tap only sets the spot; beaches and weather load when asked (Find beaches, Weather) */
     saveLastLocate(e.lngLat.lat, e.lngLat.lng);
-    loadAround(e.lngLat.lat, e.lngLat.lng);
+    sunnyApp_origin = { lat: e.lngLat.lat, lon: e.lngLat.lng };
+    document.dispatchEvent(new CustomEvent("sunny-origin"));
+    waitingForTap = false;
+    placeUserMarker();
+    setStatus("Spot set. Find beaches looks near it.");
   });
   btnLocate.addEventListener("click", () => { /* opt98: Locate is a toggle; the blue dot only shows while it is on */
     var on = !document.body.classList.contains("loc-on");

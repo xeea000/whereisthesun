@@ -26,6 +26,19 @@
   };
   /* click priority: once a tap lands on a dot, area layers (fills, lines, pictures) stay quiet for that tap */
   var hits = new WeakSet();
+  /* opt154: one tap opens one card, for the topmost item within a few pixels of the (snapped) tap */
+  var reg = new Set(), won = new WeakMap(), NEAR = 6;
+  var winner = (m, e) => {
+    var k = e.originalEvent || e;
+    if (won.has(k)) return won.get(k);
+    var ids = [...reg].filter((id) => { return m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== "none"; }), w = null;
+    if (ids.length && e.point) {
+      var p = e.point, f = m.queryRenderedFeatures([[p.x - NEAR, p.y - NEAR], [p.x + NEAR, p.y + NEAR]], { layers: ids });
+      w = f.length ? f[0].layer.id : null;
+    }
+    won.set(k, w);
+    return w;
+  };
   var hit = (e) => { return !!(e && hits.has(e.originalEvent || e)); };
   var AREA = { fill: 1, line: 1, raster: 1, heatmap: 1, "fill-extrusion": 1 };
   var snap = (m, ev) => {
@@ -65,9 +78,11 @@
       on(type, layer, fn) {
         if (type !== "click" || typeof layer !== "string" || typeof fn !== "function") return on.apply(this, arguments);
         var m = this;
+        reg.add(layer);
         return on.call(this, type, layer, (...a) => {
           var l = m.getLayer(layer);
           if (l && AREA[l.type] && hit(a[0])) return undefined;
+          try { if (a[0] && winner(m, a[0]) !== layer) return undefined; } catch (e) {}
           return fn.apply(m, a);
         });
       }

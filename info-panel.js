@@ -76,6 +76,7 @@
     tab.setAttribute("aria-expanded", on ? "true" : "false");
     if (on) { dot.hidden = true; tab.classList.remove("ip-new"); }
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (e) {}
+    if (cardsEl) renderCards();
     if (peek) renderPeek();
   }
   function news() {
@@ -157,6 +158,7 @@
   }
   function renderCards() {
     cardsEl.textContent = "";
+    if (!isOpen()) return; /* opt154: the closed panel keeps no copy of the peek card */
     var live = order(cards.filter((c) => { return c.html; }));
     if (!live.length) return;
     var box = el("div", "ip-card");
