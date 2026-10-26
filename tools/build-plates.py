@@ -23,7 +23,7 @@ for f in plates:
     m = mapping(s)
     rings = m["coordinates"] if m["type"] == "Polygon" else [x for poly in m["coordinates"] for x in poly]
     polys = [[[r(c) for c in ring] for ring in poly] for poly in (m["coordinates"] if m["type"] == "MultiPolygon" else [m["coordinates"]])]
-    feats.append({"type": "Feature", "properties": {"t": "plate", "code": code, "name": f["properties"]["PlateName"], "w": p[2] if p else None},
+    feats.append({"type": "Feature", "properties": {"t": "plate", "code": code, "name": f["properties"]["PlateName"], "w": p[2] if p else None, "pole": p[:3] if p else None},
                   "geometry": {"type": "MultiPolygon", "coordinates": polys}})
 steps = json.load(open(src + "/PB2002_steps.json"))["features"]
 cur = None

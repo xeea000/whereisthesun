@@ -1,7 +1,8 @@
 // workspace/whereisthesun/plates.js
 /* SUNNY opt123: tectonic plates and their motion.
  * Plates and typed boundaries: Bird (2003) PB2002 via github.com/fraxen/tectonicplates (ODC-By), 72 KB gzipped, cached for good.
- * Motion: NNR-MORVEL56 rotation poles (Argus, Gordon and DeMets 2011) on a 3 degree grid, 4 KB gzipped,
+ * Motion: NNR-MORVEL56 rotation poles (Argus, Gordon and DeMets 2011),
+ * each streak takes the velocity of the plate it sits in (point in polygon), so it turns exactly at the boundary,
  * drawn with the wind particle engine, sped up about a trillion times so it can be seen. */
 (() => {
   "use strict";
@@ -10,7 +11,7 @@
   var MV = ["NNR-MORVEL56, Argus et al. 2011", "https://doi.org/10.1029/2011GC003751"];
   var KIND = { sub: ["#ff3b30", "Subduction: one plate dives under"], conv: ["#ff9f1c", "Collision: plates push together"],
     div: ["#2ec4b6", "Spreading: plates pull apart"], tr: ["#c77dff", "Transform: plates slide past"] };
-  var names = {}, grid = null;
+  var names = {};
   var load = () => { return K.loadJson("data/world/plates.geo.json"); };
   var apply = (map, on) => {
     K.vis(map, ["plate-fill", "plate-edge"], on);
@@ -28,12 +29,39 @@
     }).catch(() => {});
   };
   var pname = (c) => { return names[c] || c; };
+  /* plate lookup: segments bucketed by 1 degree latitude row; a ray to the east counts crossings per plate */
+  var rows = null, poles = [];
+  var index = (g) => {
+    rows = []; for (var r = 0; r < 180; r++) rows.push([]);
+    g.features.forEach((f) => {
+      if (f.properties.t !== "plate") return;
+      var pi = poles.length; poles.push(f.properties.pole && typeof f.properties.pole === "string" ? JSON.parse(f.properties.pole) : f.properties.pole);
+      f.geometry.coordinates.forEach((poly) => { poly.forEach((ring) => { for (var i = 0; i + 1 < ring.length; i++) {
+        var a = ring[i], b = ring[i + 1], y0 = Math.max(0, Math.floor(Math.min(a[1], b[1]) + 90)), y1 = Math.min(179, Math.floor(Math.max(a[1], b[1]) + 90));
+        for (var y = y0; y <= y1; y++) rows[y].push([a[0], a[1], b[0], b[1], pi]);
+      } }); });
+    });
+  };
+  var plateAt = (lon, lat) => {
+    var row = rows[Math.max(0, Math.min(179, Math.floor(lat + 90)))], odd = {};
+    for (var i = 0; i < row.length; i++) {
+      var s = row[i];
+      if ((s[1] > lat) === (s[3] > lat)) continue;
+      if (s[0] + (lat - s[1]) * (s[2] - s[0]) / (s[3] - s[1]) > lon) odd[s[4]] = !odd[s[4]];
+    }
+    for (var k in odd) if (odd[k]) return +k;
+    return -1;
+  };
+  var D = Math.PI / 180;
   var at = (lon, lat) => {
-    if (!grid) return null;
-    var x = Math.floor((((lon + 180) % 360) + 360) % 360 / grid.step), y = Math.floor((lat - grid.lat0) / grid.step);
-    if (y < 0 || y * grid.step + grid.lat0 >= 90) return null;
-    var i = y * grid.nx + x;
-    return { u: grid.u[i], v: grid.v[i] };
+    if (!rows) return null;
+    lon = ((((lon + 180) % 360) + 360) % 360) - 180;
+    var pi = plateAt(lon, lat), p = pi >= 0 && poles[pi];
+    if (!p) return null;
+    var w = p[2] * D, wx = w * Math.cos(p[0] * D) * Math.cos(p[1] * D), wy = w * Math.cos(p[0] * D) * Math.sin(p[1] * D), wz = w * Math.sin(p[0] * D);
+    var f = lat * D, l = lon * D, rx = 6371 * Math.cos(f) * Math.cos(l), ry = 6371 * Math.cos(f) * Math.sin(l), rz = 6371 * Math.sin(f);
+    var vx = wy * rz - wz * ry, vy = wz * rx - wx * rz, vz = wx * ry - wy * rx;
+    return { u: -Math.sin(l) * vx + Math.cos(l) * vy, v: -Math.sin(f) * Math.cos(l) * vx - Math.sin(f) * Math.sin(l) * vy + Math.cos(f) * vz, p: pi };
   };
   L.add({ id: "plates", name: "Tectonic plates", icon: "🧩", group: "Earth", taps: ["plate-edge", "plate-fill"], dflt: true,
     tip: "The 52 plates of Bird's PB2002 model and the type of each boundary",
@@ -60,8 +88,6 @@
   /* a streak stops where it runs into a plate coming the other way, so it does not pile up on the boundary */
   var field = { sample: (lon, lat) => {
     var s = at(lon, lat); if (!s || !(s.u || s.v)) return null;
-    var k = grid.step / Math.hypot(s.u, s.v), t = at(lon + s.u * k / Math.max(0.2, Math.cos(lat * Math.PI / 180)), lat + s.v * k);
-    if (t && t.u * s.u + t.v * s.v < 0) return null;
     return { u: s.u / 3, v: s.v / 3 };
   } };
   var tick = (t) => {
@@ -75,8 +101,8 @@
   var motion = (map, on) => {
     mapRef = map;
     if (!on) { if (raf) cancelAnimationFrame(raf); raf = 0; if (cv) cv.style.display = "none"; return; }
-    K.loadJson("data/world/plate-motion.json").then((g) => {
-      grid = g;
+    load().then((g) => {
+      if (!rows) index(g);
       if (!L.isOn("platemotion") || raf) return;
       if (!cv) {
         cv = document.createElement("canvas"); cv.id = "plate-gl-canvas"; cv.setAttribute("aria-hidden", "true");
@@ -91,5 +117,5 @@
   L.add({ id: "platemotion", name: "Plate motion", icon: "➡️", group: "Earth", dflt: true, apply: motion,
     tip: "Streaks show where each plate is heading (NNR-MORVEL56), sped up hugely: real plates move 0 to 170 mm a year",
     legend: K.legKeys([["#ffffff", "line", "streak: direction of plate motion, faster = longer"]]),
-    attach: (map, on) => { K.loadJson("data/world/plate-motion.json").then((g) => { grid = g; }).catch(() => {}); motion(map, on); } });
+    attach: (map, on) => { load().then((g) => { if (!rows) index(g); }).catch(() => {}); motion(map, on); } });
 })();
