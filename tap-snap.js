@@ -27,13 +27,17 @@
   /* click priority: once a tap lands on a dot, area layers (fills, lines, pictures) stay quiet for that tap */
   var hits = new WeakSet();
   /* opt154: one tap opens one card, for the topmost item within a few pixels of the (snapped) tap */
-  var reg = new Set(), won = new WeakMap(), NEAR = 6;
+  var reg = new Set(), won = new WeakMap(), chose = new WeakMap(), NEAR = 6;
+  /* opt166: hover and tap share one picker: point features sorted by screen distance to the pointer */
+  var dist = (m, f, p) => { if (!f.geometry || f.geometry.type !== "Point") return 1e8; var q = m.project(f.geometry.coordinates); return Math.hypot(q.x - p.x, q.y - p.y); };
+  var near = (m, p, fs) => { return fs.map((f, i) => [dist(m, f, p), i, f]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((r) => r[2]); };
   var winner = (m, e) => {
     var k = e.originalEvent || e;
     if (won.has(k)) return won.get(k);
     var ids = [...reg].filter((id) => { return m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== "none"; }), w = null;
     if (ids.length && e.point) {
       var p = e.point, f = m.queryRenderedFeatures([[p.x - NEAR, p.y - NEAR], [p.x + NEAR, p.y + NEAR]], { layers: ids });
+      f = chose.get(k) ? [chose.get(k)] : near(m, p, f);
       w = f.length ? f[0].layer.id : null;
     }
     won.set(k, w);
@@ -52,7 +56,7 @@
       var q = m.project(f.geometry.coordinates);
       var d = Math.hypot(q.x - p.x, q.y - p.y);
       var hit = Math.max(22, 3 * radius(m, f.layer.id, f));
-      if (d <= hit && d < bestD) { bestD = d; best = q; }
+      if (d <= hit && d < bestD) { bestD = d; best = q; chose.set(ev.originalEvent || ev, f); }
     });
     if (best) hits.add(ev.originalEvent || ev);
     if (!best || bestD < 1) return;
@@ -83,11 +87,17 @@
           var l = m.getLayer(layer);
           if (l && AREA[l.type] && hit(a[0])) return undefined;
           try { if (a[0] && winner(m, a[0]) !== layer) return undefined; } catch (e) {}
+          var c = a[0] && chose.get(a[0].originalEvent || a[0]);
+          if (c && c.layer.id === layer && a[0].features) { /* the snapped item goes first, so the card matches the hover */
+            var same = (g) => { return g.geometry && g.geometry.type === "Point" && g.geometry.coordinates[0] === c.geometry.coordinates[0] &&
+              g.geometry.coordinates[1] === c.geometry.coordinates[1]; };
+            a[0].features = [c].concat(a[0].features.filter((g) => !same(g)));
+          }
           return fn.apply(m, a);
         });
       }
     });
   };
   patch();
-  window.SunnyTapSnap = { snap: snap, hit: hit };
+  window.SunnyTapSnap = { snap: snap, hit: hit, near: near };
 })();

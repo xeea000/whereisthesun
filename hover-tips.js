@@ -17,8 +17,8 @@
   /* layers whose features carry the name under their own keys, or whose id makes a poor type word */
   var OWN = {
     "plate-edge": (p) => [PK[p.k] || "Plate edge", (p.pair || "").replace("-", " / ") + (p.v ? " · " + p.v + " mm a year" : "")],
-    "pipe-line": (p) => [p.o || "Undersea pipeline", (p.s ? p.s + " " : "") + "pipeline"],
-    "pipe-hit": (p) => [p.o || "Undersea pipeline", (p.s ? p.s + " " : "") + "pipeline"],
+    "pipe-line": (p) => [p.n || (p.s ? p.s + " pipeline" : "Pipeline") + " (no name in OSM)", p.o ? "Operator " + p.o : "Undersea pipeline"],
+    "pipe-hit": (p) => [p.n || (p.s ? p.s + " pipeline" : "Pipeline") + " (no name in OSM)", p.o ? "Operator " + p.o : "Undersea pipeline"],
     "sat-trk": (p) => [p.name || "Satellite", "Orbit track"],
     "volc-due": (p) => [p.name || "Volcano", "Volcano · eruption may be due"],
     "acc-ring": (p) => [p.name || p.n || "Accelerator ring", "Particle accelerator"],
@@ -78,6 +78,7 @@
         var e = le;
         var fs = [];
         try { fs = m.queryRenderedFeatures([[e.point.x - 6, e.point.y - 6], [e.point.x + 6, e.point.y + 6]]); } catch (x) { fs = []; }
+        if (window.SunnyTapSnap) fs = window.SunnyTapSnap.near(m, e.point, fs);
         var ok = fs.filter((g) => g.layer && !SKIP[g.source] && !SKIPL[g.layer.id] && g.layer.type !== "raster");
         var f = ok.find((g) => /circle|symbol/.test(g.layer.type)) || ok.find((g) => g.layer.type === "line") || ok[0]; /* dots win over lines, lines over areas */
         if (!f && window.SunnyAurora) {

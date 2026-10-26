@@ -71,7 +71,8 @@
     legend: K.legKeys(RAMP.map((r) => { return [r[1], "line", r[2]]; })) + '<span class="ls-k">▲ points where the waves travel</span>',
     tip: "Wave height, period and direction now (Open-Meteo Marine model). Only the area on screen is loaded",
     attach: (map, on) => {
-      (window.SunnyHoverName = window.SunnyHoverName || {})["wave-dot"] = (f) => { return Promise.resolve(text(f.properties)); };
+      var hw = (window.SunnyHoverName = window.SunnyHoverName || {});
+      hw["wave-dot"] = hw["wave-arrow"] = (f) => { return Promise.resolve(text(f.properties)); };
       map.on("moveend", () => { clearTimeout(wait); wait = setTimeout(() => { fetchView(map); }, 600); });
       map.on("idle", () => {
         if (!L.isOn("waves")) return;

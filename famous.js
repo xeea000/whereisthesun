@@ -89,11 +89,21 @@
     g.checked = on();
     g.addEventListener("change", () => { try { localStorage.setItem("sunny-famous", g.checked ? "1" : "0"); } catch (e) {} draw(); });
   };
-  L.add({ id: "famous-attach", group: "none", attach: (m) => {
+  L.add({ id: "famous-attach", group: "none", taps: ["famous-star"], attach: (m) => {
     map = m;
     document.addEventListener("change", soon);
     map.on("idle", () => { if (map.getLayer("famous-star")) { var ls = map.getStyle().layers; if (ls[ls.length - 1].id !== "famous-star") map.moveLayer("famous-star"); }
       hide();
+    });
+    /* opt166: a tap on a star opens the card of the dot under it (stars sit on top and used to swallow the tap) */
+    var busy = false;
+    map.on("click", "famous-star", (e) => {
+      if (busy) return;
+      var f = e.features[0], q = map.project(f.geometry.coordinates), R = 10;
+      var ids = map.getStyle().layers.filter((l) => l.type === "circle" && l.id !== "famous-star").map((l) => l.id);
+      var under = map.queryRenderedFeatures([[q.x - R, q.y - R], [q.x + R, q.y + R]], { layers: ids });
+      if (under.length) { busy = true; try { map.fire("click", { point: q, lngLat: map.unproject(q), originalEvent: {} }); } finally { busy = false; } return; }
+      K.show(map, f.geometry.coordinates, f.properties.name, ["Famous place; zoom in for its own card"], ["SUNNY famous places list", ""]);
     });
     row(); setTimeout(row, 1500);
     soon();

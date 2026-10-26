@@ -86,6 +86,9 @@
         lons.push(nodeLon(tx * TILE + b));
       }
     }
+    /* opt166: Open-Meteo answers 400 to a latitude past the poles or a longitude past 180, so edge nodes are clamped and wrapped */
+    lats = lats.map((v) => { return Math.max(-90, Math.min(90, v)); });
+    lons = lons.map((v) => { return ((v + 180) % 360 + 360) % 360 - 180; });
     var url = API + "?latitude=" + lats.join(",") + "&longitude=" + lons.join(",") +
       "&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms";
     inFlight++;

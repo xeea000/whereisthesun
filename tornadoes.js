@@ -57,6 +57,7 @@
     attach: (map, on) => {
       map.on("idle", () => { if (L.isOn("tornadoes") && !map.getLayer("torn-line")) apply(map, true); });
       var hn = window.SunnyHoverName = window.SunnyHoverName || {};
+      hn["torn-star"] = hoverName; hn["torn-line"] = hoverName;
       TAPS.forEach((id) => { hn[id] = hoverName; map.on("click", id, (e) => { card(map, e); }); });
       apply(map, on);
     } });

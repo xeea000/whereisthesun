@@ -291,6 +291,9 @@
     tip: "The next meteor shower peaks, rates and moonlight (IMO calendar); colour bands show how high its radiant climbs by latitude", legend: shLegend(), apply: shApply,
     attach: (m, on) => {
       m.on("idle", () => { if (L.isOn("showers") && !m.getLayer("shower-band")) shApply(m, true); });
+      (window.SunnyHoverName = window.SunnyHoverName || {})["shower-band"] = (f) => { var sh = nextShower(), k = f.properties.k;
+        return Promise.resolve([sh.n + (k === 3 ? ": not visible here" : ": " + SHK[k][1].split(":")[0]),
+          "Peak " + sh.d.toLocaleDateString([], { month: "short", day: "numeric" })]); };
       m.on("click", "shower-band", (e) => {
         var sh = nextShower(), k = e.features[0].properties.k, alt = Math.round(90 - Math.abs(e.lngLat.lat - sh.dec));
         var t = sh.n + (k === 3 ? " not visible" : ": " + SHK[k][1].split(":")[0]);

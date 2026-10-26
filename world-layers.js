@@ -149,11 +149,14 @@
     ["c1500", "Castles & forts, 1,001–1,500 years", "#8e3b1a", 2.8], ["cold", "Castles & forts, over 1,500 years", "#5a1d0c", 3],
     ["cnone", "Castles & forts, age not known", "#9a9a9a", 2.2], ["site", "Other ancient sites", "#7fc6a4", 2.4],
     ["nhsca", "National Historic Sites of Canada", "#e53935", 2.6]];
+  /* opt166: for a designation (monument, park, historic site...) the Wikidata date is when it was designated, not built */
+  var DESIG = /monument|park|historic site|historic district|heritage|reserve|protected|landmark|national historic/i;
   pointLayer({ id: "history", file: "history", name: "Heritage & ancient sites", icon: "🏛️", group: "History", dflt: true, kids: true,
     tip: "World Heritage, the Wonders, old temples, castles and forts by age, ancient sites and National Historic Sites of Canada, each place listed once (Wikidata)", attrib: WD,
     src: ["Wikidata", "https://www.wikidata.org/"], legend: K.legKeys(HIST.map((h) => { return [h[2], "dot", h[1]]; })),
     layers: HIST.map((h) => { return { id: "hist-" + h[0], codes: [h[0]], color: h[2], r: h[3], name: h[1] }; }),
-    lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
+    lines: (r) => { return [K.esc(cap(r.kind)), place(r), (DESIG.test(r.kind || "") ? (r.year ? "Designated or founded " + K.esc(r.year) + " (Wikidata; not the build date)" : "") :
+      +r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
   /* Travel: airports */
   pointLayer({ id: "airports", file: "airports", name: "Airports", icon: "✈️", group: "Travel", dflt: true,
     tip: "Large airports and medium airports with scheduled flights; in Canada also every small airfield and water aerodrome (OurAirports, public domain)",

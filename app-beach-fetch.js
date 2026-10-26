@@ -518,9 +518,14 @@
     }
     return null;
   }
+  window.sunnyBeachById = beachById; /* opt166: real beach names for hover */
+  window.SunnyHoverName = window.SunnyHoverName || {};
+  ["beaches-dot", "beaches-sun"].forEach((id) => { window.SunnyHoverName[id] = (f) => { var b = beachById(f.properties.id);
+    return Promise.resolve(b && b.name && b.name !== "Unnamed beach" ? [b.name, "Beach"] : ["Beach (no name in OpenStreetMap)", ""]); }; });
   function fetchWiki(b) {
-    var title = b.wiki || b.name;
-    if (!title || title === "Unnamed beach") return Promise.resolve(null);
+    var title = b.wiki; /* opt166: only a real wikipedia tag; a beach name is never sent as a guessed title */
+    if (!title) return Promise.resolve(null);
+    title = String(title).replace(/^[a-z-]{2,12}:/, "");
     if (wikiCache[title] !== undefined) return Promise.resolve(wikiCache[title]);
     return fetch(WIKI_URL + encodeURIComponent(title), {
       headers: { Accept: "application/json" }

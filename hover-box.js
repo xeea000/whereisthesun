@@ -49,6 +49,7 @@
     var fs = [];
     try { fs = m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ids }); } catch (e) { return []; }
     /* a dot or line under the pointer beats the area it sits in */
+    if (window.SunnyTapSnap) fs = window.SunnyTapSnap.near(m, p, fs);
     var dots = fs.filter((f) => { return f.layer.type === "circle" || f.layer.type === "symbol"; });
     var sharp = fs.filter((f) => { return f.layer.type !== "fill" && f.layer.type !== "raster"; });
     return dots.length ? dots : sharp.length ? sharp : fs;

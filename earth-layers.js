@@ -88,6 +88,9 @@
       idleAdd(map, "fires", "fire-dot", fireApply);
       setInterval(() => { if (L.isOn("fires")) fireApply(map, true); }, 30 * 60000);
       map.on("click", (e) => { if (!(window.SunnyTapSnap && window.SunnyTapSnap.hit(e))) perimTap(map, e); });
+      (window.SunnyHoverName = window.SunnyHoverName || {})["fire-dot"] = (f) => { var p = f.properties;
+        var t = p.t ? new Date(p.t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+        return Promise.resolve(["Fire hotspot" + (t ? ", " + t : ""), (p.frp ? p.frp + " MW fire power · " : "") + (p.sat || "satellite")]); };
       map.on("click", "fire-dot", (e) => {
         var p = e.features[0].properties;
         var t = p.t ? new Date(p.t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
