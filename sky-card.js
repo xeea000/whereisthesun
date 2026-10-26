@@ -262,27 +262,39 @@
       var m = moonPct(s.d);
       return '<span class="ls-k" style="display:block">☄️ <b>' + K.esc(s.n) + "</b> " + s.d.toLocaleDateString([], { month: "short", day: "numeric" }) + " · up to " + s.z + "/h" +
         (m != null ? " · moon " + m + "% lit" : "") + "</span>";
-    }).join("") + K.legKeys([["#3a2a5a", "area", "next radiant never rises here"]]);
+    }).join("") + K.legKeys(SHK.map((k) => { return [k[0], "area", k[1]]; }));
   };
+  /* the radiant's highest point in the sky at latitude L is 90 - |L - dec| degrees; bands step at 0, 20 and 40 degrees */
+  var SHK = [["#2ca25f", "good: radiant climbs over 40°", 50], ["#fdcc3a", "fair: radiant up to 20–40°", 70], ["#f46d43", "poor: radiant under 20°", 90],
+    ["#3a2a5a", "next shower not visible", 999]];
   var band = (dec) => {
-    var a = dec >= 0 ? -90 : dec + 90, b = dec >= 0 ? dec - 90 : 90;
-    return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[-180, a], [180, a], [180, b], [-180, b], [-180, a]]] } };
+    var f = [], cut = (lo, hi, k) => {
+      lo = Math.max(-85, lo); hi = Math.min(85, hi);
+      var ring = [[-180, lo], [180, lo], [180, hi], [-180, hi], [-180, lo]];
+      if (hi > lo) f.push({ type: "Feature", properties: { k: k }, geometry: { type: "Polygon", coordinates: [ring] } });
+    };
+    var prev = 0;
+    SHK.forEach((k, i) => { var r = Math.min(k[2], 200); cut(dec - r, dec - prev, i); cut(dec + prev, dec + r, i); prev = r; });
+    return { type: "FeatureCollection", features: f };
   };
   function shApply(m, on) {
     K.vis(m, ["shower-band"], on);
     if (!on || m.getLayer("shower-band")) return;
     try {
       m.addSource("shower-band", { type: "geojson", data: band(nextShower().dec) });
-      m.addLayer({ id: "shower-band", type: "fill", source: "shower-band", paint: { "fill-color": "#3a2a5a", "fill-opacity": 0.35 } }, K.before(m));
+      var col = ["match", ["get", "k"], 0, SHK[0][0], 1, SHK[1][0], 2, SHK[2][0], SHK[3][0]];
+      m.addLayer({ id: "shower-band", type: "fill", source: "shower-band", paint: { "fill-color": col, "fill-opacity": 0.35 } }, K.before(m));
     } catch (e) {}
   }
   L.add({ id: "showers", name: "Meteor showers", icon: "☄️", group: "Sky & Space", taps: ["shower-band"], dflt: true,
-    tip: "The next meteor shower peaks, rates and moonlight (IMO calendar); the shaded band cannot see the next shower", legend: shLegend(), apply: shApply,
+    tip: "The next meteor shower peaks, rates and moonlight (IMO calendar); colour bands show how high its radiant climbs by latitude", legend: shLegend(), apply: shApply,
     attach: (m, on) => {
       m.on("idle", () => { if (L.isOn("showers") && !m.getLayer("shower-band")) shApply(m, true); });
       m.on("click", "shower-band", (e) => {
-        var sh = nextShower();
-        K.show(m, e.lngLat, sh.n + " not visible", ["The " + K.esc(sh.n) + " radiant never rises at this latitude", "Peak " + sh.d.toLocaleDateString([], { month: "short", day: "numeric" })],
+        var sh = nextShower(), k = e.features[0].properties.k, alt = Math.round(90 - Math.abs(e.lngLat.lat - sh.dec));
+        var t = sh.n + (k === 3 ? " not visible" : ": " + SHK[k][1].split(":")[0]);
+        K.show(m, e.lngLat, t, [k === 3 ? "The " + K.esc(sh.n) + " radiant never rises at this latitude" :
+          "The radiant climbs to about " + alt + "° here, and higher means more meteors", "Peak " + sh.d.toLocaleDateString([], { month: "short", day: "numeric" })],
           ["IMO meteor shower calendar", "https://www.imo.net/resources/calendar/"]);
       });
       shApply(m, on);

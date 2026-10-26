@@ -24,8 +24,10 @@
   }
   function keepLow() {
     if (!map || !map.getLayer(ID)) return;
-    var b = beforeId(), ls = map.getStyle().layers, me = ls.findIndex((l) => l.id === ID), bi = ls.findIndex((l) => l.id === b);
-    if (b && bi >= 0 && bi < me) map.moveLayer(ID, b);
+    var ls = map.getStyle().layers, me = ls.findIndex((l) => l.id === ID), b = beforeId(), bi = ls.findIndex((l) => l.id === b);
+    var base = ls.some((l, i) => { return i > me && (l.type === "background" || l.source === "ofm"); });
+    if (b && bi >= 0 && (bi < me || base)) map.moveLayer(ID, b);
+    else if (!b && base) map.moveLayer(ID);
   }
   function addLayer() {
     if (!map.getSource(SRC)) map.addSource(SRC, { type: "raster", tiles: [URL], tileSize: 256, maxzoom: 8, attribution: ATTRIB });
