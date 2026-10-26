@@ -208,6 +208,35 @@
   /* opt107: fixed world-aligned squares (they no longer slide with the view), sized by zoom, at every zoom.
    * Each square's clouds are fetched once an hour and reused while panning. */
   var cellStore = {};
+  /* Open-Meteo answers 429 when its free per-minute quota is used up: retry after 5, 15 and 45 s, and meanwhile any coarser square
+   * already loaded that covers this one lends its clouds, so the squares always show */
+  var retryT = 0;
+  function fetchClouds(need, n) {
+    return fetch("https://api.open-meteo.com/v1/forecast?latitude=" + need.map((c) => { return c.lat.toFixed(2); }).join(",") +
+      "&longitude=" + need.map((c) => { return c.lng.toFixed(2); }).join(",") + "&hourly=cloud_cover&forecast_days=2&timezone=GMT&timeformat=unixtime")
+      .then((r) => { if (r.status === 429) throw new Error("429"); return r.json(); }).then((j) => {
+        (Array.isArray(j) ? j : [j]).forEach((x, k) => {
+          if (!x || !x.hourly) return;
+          var v = { t: x.hourly.time, c: x.hourly.cloud_cover };
+          cellStore[need[k].k] = v; K.putStore("ns-" + need[k].k, v, 3600000);
+        });
+      }).catch(() => {
+        if (n < 3) { clearTimeout(retryT); retryT = setTimeout(() => { fetchClouds(need, n + 1).then(() => { gridKey = ""; grid(); }); }, 5000 * Math.pow(3, n)); }
+      });
+  }
+  function stale(k) { try { var v = JSON.parse(localStorage.getItem("sunny-c-ns-" + k)); return v && v.t > Date.now() - 864e5 ? v.d : null; } catch (e) { return null; } }
+  function coarse(c) {
+    var own = stale(c.k);
+    if (own) return own;
+    var steps = [0.5, 1, 2, 4, 10, 20, 40];
+    for (var i = 0; i < steps.length; i++) {
+      var d = steps[i];
+      if (d <= c.e - c.w) continue;
+      var k = d + ":" + Math.floor(c.lng / d) * d + ":" + Math.floor(c.lat / d) * d, v = cellStore[k] || K.getStore("ns-" + k);
+      if (v) return v;
+    }
+    return null;
+  }
   function step() { var z = map.getZoom(); return z < 3 ? 10 : z < 5 ? 4 : z < 7 ? 2 : z < 9 ? 1 : 0.5; }
   function grid() {
     if (!map || !L.isOn("nightscore") || !window.SunCalc) {
@@ -226,20 +255,12 @@
     var cells = [];
     for (var x = w; x < e; x += d) for (var y = s; y < n; y += d) cells.push({ w: x, e: x + d, s: y, n: y + d, lat: y + d / 2, lng: x + d / 2, k: d + ":" + x + ":" + y });
     var need = cells.filter((c) => { return !cellStore[c.k] && !K.getStore("ns-" + c.k); });
-    var cp = !need.length ? Promise.resolve() : fetch("https://api.open-meteo.com/v1/forecast?latitude=" + need.map((c) => { return c.lat.toFixed(2); }).join(",") +
-      "&longitude=" + need.map((c) => { return c.lng.toFixed(2); }).join(",") + "&hourly=cloud_cover&forecast_days=2&timezone=GMT&timeformat=unixtime")
-      .then((r) => { return r.json(); }).then((j) => {
-        (Array.isArray(j) ? j : [j]).forEach((x, k) => {
-          if (!x || !x.hourly) return;
-          var v = { t: x.hourly.time, c: x.hourly.cloud_cover };
-          cellStore[need[k].k] = v; K.putStore("ns-" + need[k].k, v, 3600000);
-        });
-      });
+    var cp = !need.length ? Promise.resolve() : fetchClouds(need, 0);
     cp.then(() => {
       return Promise.all(cells.map((c) => { return S().darkness(c.lat, c.lng).catch(() => { return null; }); })).then((lums) => {
         if (key !== gridKey) return;
         var f = cells.map((c, k) => {
-          var cc = cellStore[c.k] || K.getStore("ns-" + c.k), v = cc ? scoreOf(cc, lums[k], c.lat, c.lng) : null;
+          var cc = cellStore[c.k] || K.getStore("ns-" + c.k) || coarse(c), v = cc ? scoreOf(cc, lums[k], c.lat, c.lng) : null;
           return { type: "Feature", properties: { v: v == null ? -1 : v }, geometry: { type: "Polygon", coordinates: [[[c.w, c.s], [c.e, c.s], [c.e, c.n], [c.w, c.n], [c.w, c.s]]] } };
         });
         if (!map.getSource("sky-grid")) {
