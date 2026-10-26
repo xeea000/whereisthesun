@@ -5,7 +5,7 @@
 (() => {
   "use strict";
   if (!window.matchMedia || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  var SKIP = { ofm: 1, "iem-vis": 1, "sky-grid": 1 }, SKIPL = { "sky-night": 1, "sky-grid-line": 1 };
+  var SKIP = { ofm: 1, "iem-vis": 1, "sky-grid": 1, "sunh-omt": 1 }, SKIPL = { "sky-night": 1, "sky-grid-line": 1 };
   var tip = document.createElement("div");
   tip.id = "hover-tip";
   tip.style.cssText = "position:fixed;z-index:9999;pointer-events:none;display:none;max-width:260px;padding:4px 8px;" +
