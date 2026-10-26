@@ -138,6 +138,16 @@
     legend: K.legKeys([["#9be564", "dot", "laboratory or research centre"], ["#5fb8ff", "dot", "research institute"]]),
     layers: [{ id: "lab-dot", codes: ["lab"], color: "#9be564", r: 2.4 }, { id: "inst-dot", codes: ["inst"], color: "#5fb8ff", r: 2.4 }],
     lines: sciLines });
+  /* Travel: airports */
+  pointLayer({ id: "airports", file: "airports", name: "Airports", icon: "✈️", group: "Travel", dflt: true,
+    tip: "Large airports and medium airports with scheduled flights (OurAirports, public domain)",
+    attrib: 'Airports: <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a>', src: ["OurAirports", "https://ourairports.com/data/"],
+    legend: K.legKeys([["#e8eef7", "dot", "large airport"], ["#9aa7bd", "dot", "medium airport, scheduled flights"]]),
+    layers: [{ id: "ap-large", codes: ["large"], color: "#e8eef7", r: 3.6 }, { id: "ap-med", codes: ["medium"], color: "#9aa7bd", r: 2.4 }],
+    lines: (r) => {
+      return [[r.iata, r.icao].filter(Boolean).map(K.esc).join(" · "), [r.city, r.country].filter(Boolean).map(K.esc).join(", "),
+        r.elev !== "" ? "Elevation " + Number(r.elev).toLocaleString() + " ft" : "", wikiLine(r)];
+    } });
   /* Transmission */
   var txLines = (verb) => {
     return (r) => {
