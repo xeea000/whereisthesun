@@ -138,9 +138,9 @@
     craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", stations: "Earth" };
   var SUBS = { "Sky & Space": ["Natural", "Artificial"], Earth: ["", "Geology"] };
   function fold(parent, path, label, lvl) {
-    var key = "sunny-lp-g-" + path;
-    var open = true;
-    try { open = localStorage.getItem(key) !== "0"; } catch (e) {}
+    var key = "sunny-lp-g2-" + path; /* opt104: new key, folded by default */
+    var open = false;
+    try { open = localStorage.getItem(key) === "1"; } catch (e) {}
     var h = el("button", "lp-head lp-fold-h lp-l" + lvl);
     h.type = "button";
     var box = el("div", "lp-grp");

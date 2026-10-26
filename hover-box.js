@@ -1,7 +1,9 @@
 // workspace/whereisthesun/hover-box.js
 /* SUNNY opt101: hover info box for mouse users. Layers register a short label and a card.
  * Hover shows the label (hover-tips.js); keeping still 2 s opens the card under the cursor.
- * Leaving the feature closes it unless the mouse is in the box. The title bar drags it. */
+ * Leaving the feature closes it unless the mouse is in the box. The title bar drags it.
+ * opt104: works for every tappable layer. Layers without their own hover card get the same card a tap
+ * would open: a synthetic click runs while capture is on, and info-panel.js hands each popup here. It fades out. */
 (function () {
   "use strict";
   var labels = {}, cards = [], box = null, timer = 0, inBox = false, drag = null, last = null;
@@ -9,7 +11,13 @@
   var mx = -1, my = -1;
   document.addEventListener("pointermove", (e) => { mx = e.clientX; my = e.clientY; }, true);
   function hit() { if (!box) return false; var r = box.getBoundingClientRect(); return mx >= r.left && mx <= r.right && my >= r.top && my <= r.bottom; }
-  function close() { if (box && !inBox && !drag && !hit()) { box.remove(); box = null; } }
+  var cap = false, caps = [];
+  function close() {
+    if (!box || inBox || drag || hit()) return;
+    var b = box; box = null; caps = [];
+    b.style.transition = "opacity .35s"; b.style.opacity = "0"; setTimeout(() => { b.remove(); }, 380);
+  }
+  function capHtml() { return caps.map((p) => { return p._sHtml || ""; }).filter(Boolean).join('<hr style="border:0;border-top:1px solid rgba(255,255,255,.15)">'); }
   function open(x, y, html) {
     if (box) box.remove();
     box = document.createElement("div");
@@ -31,8 +39,9 @@
     });
     box.querySelector(".hb-bar").addEventListener("pointerup", () => { drag = null; });
   }
+  function tapIds() { return window.SunnyLayers ? window.SunnyLayers.tapIds() : []; }
   function feats(m, p) {
-    var ids = Object.keys(labels).filter((id) => m.getLayer(id));
+    var ids = Object.keys(labels).concat(tapIds(), ["beaches-dot", "beaches-sun"]).filter((id, i, a) => a.indexOf(id) === i && m.getLayer(id));
     if (!ids.length) return [];
     try { return m.queryRenderedFeatures([[p.x - 4, p.y - 4], [p.x + 4, p.y + 4]], { layers: ids }); } catch (e) { return []; }
   }
@@ -47,13 +56,25 @@
       if (!fs.length) { setTimeout(() => { if (!inBox && !overNow()) close(); }, 400); return; }
       var x = e.originalEvent.clientX, y = e.originalEvent.clientY;
       timer = setTimeout(() => {
+        if (inBox || drag) return;
         var c = cards.find((k) => fs.some((f) => k.ids[f.layer.id]));
-        if (c && !inBox && !drag) open(x, y, c.fn(fs));
+        if (c) return open(x, y, c.fn(fs));
+        caps = []; cap = true;
+        var pt = e.point;
+        try { m.fire("click", { type: "click", point: pt, lngLat: m.unproject(pt), originalEvent: e.originalEvent, target: m }); } catch (er) {}
+        cap = false;
+        if (caps.length) { var keep = caps; open(x, y, capHtml()); caps = keep; }
       }, 2000);
     });
     m.getCanvas().addEventListener("mouseleave", () => { clearTimeout(timer); last = null; setTimeout(close, 80); });
   }
   window.SunnyHoverBox = {
+    capturing: () => cap,
+    capture: (p) => {
+      if (caps.indexOf(p) < 0) { if (!cap) return; caps.push(p); }
+      var b = box && box.querySelector(".hb-body");
+      if (b) b.innerHTML = capHtml();
+    },
     label: (id) => labels[id],
     add: (map, fn) => { Object.assign(labels, map); cards.push({ ids: map, fn: fn }); }
   };

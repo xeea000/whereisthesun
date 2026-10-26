@@ -205,6 +205,7 @@
       },
       setHTML(h) {
         this._sHtml = h;
+        if (this._hb) { window.SunnyHoverBox.capture(this); return this; }
         if (this._sOpen) put(this);
         return this;
       },
@@ -218,6 +219,10 @@
       },
       addTo(map) {
         this._map = map;
+        if (window.SunnyHoverBox && window.SunnyHoverBox.capturing()) { /* opt104: desktop 2 s hover box shows this card instead */
+          this._hb = true; this._sOpen = true; this.remove = P.remove; window.SunnyHoverBox.capture(this); return this;
+        }
+        this._hb = false;
         this.remove = P.remove; /* opt98: maplibre makes remove an instance field, which hid this patch, so X did nothing */
         this._sOpen = true;
         put(this);
@@ -228,6 +233,7 @@
       },
       remove() {
         this._sOpen = false;
+        if (this._hb) return this;
         drop(this);
         if (this.fire && window.maplibregl.Event) this.fire(new window.maplibregl.Event("close"));
         return this;

@@ -48,3 +48,9 @@
 .lp-title{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(18,22,30,.97);border-radius:0 12px 0 0;padding-bottom:6px}.lp-clear{border:0;border-radius:8px;padding:5px 10px;background:#5a2b2b;color:#fff;font:700 12px system-ui,sans-serif;cursor:pointer}.lp-clear:hover{background:#7a3535}
 .lp-twisty{border:0;background:transparent;color:#ffd34d;font:700 14px system-ui,sans-serif;width:18px;padding:0;margin-right:-6px;cursor:pointer}.lp-kids{padding:0 8px 6px 46px;display:flex;flex-direction:column;gap:2px}.lp-kids[hidden]{display:none}.lp-kid{display:flex;align-items:center;gap:6px;min-height:30px;font-size:12.5px;cursor:pointer}.lp-kid input{width:18px;height:18px;accent-color:#f5b301}
 .lp-fold-h{display:block;width:100%;text-align:left;border:0;background:transparent;color:#fff;cursor:pointer;padding:6px 8px;margin:6px 0 0}.lp-fold-h.lp-l1{font-size:10px;opacity:.75;padding-left:22px;margin-top:2px}.lp-grp[hidden]{display:none}
+/* opt104: compact panel. Tight rows on desktop, about 32px rows on touch. */
+.lp-title{padding:6px 10px 3px;font-size:14px}.lp-body{padding:0 4px 6px}.lp-head{margin:6px 6px 1px;font-size:9.5px}
+.lp-row{gap:7px;padding:2px 6px;min-height:26px;border-radius:6px;font-size:12.5px}.lp-ico{width:18px;font-size:14px}
+.lp-row.is-on .lp-sw::after{transform:translateX(12px)}.lp-sw{width:28px;height:16px}.lp-sw::after{width:12px;height:12px}.lp-bicon{padding:2px 8px 4px 30px;font-size:12px}
+.lp-fold-h{padding:3px 6px;margin:2px 0 0;font-size:12px}.lp-fold-h.lp-l1{font-size:10px;padding-left:14px;margin-top:0}.lp-kids{padding:0 6px 3px 30px;gap:0}.lp-kid{min-height:24px}
+@media (pointer:coarse){.lp-row{min-height:32px;padding:3px 6px}.lp-fold-h{min-height:30px}.lp-kid{min-height:30px}}
