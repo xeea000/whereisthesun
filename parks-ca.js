@@ -29,6 +29,7 @@
     r[6] ? "Area " + Number(r[6]).toLocaleString() + " ha" : "", r[8] ? "Established " + r[8] : "",
     stNote(r)]; };
   var SRC = ["CPCAD 2025 (ECCC, OGL-Canada)", "https://www.canada.ca/en/environment-climate-change/services/national-wildlife-areas/protected-conserved-areas-database.html"];
+  var SRC_AB = ["Alberta Parks protected areas (Gov. of Alberta, OGL-Alberta)", "https://geospatial.alberta.ca/titan/rest/services/boundary/parks_protected_areas_alberta/FeatureServer/0"];
   var props = (f) => { return f.properties.i === undefined ? null : row(f.properties); };
   var fc = () => { return K.fc(data.r.map((r, i) => { return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] }, properties: { i: i, s: r[4] } }; })); };
   var bfc = () => { var fs = []; Object.keys(got).forEach((k) => { if (got[k] !== 1) fs = fs.concat(got[k]); }); return K.fc(fs); };
@@ -58,16 +59,16 @@
   var apply = () => {
     if (!map) return;
     var want = on();
-    if (want && !data) { data = { r: [], b: {} }; K.loadJson("data/parks-ca.json?v=e6238e73").then((d) => { data = d; apply(); }).catch(() => { data = null; }); return; }
+    if (want && !data) { data = { r: [], b: {} }; K.loadJson("data/parks-ca.json?v=b76ccb23").then((d) => { data = d; apply(); }).catch(() => { data = null; }); return; }
     if (want && data.r.length) { try { add(); } catch (e) { setTimeout(apply, 2000); return; } loadB(); }
     ["parks-fill", "parks-edge", "parks-dot"].forEach((id) => { if (map.getLayer(id)) map.setFilter(id, filt()); });
     K.vis(map, ["parks-fill", "parks-edge", "parks-dot"], want);
   };
-  var card = (e) => { var r = props(e.features[0]); if (r) K.show(map, e.lngLat, title(r), lines(r), SRC); };
+  var card = (e) => { var r = props(e.features[0]); if (r) K.show(map, e.lngLat, title(r), lines(r), r[7] === "ab" ? SRC_AB : SRC); };
   L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
     kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
     legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
-    tip: "1,347 provincial and territorial parks (CPCAD). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines from zoom 6; tap for details",
+    tip: "1,540 provincial and territorial parks (CPCAD; Alberta recreation areas from Alberta Parks). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines from zoom 6; tap for details",
     attach: (m) => {
       map = m;
       if (hooked) return; hooked = true;
