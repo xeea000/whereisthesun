@@ -61,7 +61,7 @@
   var apply = () => {
     if (!map) return;
     var want = on();
-    if (want && !data) { data = { r: [], b: {} }; K.loadJson("data/parks-ca.json?v=b76ccb23").then((d) => { data = d; apply(); }).catch(() => { data = null; }); return; }
+    if (want && !data) { data = { r: [], b: {} }; K.loadJson("data/parks-ca.json?v=298ab790").then((d) => { data = d; apply(); }).catch(() => { data = null; }); return; }
     if (want && data.r.length) { try { add(); } catch (e) { setTimeout(apply, 2000); return; } loadB(); }
     ["parks-fill", "parks-edge", "parks-dot"].forEach((id) => { if (map.getLayer(id)) map.setFilter(id, filt()); });
     K.vis(map, ["parks-fill", "parks-edge", "parks-dot"], want);
