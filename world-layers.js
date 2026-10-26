@@ -93,9 +93,9 @@
     } });
   /* Ocean: offshore platforms */
   pointLayer({ id: "platforms", file: "platforms", name: "Offshore platforms", icon: "🛢️", group: "Ocean",
-    tip: "Offshore oil and gas platforms still standing: US federal waters (BOEM) and named platforms worldwide (Wikidata)",
+    tip: "Offshore oil and gas platforms still standing: US federal waters (BOEM), named platforms worldwide (Wikidata); Canada adds Grand Banks and Scotian Shelf fields and FPSOs (Wikidata) and Beaufort Sea platforms (OSM)",
     attrib: 'Platforms: <a href="https://www.data.boem.gov/" target="_blank" rel="noopener">BOEM</a>, Wikidata', src: ["BOEM platform structures", "https://www.data.boem.gov/Main/PlatformStructures.aspx"],
-    layers: [{ id: "plat-dot", codes: ["boem", "wd"], color: "#ffcc33", r: 2 }],
+    layers: [{ id: "plat-dot", codes: ["boem", "wd", "osm"], color: "#ffcc33", r: 2 }],
     lines: (r, k) => {
       return [K.esc(k === "boem" ? BT[r.kind] || "Structure type " + r.kind : cap(r.kind)), place(r), age("Installed", r.year),
         r.depth !== "" ? "Water depth " + K.esc(r.depth) + " m" : "", r.operator ? "Operator " + K.esc(r.operator) : "",
