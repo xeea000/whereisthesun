@@ -133,11 +133,15 @@
       map.addLayer({ id: "acc-ring", type: "line", source: "w-acc-ring", paint: { "line-color": "#ff4fa3", "line-width": 2, "line-opacity": 0.9 } }, K.before(map));
     },
     lines: sciLines });
-  pointLayer({ id: "labs", file: "labs", name: "Research labs & centres", icon: "🧪", group: "Science", dflt: true,
-    tip: "Laboratories, research centres and well-known research institutes (Wikidata)", attrib: WD, src: ["Wikidata", "https://www.wikidata.org/"],
-    legend: K.legKeys([["#9be564", "dot", "laboratory or research centre"], ["#5fb8ff", "dot", "research institute"]]),
-    layers: [{ id: "lab-dot", codes: ["lab"], color: "#9be564", r: 2.4 }, { id: "inst-dot", codes: ["inst"], color: "#5fb8ff", r: 2.4 }],
-    lines: sciLines });
+  /* labs by field (tools/classify-labs.js): one class per lab from its Wikidata field of work, type and name */
+  var LABS = [["space", "Physics & space", "#b48cff"], ["life", "Life sciences & medicine", "#ff6b8a"], ["earth", "Earth, climate & ocean", "#3fb6c9"],
+    ["eng", "Engineering, tech & computing", "#ffb347"], ["chem", "Chemistry & materials", "#f5e663"], ["agri", "Agriculture & food", "#9be564"],
+    ["soc", "Social sciences", "#5fb8ff"], ["rel", "Religion & humanities", "#d9a6ff"], ["mil", "Military & defence", "#a0a0a0"], ["other", "Other or not known", "#e8e8e8"]];
+  pointLayer({ id: "labs", file: "labs", name: "Research labs & centres", icon: "🧪", group: "Science", dflt: true, kids: true,
+    tip: "Laboratories, research centres and well-known research institutes by field (Wikidata)", attrib: WD, src: ["Wikidata", "https://www.wikidata.org/"],
+    legend: K.legKeys(LABS.map((c) => { return [c[2], "dot", c[1]]; })),
+    layers: LABS.map((c) => { return { id: "lab-" + c[0], codes: [c[0]], color: c[2], r: 2.4, name: c[1] }; }),
+    lines: (r) => { return sciLines(r).concat(r.field ? ["Field: " + K.esc(r.field)] : []); } });
   /* History: one place per point, in the first group that claims it (tools/build-history.js) */
   var HIST = [["wonder", "Ancient Wonders (original sites)", "#ffd34d", 5], ["new7", "New 7 Wonders", "#ffb000", 5], ["whs", "UNESCO World Heritage", "#3f8cff", 3],
     ["temple", "Temples & shrines, 800+ years", "#c08bff", 2.8], ["c200", "Castles & forts, under 200 years", "#f6d6a8", 2.4],
