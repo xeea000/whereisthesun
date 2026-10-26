@@ -33,7 +33,7 @@
     box.id = "legend-stack"; box.className = "legend-stack";
     box.innerHTML = '<button type="button" class="ls-head"></button><div class="ls-body"></div>';
     document.body.appendChild(box);
-    var head = box.firstChild, body = box.lastChild, open = get("sunny-leg-open", "1") === "1", last = "";
+    var head = box.firstChild, body = box.lastChild, open = get("sunny-leg-open", window.innerWidth < 700 ? "0" : "1") === "1", last = "";
     var draw = () => {
       var on = L.list();
       box.hidden = !on.length;

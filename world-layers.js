@@ -36,7 +36,7 @@
     o.layers.forEach((l) => { hoverOf[l.id] = o; });
     function apply(map, on) {
       var ids = o.layers.map((l) => { return l.id; });
-      K.vis(map, ids, on);
+      K.vis(map, ids.concat(o.extraIds || []), on);
       if (!on) return;
       K.loadJson(BASE + o.file + ".p.json?h=" + V).then((d) => {
         meta[o.file] = d;
@@ -50,11 +50,12 @@
           if (K.gz(l.minzoom || 0)) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
         });
-        K.vis(map, ids, L.isOn(o.id));
+        if (o.extra) o.extra(map);
+        K.vis(map, ids.concat(o.extraIds || []), L.isOn(o.id));
       }).catch(() => {});
     }
     var taps = o.layers.map((l) => { return l.id; });
-    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply,
+    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply, legend: o.legend,
       attach: (map, on) => {
         idle(map, o.id, taps[0], apply);
         taps.forEach((t) => {
@@ -92,14 +93,42 @@
         r.wiki === "manned" ? "Crewed around the clock" : "", wikiLine(r)];
     } });
   /* research stations */
-  pointLayer({ id: "stations", file: "stations", name: "Research stations", icon: "🔬", group: "Earth",
+  pointLayer({ id: "stations", file: "stations", name: "Research stations", icon: "🔬", group: "Science",
     tip: "Research stations worldwide (Wikidata) and every Antarctic station and camp (COMNAP)",
+    legend: K.legKeys([["#e8f6ff", "dot", "polar station or camp"], ["#7fd1a8", "dot", "other research station"]]),
     attrib: 'Stations: <a href="https://www.comnap.aq/" target="_blank" rel="noopener">COMNAP</a>, Wikidata', src: ["COMNAP Antarctic facilities", "https://github.com/PolarGeospatialCenter/comnap-antarctic-facilities"],
     layers: [{ id: "stn-polar", codes: ["polar"], color: "#e8f6ff", r: 3.2 }, { id: "stn-other", codes: ["other"], color: "#7fd1a8", r: 2.6 }],
     lines: (r) => {
       return [K.esc(cap(r.kind)), place(r), age("Opened", r.year), r.operator ? "Run by " + K.esc(r.operator) : "",
         r.height !== "" ? "Height " + K.esc(r.height) + " m" : "", wikiLine(r)];
     } });
+  /* opt111 Science: particle accelerators (with the LHC ring) and research labs (tools/build-science.js) */
+  var ring = (lat, lon, km) => {
+    var c = [];
+    for (var a = 0; a <= 360; a += 5) c.push([lon + km / (111.32 * Math.cos(lat * Math.PI / 180)) * Math.cos(a * Math.PI / 180), lat + km / 110.57 * Math.sin(a * Math.PI / 180)]);
+    return c;
+  };
+  var sciLines = (r) => {
+    return [K.esc(cap(r.kind)), place(r), age("Opened", r.year), r.operator ? "Run by " + K.esc(r.operator) : "", wikiLine(r)];
+  };
+  var WD = 'Science: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>';
+  pointLayer({ id: "accelerators", file: "accelerators", name: "Particle accelerators", icon: "⚛️", group: "Science", dflt: true,
+    tip: "Particle accelerators and the big accelerator labs (CERN, Fermilab, SLAC, DESY, KEK, TRIUMF, Brookhaven), Wikidata", attrib: WD,
+    src: ["Wikidata", "https://www.wikidata.org/"], legend: K.legKeys([["#ff4fa3", "dot", "accelerator lab"], ["#ffa6d2", "dot", "accelerator"],
+      ["#ff4fa3", "line", "LHC ring, 27 km"]]),
+    layers: [{ id: "acc-lab", codes: ["lab"], color: "#ff4fa3", r: 4 }, { id: "acc-dot", codes: ["acc"], color: "#ffa6d2", r: 2.8 }],
+    extraIds: ["acc-ring"],
+    extra: (map) => {
+      if (map.getLayer("acc-ring")) return;
+      map.addSource("w-acc-ring", { type: "geojson", data: K.fc([{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: ring(46.2726, 6.0661, 4.24) } }]) });
+      map.addLayer({ id: "acc-ring", type: "line", source: "w-acc-ring", paint: { "line-color": "#ff4fa3", "line-width": 2, "line-opacity": 0.9 } }, K.before(map));
+    },
+    lines: sciLines });
+  pointLayer({ id: "labs", file: "labs", name: "Research labs & centres", icon: "🧪", group: "Science", dflt: true,
+    tip: "Laboratories, research centres and well-known research institutes (Wikidata)", attrib: WD, src: ["Wikidata", "https://www.wikidata.org/"],
+    legend: K.legKeys([["#9be564", "dot", "laboratory or research centre"], ["#5fb8ff", "dot", "research institute"]]),
+    layers: [{ id: "lab-dot", codes: ["lab"], color: "#9be564", r: 2.4 }, { id: "inst-dot", codes: ["inst"], color: "#5fb8ff", r: 2.4 }],
+    lines: sciLines });
   /* Transmission */
   var txLines = (verb) => {
     return (r) => {

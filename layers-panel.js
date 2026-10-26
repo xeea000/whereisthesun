@@ -5,7 +5,7 @@
  * made here in Settings, "More layers". Open/closed and each layer's state are saved. */
 (() => {
   "use strict";
-  var GROUPS = ["Weather", "Sky & Space", "Earth", "Ocean", "Transmission", "Outdoors", "History"];
+  var GROUPS = ["Weather", "Sky & Space", "Earth", "Ocean", "Science", "Transmission", "Outdoors", "History"];
   var defs = [];
   var map = null;
   var panel = null;
@@ -147,7 +147,7 @@
    * PLACE moves a layer into a "Section/Sub" path without touching the layer's own file. */
   var PLACE = { skyglow: "Sky & Space/Natural", aurora: "Sky & Space/Natural", eclipses: "Sky & Space/Natural", moon: "Sky & Space/Natural",
     nightscore: "Sky & Space/Natural", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
-    craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", stations: "Earth" };
+    craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", stations: "Science" };
   var SUBS = { "Sky & Space": ["Natural", "Artificial"], Earth: ["", "Geology"] };
   function fold(parent, path, label, lvl) {
     var key = "sunny-lp-g2-" + path; /* opt104: new key, folded by default */
