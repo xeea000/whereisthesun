@@ -8,7 +8,7 @@
   var SRC = ["NOAA SPC Severe Weather Database", "https://www.spc.noaa.gov/wcm/"];
   var EF = [[3, "#ffb347", "EF3 / F3"], [4, "#e53935", "EF4 / F4"], [5, "#b0006d", "EF5 / F5 (star)"]];
   var color = ["match", ["get", "m"], 3, EF[0][1], 4, EF[1][1], "#b0006d"];
-  var IDS = ["torn-line", "torn-hit", "torn-dot", "torn-star"], TAPS = ["torn-hit", "torn-dot"];
+  var IDS = ["torn-line", "torn-hit", "torn-dot", "torn-star"], TAPS = ["torn-hit", "torn-dot", "torn-star"];
   var feats = (g) => {
     return g.t.map((r, i) => {
       var a = [r[10] / 100, r[9] / 100], b = [r[12] / 100, r[11] / 100], same = a[0] === b[0] && a[1] === b[1];

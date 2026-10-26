@@ -385,7 +385,7 @@
       idle(map, "pipelines", "pipe-line", pipeApply);
       map.on("click", "pipe-hit", (e) => {
         var p = e.features[0].properties;
-        K.show(map, e.lngLat, p.n || "Undersea pipeline", [p.s ? "Carries " + K.esc(p.s) : "", p.o ? "Operator " + K.esc(p.o) : ""],
+        K.show(map, e.lngLat, p.n || (p.s ? p.s + " pipeline" : "Pipeline") + " (no name in OSM)", [p.s ? "Carries " + K.esc(p.s) : "", p.o ? "Operator " + K.esc(p.o) : ""],
           ["OpenStreetMap via Geofabrik", "https://www.openstreetmap.org/#map=12/" + e.lngLat.lat.toFixed(4) + "/" + e.lngLat.lng.toFixed(4)]);
       });
       pipeApply(map, on);
