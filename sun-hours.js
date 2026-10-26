@@ -142,6 +142,10 @@
     tip: "Estimated hours of direct sun today on a clear day, with shade from hills, buildings and woods. Zoom 13 or closer; tap for the value",
     attach: (map, on) => {
       map.on("moveend", () => { if (L.isOn("sunhours")) later(map); });
+      map.on("mousemove", (e) => { /* desktop hover: the value under the pointer as the map's tooltip */
+        var v = L.isOn("sunhours") ? at(e.lngLat) : null, cv = map.getCanvas(), t = v == null ? "" : "Sun hours: about " + fmt(v) + " (estimate)";
+        if (cv.title !== t) cv.title = t;
+      });
       map.on("click", (e) => {
         if (!L.isOn("sunhours")) return;
         var v = at(e.lngLat);
