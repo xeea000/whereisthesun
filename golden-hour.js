@@ -50,8 +50,10 @@
   };
   var apply = (map, on) => {
     clearInterval(timer); timer = null;
-    if (on && !map.getSource("gold") && !map.isStyleLoaded()) return; /* the idle hook adds it once the style is ready */
-    if (on) { draw(map); low(map); timer = setInterval(() => { draw(map); }, 60000); }
+    if (on) {
+      try { draw(map); low(map); } catch (e) { setTimeout(() => { if (L.isOn("goldenhour")) apply(map, true); }, 2000); return; } /* style not ready yet */
+      timer = setInterval(() => { try { draw(map); } catch (e) {} }, 60000);
+    }
     K.vis(map, IDS, on);
   };
   var hoverName = (f) => {
