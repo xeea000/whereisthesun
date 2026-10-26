@@ -49,7 +49,7 @@
     return data;
   }
   function load() {
-    if (!loading) loading = fetch("data/impact-craters.json").then(readJson).then(keep);
+    if (!loading) loading = fetch("data/impact-craters.json?h=opt99").then(readJson).then(keep);
     return loading;
   }
   function beforeId() {
@@ -144,7 +144,7 @@
     map = m;
     var t = document.getElementById("toggle-craters");
     if (t) {
-      try { t.checked = localStorage.getItem(KEY) === "1"; } catch (eR) {}
+      try { t.checked = localStorage.getItem(KEY) !== "0"; /* opt99: on by default */ } catch (eR) {}
       t.addEventListener("change", onToggle);
     }
     map.on("click", "craters-fill", onClick);

@@ -36,9 +36,37 @@
     }
     return fireLoading;
   }
+  /* opt99: fire perimeters this season (CWFIS M3 burned areas from satellite hotspots), WMS tiles for the view only */
+  var PERIM = "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/wms?service=WMS&version=1.1.1&request=GetMap&layers=public:m3_polygons_current" +
+    "&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}";
+  function perimAdd(map) {
+    if (!map.getSource("fire-perim")) map.addSource("fire-perim", { type: "raster", tiles: [PERIM + "&t=" + Math.floor(Date.now() / 36e5)], tileSize: 256, minzoom: 3,
+      attribution: 'Fire perimeters: <a href="https://cwfis.cfs.nrcan.gc.ca/" target="_blank" rel="noopener">CWFIS (NRCan)</a>' });
+    if (!map.getLayer("fire-perim")) map.addLayer({ id: "fire-perim", type: "raster", source: "fire-perim", minzoom: 3, paint: { "raster-opacity": 0.8 } }, K.before(map));
+  }
+  var DAY = 864e5;
+  function perimTap(map, e) {
+    if (!L.isOn("fires") || map.getZoom() < 3) return;
+    if (map.queryRenderedFeatures(e.point).some((f) => { return f.layer && f.layer.id === "fire-dot"; })) return;
+    var a = map.unproject([e.point.x - 3, e.point.y + 3]), b = map.unproject([e.point.x + 3, e.point.y - 3]);
+    var u = "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=public:m3_polygons_current" +
+      "&outputFormat=application/json&propertyName=firstdate,lastdate,area,hcount&count=1&bbox=" + [a.lng, a.lat, b.lng, b.lat].map((x) => { return x.toFixed(5); }).join(",") + ",urn:ogc:def:crs:OGC:1.3:CRS84";
+    fetch(u).then((r) => { return r.json(); }).then((j) => {
+      var f = (j.features || [])[0];
+      if (!f) return;
+      var p = f.properties, t0 = new Date(p.firstdate), t1 = new Date(p.lastdate);
+      var d = (x) => { return x.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }); };
+      var days = Math.max(1, Math.round((t1 - t0) / DAY));
+      var ago = Math.round((Date.now() - t1) / DAY);
+      K.show(map, e.lngLat, "Fire perimeter", ["Burned area mapped from satellite hotspots", "First seen " + K.esc(d(t0)), "Last seen " + K.esc(d(t1)) + (ago > 0 ? " (" + ago + " days ago)" : " (today)"),
+        "Burned for about " + days + " day" + (days === 1 ? "" : "s"), p.area != null ? "Area " + Math.round(p.area).toLocaleString() + " ha" : "",
+        p.hcount ? K.esc(p.hcount) + " hotspots" : ""], ["CWFIS fire M3 perimeters, NRCan", "https://cwfis.cfs.nrcan.gc.ca/interactive-map"]);
+    }).catch(() => {});
+  }
   function fireApply(map, on) {
-    K.vis(map, ["fire-dot"], on);
+    K.vis(map, ["fire-dot", "fire-perim"], on);
     if (!on) return;
+    try { perimAdd(map); } catch (eP) {}
     fireData().then((rows) => {
       var geo = K.fc(rows.map((r) => {
         return { type: "Feature", properties: { t: r[2], sat: r[3], frp: r[4], ag: r[5] }, geometry: { type: "Point", coordinates: [r[0], r[1]] } };
@@ -51,14 +79,15 @@
           "circle-color": ["interpolate", ["linear"], ["coalesce", ["get", "frp"], 0], 0, "#ffb000", 50, "#ff5a00", 300, "#d0001a"],
           "circle-stroke-color": "#3a0a00", "circle-stroke-width": 0.6 } }, K.before(map));
       }
-      K.vis(map, ["fire-dot"], L.isOn("fires"));
+      K.vis(map, ["fire-dot", "fire-perim"], L.isOn("fires"));
     }).catch(() => {});
   }
-  L.add({ id: "fires", name: "Wildfires (24 h)", icon: "🔥", group: "Weather", taps: ["fire-dot"],
-    tip: "Satellite fire hotspots, last 24 hours, North America (CWFIS, NRCan)", apply: fireApply,
+  L.add({ id: "fires", name: "Wildfires", icon: "🔥", group: "Weather", taps: ["fire-dot"],
+    tip: "Fire perimeters this season and satellite hotspots from the last 24 hours, North America (CWFIS, NRCan)", apply: fireApply,
     attach: (map, on) => {
       idleAdd(map, "fires", "fire-dot", fireApply);
       setInterval(() => { if (L.isOn("fires")) fireApply(map, true); }, 30 * 60000);
+      map.on("click", (e) => { perimTap(map, e); });
       map.on("click", "fire-dot", (e) => {
         var p = e.features[0].properties;
         var t = p.t ? new Date(p.t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
@@ -72,7 +101,7 @@
   function metApply(map, on) {
     K.vis(map, ["meteor-dot"], on);
     if (!on) return;
-    K.loadJson(MET + ".p.json").then((d) => {
+    K.loadJson(MET + ".p.json?h=opt99").then((d) => {
       metMeta = d;
       if (!map.getSource("meteorites")) {
         map.addSource("meteorites", { type: "geojson", attribution: 'Meteorites: <a href="https://www.lpi.usra.edu/meteor/" target="_blank" rel="noopener">Meteoritical Society</a> via NASA',
@@ -81,7 +110,7 @@
       if (!map.getLayer("meteor-dot")) {
         map.addLayer({ id: "meteor-dot", type: "circle", source: "meteorites", paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 1.8, 8, 5],
-          "circle-color": "#b9a2ff", "circle-stroke-color": "#2a1f4d", "circle-stroke-width": 0.7 } }, K.before(map));
+          "circle-color": ["match", ["get", "k"], "found", "#8a7bd0", "#b9a2ff"], "circle-stroke-color": "#2a1f4d", "circle-stroke-width": 0.7 } }, K.before(map));
       }
       K.vis(map, ["meteor-dot"], L.isOn("meteorites"));
     }).catch(() => {});
@@ -90,16 +119,18 @@
     if (g == null) return "";
     return g >= 1000 ? (Math.round(g / 100) / 10) + " kg" : g + " g";
   }
-  L.add({ id: "meteorites", name: "Meteorite falls", icon: "🪨", group: "Earth", taps: ["meteor-dot"],
-    tip: "Places where a meteorite was seen falling and then found (Meteoritical Society, NASA)", apply: metApply,
+  L.add({ id: "meteorites", name: "Meteorites", icon: "🪨", group: "Earth", taps: ["meteor-dot"],
+    tip: "Meteorites seen falling, plus finds of 1 kg or more, worldwide (Meteoritical Society, NASA)", apply: metApply,
     attach: (map, on) => {
       idleAdd(map, "meteorites", "meteor-dot", metApply);
       map.on("click", "meteor-dot", (e) => {
         var ll = e.features[0].geometry.coordinates;
+        var fell = e.features[0].properties.k !== "found";
         var pp = K.show(map, ll, "", [window.SunnyPoints.skeleton("Meteorite fall")], "Meteoritical Bulletin");
-        window.SunnyPoints.detail(MET, metMeta, e.features[0].properties.i, "opt96").then((p) => {
+        window.SunnyPoints.detail(MET, metMeta, e.features[0].properties.i, "opt99").then((p) => {
           var rec = "https://www.lpi.usra.edu/meteor/metbull.php?sea=" + encodeURIComponent(p.n) + "&srt=name&lrec=50";
-          if (pp.isOpen()) pp.setHTML(K.card(p.n + " meteorite", ["Seen falling" + (p.y ? " in " + K.esc(p.y) : ""), "Type " + K.esc(p.c),
+                    var yrs = p.y ? new Date().getFullYear() - +p.y : 0;
+          if (pp.isOpen()) pp.setHTML(K.card(p.n + " meteorite", [(fell ? "Seen falling" : "Found") + (p.y ? " in " + K.esc(p.y) + (yrs > 0 ? " · " + yrs + " years ago" : "") : ""), "Type " + K.esc(p.c),
             p.m != null && p.m !== "" ? "Found: " + mass(+p.m) : ""], ["Meteoritical Bulletin record", rec]));
         }).catch(() => { if (pp.isOpen()) pp.setHTML(K.card("Meteorite fall", ["Could not load details. Tap again when online."], "Meteoritical Bulletin")); });
       });

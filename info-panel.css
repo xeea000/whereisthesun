@@ -32,7 +32,8 @@
 @keyframes ipglim { from { background-position: 100% 0; } to { background-position: 0 0; } }
 .ip-peek { position: fixed; left: 50%; transform: translateX(-50%); bottom: 136px; width: min(360px, calc(100vw - 24px)); z-index: 21; background: rgba(18, 22, 30, 0.95); color: #e8eef6; border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); font: 13px/1.35 system-ui, sans-serif; padding: 9px 12px 6px; }
 .ip-peek[hidden] { display: none; }
-.ip-peek .pk-body { max-height: 74px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.ip-peek { display: flex; flex-direction: column; max-height: 42vh; }
+.ip-peek .pk-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
 .ip-peek .pk-body img, .ip-peek .pk-body svg { display: none; }
 .ip-peek .pk-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .ip-peek .pk-src { flex: 1; font-size: 10px; opacity: 0.7; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -41,7 +42,7 @@
 .ip-peek .pk-more { border: 0; border-radius: 14px; background: #ffd34d; color: #111; font-weight: 700; padding: 6px 12px; cursor: pointer; }
 .ip-peek .pk-x { border: 0; background: none; color: #e8eef6; font-size: 22px; padding: 0 6px; cursor: pointer; }
 .is-disabled#btn-play, button.is-disabled { opacity: 0.4; }
-.ip-peek.pk-tall .pk-body { max-height: 62vh; overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
+.ip-peek.pk-tall .pk-body { overflow-y: auto; }
 .ip-peek.pk-tall .pk-body h2 { margin: 0 0 4px; font-size: 15px; }
 .bx-ring .bc-ring { position: relative; width: 210px; height: 190px; margin: 0 auto; }
 .bx-ring img.bx-big { display: block !important; position: absolute; left: 35px; top: 15px; width: 140px; height: 140px; }

@@ -5,7 +5,7 @@
  * made here in Settings, "More layers". Open/closed and each layer's state are saved. */
 (() => {
   "use strict";
-  var GROUPS = ["Weather", "Sky & Space", "Earth", "Outdoors", "History"];
+  var GROUPS = ["Weather", "Sky & Space", "Earth", "Ocean", "Transmission", "Outdoors", "History"];
   var defs = [];
   var map = null;
   var panel = null;

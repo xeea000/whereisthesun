@@ -3,7 +3,7 @@
  * (The Meteoritical Society data, NASA open data, public domain; CSV mirror from
  * rfordatascience/tidytuesday 2019-06-11). Keeps only "Fell" with real coordinates.
  *   node tools/build-meteorites.js <meteorites.csv>  -> data/meteorite-falls.json
- * Rows: [name, class, mass grams, year, lat, lon] */
+ * Rows: [name, class, mass grams, year, lat, lon, fell 1 | found 0] (opt99: finds of 1 kg or more added) */
 "use strict";
 var fs = require("fs");
 var path = require("path");
@@ -21,10 +21,12 @@ function cells(line) {
 var rows = fs.readFileSync(process.argv[2], "utf8").split("\n").slice(1).map(cells);
 var falls = [];
 rows.forEach((r) => {
-  if (r[5] !== "Fell" || r[2] !== "Valid") return;
+  if (r[2] !== "Valid") return;
+  /* opt99: also finds of 1 kg or more */
+  if (r[5] !== "Fell" && !(r[5] === "Found" && +r[4] >= 1000)) return;
   var lat = +r[7], lon = +r[8];
   if (!r[7] || (lat === 0 && lon === 0) || isNaN(lat)) return;
-  falls.push([r[0], r[3], r[4] ? Math.round(+r[4]) : null, r[6] ? +r[6] : null, Math.round(lat * 1e3) / 1e3, Math.round(lon * 1e3) / 1e3]);
+  falls.push([r[0], r[3], r[4] ? Math.round(+r[4]) : null, r[6] ? +r[6] : null, Math.round(lat * 1e3) / 1e3, Math.round(lon * 1e3) / 1e3, r[5] === "Fell" ? 1 : 0]);
 });
 fs.writeFileSync(path.join(__dirname, "..", "data", "meteorite-falls.json"), JSON.stringify({ source: "NASA Meteorite Landings (Meteoritical Society), public domain", falls: falls }));
 console.log(falls.length + " falls");

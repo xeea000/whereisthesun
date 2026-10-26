@@ -85,13 +85,18 @@
   }
   /* opt96: a tap shows a small peek card near the bottom; More opens the panel. Never auto-opens. */
   var peek = null;
+  /* opt99: the tapped thing first; wide-area cards (aurora, night sky, eclipse paths) after it */
+  var BROAD = /Aurora chance|Night-sky score|solar eclipse|lunar eclipse/;
+  function order(list) {
+    return list.filter((c) => { return !BROAD.test(c.html); }).concat(list.filter((c) => { return BROAD.test(c.html); }));
+  }
   function renderPeek() {
     if (!peek) {
       peek = el("div", "ip-peek");
       peek.id = "ip-peek";
       document.body.appendChild(peek);
     }
-    var live = cards.filter((c) => { return c.html; });
+    var live = order(cards.filter((c) => { return c.html; }));
     if (!live.length || isOpen()) { peek.hidden = true; return; }
     var tmp = el("div");
     tmp.innerHTML = live[0].html;
@@ -111,6 +116,9 @@
     px.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
     px.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); cards.slice().forEach((c) => { c.p.remove(); }); });
     peek.hidden = false;
+    /* opt99: free-area placement, height capped so the body scrolls */
+    var wp = where();
+    if (window.SunnyPeekPlace) window.SunnyPeekPlace(peek, wp && wp._map, wp && (wp._sLL || wp._lngLat));
   }
   function build() {
     panel = el("aside", "ip-panel");
@@ -147,7 +155,7 @@
   }
   function renderCards() {
     cardsEl.textContent = "";
-    var live = cards.filter((c) => { return c.html; });
+    var live = order(cards.filter((c) => { return c.html; }));
     if (!live.length) return;
     var box = el("div", "ip-card");
     box.insertAdjacentHTML("beforeend", coordHtml());

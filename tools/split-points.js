@@ -55,7 +55,7 @@ if (require.main === module) {
   } else if (which === "met") {
     const d = JSON.parse(fs.readFileSync(path.join(root, "meteorite-falls.json"), "utf8"));
     const r = split(path.join(root, "met", "falls"), d.falls.map((f) => {
-      return { lat: f[4], lon: f[5], code: "", row: [f[0], f[1], f[2], f[3]] };
+      return { lat: f[4], lon: f[5], code: f[6] === 0 ? "found" : "fell", row: [f[0], f[1], f[2], f[3]] };
     }), "n,c,m,y", 150);
     console.log("met", JSON.stringify(r));
   } else console.log("usage: node tools/split-points.js obs|met");

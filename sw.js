@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt98"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt99"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,11 +32,12 @@ var PRECACHE = [
   "settings-panel.css?h=5ab8872727",
   "side-buttons.css?h=de1efe43ac",
   "layers-panel.css?h=22dafdb7c6",
-  "info-panel.css?h=2dd737311b",
+  "info-panel.css?h=ed7a47a437",
   "vendor/maplibre-gl.js?h=be9633c4d8",
-  "tap-snap.js?h=5bfcd17fb8",
+  "tap-snap.js?h=e745272768",
   "points.js?h=bd3ec9c286",
-  "info-panel.js?h=12be4b6b07",
+  "peek-place.js?h=f0d14e00bc",
+  "info-panel.js?h=fdec3ce34a",
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=9bb675dbcd",
   "data-saver.js?h=92b48c076c",
@@ -52,7 +53,7 @@ var PRECACHE = [
   "wind-field.js?h=a95511e1dc",
   "wind-gl.js?h=cbb13e67c4",
   "point-forecast.js?h=faf1994fb8",
-  "craters.js?h=5145d0d840",
+  "craters.js?h=aeca865098",
   "sky-glow.js?h=67ea06339b",
   "beach-toggle.js?h=29ef62a7e1",
   "observatories.js?h=d8f1e358b2",
@@ -61,10 +62,11 @@ var PRECACHE = [
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
   "layer-kit.js?h=6755344adb",
-  "layers-panel.js?h=f6dc3d4033",
+  "layers-panel.js?h=ff91938d43",
   "existing-layers.js?h=9f6ba55b3e",
   "sky-layers.js?h=adfaed2f60",
-  "earth-layers.js?h=93d282598f",
+  "earth-layers.js?h=8c342d50dd",
+  "world-layers.js?h=fc0dcd4227",
   "outdoor-layers.js?h=d659829248",
   "sky-card.js?h=7e841a5414",
   "sky-draw.js?h=e97d615995",
@@ -225,7 +227,7 @@ function isTile(u) {
 function isStaticData(u) {
   if (u.origin !== self.location.origin) return false;
   var p = u.pathname;
-  return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json" || p.slice(-23) === "/data/observatories.json" || p.indexOf("/data/obs/") !== -1 || p.indexOf("/data/met/") !== -1;
+  return p.slice(-23) === "/data/nexrad-sites.json" || p.slice(-25) === "/data/impact-craters.json" || p.slice(-23) === "/data/observatories.json" || p.indexOf("/data/obs/") !== -1 || p.indexOf("/data/met/") !== -1 || p.indexOf("/data/world/") !== -1;
 }
 function isBeachData(u) {
   return u.origin === self.location.origin && u.pathname.indexOf("/data/") !== -1 && u.searchParams.has("h");
