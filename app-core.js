@@ -579,9 +579,9 @@ function sunnyStep01() {
         }
       },
       layers: [
-        { id: "osm", type: "raster", source: "osm", layout: { visibility: window.SunnyDataSaver.on("vector") ? "none" : "visible" } },
-        { id: "base-sat", type: "raster", source: "base-sat", layout: { visibility: "none" } },
-        { id: "base-dark", type: "raster", source: "base-dark", layout: { visibility: "none" } }
+        { id: "osm", type: "raster", source: "osm", paint: { "raster-resampling": "nearest" }, layout: { visibility: window.SunnyDataSaver.on("vector") ? "none" : "visible" } },
+        { id: "base-sat", type: "raster", source: "base-sat", paint: { "raster-resampling": "nearest" }, layout: { visibility: "none" } },
+        { id: "base-dark", type: "raster", source: "base-dark", paint: { "raster-resampling": "nearest" }, layout: { visibility: "none" } }
       ]
     },
     center: bootCenter,

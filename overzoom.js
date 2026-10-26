@@ -1,6 +1,6 @@
 // workspace/whereisthesun/overzoom.js
-/* SUNNY opt117 overzoom notice: map tiles carry no more detail past zoom 19, so a small pill says "Max detail reached"
- * with a Zoom out button back to 19. Settings switch "Max detail notice" (sunny-maxdetail, on by default). No data. */
+/* SUNNY opt118 overzoom notice: map tiles carry no more detail past zoom 19. The map keeps zooming into the last tiles
+ * (stretched pixels, base maps drawn with nearest resampling) and a text watermark says "Max detail reached". Settings switch "Max detail notice" (sunny-maxdetail, on by default). No data. */
 (() => {
   "use strict";
   var L = window.SunnyLayers;
@@ -15,13 +15,12 @@
       pill = document.createElement("div");
       pill.id = "max-detail";
       pill.setAttribute("role", "status");
-      pill.style.cssText = "position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(20,24,34,.92);color:#fff;" +
-        "font:13px system-ui,sans-serif;padding:6px 8px 6px 12px;border-radius:16px;display:flex;gap:8px;align-items:center;white-space:nowrap";
-      pill.innerHTML = 'Max detail reached <button type="button" style="border:0;border-radius:12px;padding:3px 10px;background:#ffd34d;font:inherit">Zoom out</button>';
-      pill.querySelector("button").addEventListener("click", () => { map.easeTo({ zoom: MAX }); });
+      pill.style.cssText = "position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:30;color:rgba(255,255,255,.85);pointer-events:none;" +
+        "font:600 13px system-ui,sans-serif;text-shadow:0 1px 3px #000,0 0 2px #000;white-space:nowrap";
+      pill.textContent = "Max detail reached";
       document.body.appendChild(pill);
     }
-    if (pill) pill.style.display = need ? "flex" : "none";
+    if (pill) pill.style.display = need ? "block" : "none";
   };
   var row = () => {
     var pop = document.getElementById("settings-pop"), btn = document.getElementById("set-adv-btn");
