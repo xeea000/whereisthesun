@@ -2,7 +2,7 @@
 /* SUNNY waves and surf: wave height, period and direction now, from Open-Meteo Marine (free, no key).
  * Viewport grid gets finer with zoom (~5° world → ~0.08° close in). Up to 300 spots per request,
  * sampled evenly so the first batch fills the view (not just the SW corner). Spots kept one hour.
- * Arrows sized and coloured by height; cell_selection=sea prefers water. Gap: model, not beach breaks. */
+ * Arrows sized and coloured by height; Land returns no height so arrows stay offshore. Gap: model, not beach breaks. */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
@@ -12,17 +12,17 @@
   var IDS = ["wave-dot", "wave-arrow"], seen = Object.create(null), busy = false, wait = null;
   var MAX_REQ = 300, TTL = 36e5;
   var stepOf = (z) => {
-    if (z < 3) return 5;
-    if (z < 4) return 3;
-    if (z < 5) return 2;
+    if (z < 3) return 4;
+    if (z < 4) return 2.5;
+    if (z < 5) return 1.5;
     if (z < 6) return 1;
-    if (z < 7) return 0.75;
-    if (z < 8) return 0.5;
-    if (z < 9) return 0.35;
-    if (z < 10) return 0.25;
-    if (z < 12) return 0.15;
-    if (z < 14) return 0.1;
-    return 0.08;
+    if (z < 7) return 0.6;
+    if (z < 8) return 0.4;
+    if (z < 9) return 0.25;
+    if (z < 10) return 0.18;
+    if (z < 12) return 0.12;
+    if (z < 14) return 0.08;
+    return 0.05;
   };
   var key = (c) => { return c[0].toFixed(2) + "," + c[1].toFixed(2); };
   var cells = (map) => {
@@ -74,7 +74,7 @@
     busy = true;
     var body = "latitude=" + need.map((c) => { return c[1].toFixed(2); }).join(",") +
       "&longitude=" + need.map((c) => { return c[0].toFixed(2); }).join(",") +
-      "&current=wave_height,wave_period,wave_direction&cell_selection=sea";
+      "&current=wave_height,wave_period,wave_direction";
     var req = body.length < 5500
       ? fetch(API + "?" + body)
       : fetch(API, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
@@ -89,7 +89,7 @@
       if (all.some((c) => { var v = seen[key(c)]; return !v || t - v.t > TTL; })) {
         setTimeout(() => { fetchView(map); }, 1200);
       }
-    }).catch(() => { busy = false; setTimeout(() => { fetchView(map); }, 30000); });
+    }).catch(() => { busy = false; setTimeout(() => { fetchView(map); }, 45000); });
   };
   var color = ["interpolate", ["linear"], ["get", "h"]].concat(...RAMP.map((r) => { return [r[0], r[1]]; }));
   /* taller waves → bigger ▲; also grows with zoom (MapLibre accepts nested interpolate here) */
