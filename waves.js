@@ -36,7 +36,8 @@
     if (mask) return Promise.resolve(mask);
     if (maskWait) return maskWait;
     maskWait = K.loadJson("data/wave-water-mask.json").then((m) => {
-      mask = { step: m.step, lon0: m.lon0, lat0: m.lat0, cols: m.cols, rows: m.rows, water: b64(m.water) };
+      mask = { step: m.step, lon0: m.lon0, lat0: m.lat0, cols: m.cols, rows: m.rows,
+        fetch: b64(m.fetch || m.water), strict: b64(m.strict || m.water) };
       lakeSet = Object.create(null);
       (m.lakes || []).forEach((i) => { lakeSet[i] = 1; });
       return mask;
@@ -53,7 +54,12 @@
   var isFetchWater = (lon, lat) => {
     if (!mask) return true; /* mask missing: fetch all; post-filter drops land */
     var i = maskIndex(lon, lat);
-    return i >= 0 && bitOn(mask.water, i);
+    return i >= 0 && bitOn(mask.fetch, i);
+  };
+  var isStrictWater = (lon, lat) => {
+    if (!mask) return false;
+    var i = maskIndex(lon, lat);
+    return i >= 0 && bitOn(mask.strict, i);
   };
   var isLake = (lon, lat) => {
     if (!lakeSet) return false;
@@ -70,10 +76,12 @@
     var glon = o.longitude != null ? o.longitude : reqLon, glat = o.latitude != null ? o.latitude : reqLat;
     var elev = o.elevation, d = distKm(reqLon, reqLat, glon, glat);
     if (d > MAX_SNAP_KM) return null;
-    var lake = isLake(reqLon, reqLat) || isLake(glon, glat);
-    if (elev != null && elev > OCEAN_ELEV_M && !lake) return null;
-    if (elev != null && elev > OCEAN_ELEV_M && lake && d > 12) return null;
-    return { lon: glon, lat: glat }; /* place on the model water cell, not dry land */
+    if (typeof elev !== "number" || !isFinite(elev)) return null;
+    if (isLake(glon, glat)) return d <= 12 ? { lon: glon, lat: glat } : null;
+    if (elev > OCEAN_ELEV_M) return null;
+    /* elev 0 = open water (ocean/bay). elev 1..8 only if undilated mask agrees (skip coastal hills) */
+    if (elev > 0 && mask && !isStrictWater(glon, glat)) return null;
+    return { lon: glon, lat: glat };
   };
   var cells = (map) => {
     var b = map.getBounds(), s = stepOf(map.getZoom()), out = [];
