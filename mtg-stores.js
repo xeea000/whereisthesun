@@ -213,28 +213,31 @@
     });
   }
   function mountScheduleBtn() {
-    var fold = document.querySelector('.lp-input[data-id="mtg"]');
-    if (!fold) return;
-    var wrap = fold.closest(".lp-fold");
+    var input = document.querySelector('.lp-input[data-id="mtg"]');
+    if (!input) return;
+    var wrap = input.closest(".lp-fold");
     if (!wrap) return;
-    var leg = wrap.querySelector(".lp-leg");
-    if (!leg) return;
-    if (leg.querySelector(".mtg-sched-btn")) return;
+    if (wrap.querySelector(".mtg-sched-btn")) return;
     var b = document.createElement("button");
     b.type = "button";
     b.className = "mtg-sched-btn";
     b.textContent = "Prerelease schedule";
     b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleSchedule(); });
-    leg.appendChild(b);
+    /* Sit on the fold itself (outside .lp-kids) so the button stays visible without expanding filters. */
+    wrap.appendChild(b);
     scheduleBtn = b;
   }
   function closeSchedule() {
     if (panelEl) panelEl.hidden = true;
   }
-  function toggleSchedule() {
+  function openSchedule() {
     if (!panelEl) buildSchedule();
-    panelEl.hidden = !panelEl.hidden;
-    if (!panelEl.hidden) renderSchedule();
+    panelEl.hidden = false;
+    renderSchedule();
+  }
+  function toggleSchedule() {
+    if (!panelEl || panelEl.hidden) openSchedule();
+    else closeSchedule();
   }
   function buildSchedule() {
     panelEl = document.createElement("div");
@@ -378,5 +381,5 @@
       if (document.body) mo.observe(document.body, { childList: true, subtree: true });
     }
   });
-  window.SunnyMtg = { setFilter: setFilter, openSchedule: toggleSchedule };
+  window.SunnyMtg = { setFilter: setFilter, openSchedule: openSchedule };
 })();
