@@ -1,18 +1,20 @@
 // workspace/whereisthesun/mtg-stores.js
 /* SUNNY Fun & Games: Magic: The Gathering WPN stores (opt190/opt191).
  * Data: public Wizards locator scrape + Scryfall sets + tiny Wizards key-art thumbs.
- * Off by default. Kids filter Prerelease / FNM formats. Schedule panel filters by set. */
+ * Past prereleases: accumulate-merge history (locator has no past API).
+ * Off by default. Kids: Prerelease / FNM / hosted past. Schedule panel filters by set. */
 (() => {
   "use strict";
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=117cb162";
-  var SETS = "data/mtg-sets.json?v=d842a175";
+  var DATA = "data/mtg-stores.json?v=ad0f54c3";
+  var SETS = "data/mtg-sets.json?v=91fc2e44";
   var meta = null, setCat = null, pMap = null, filterSet = "";
   var panelEl = null, scheduleBtn = null;
   var KIDS = [
     { id: "mtg-pre", name: "Prerelease (WPN partners)", dflt: true, kind: "pre" },
+    { id: "mtg-past", name: "Hosted a past prerelease", dflt: true, kind: "past" },
     { id: "mtg-fnm-cmd", name: "FNM · Commander", dflt: true, kind: "fnm", fmt: "Commander" },
     { id: "mtg-fnm-std", name: "FNM · Standard", dflt: true, kind: "fnm", fmt: "Standard" },
     { id: "mtg-fnm-oth", name: "FNM · other formats", dflt: true, kind: "fnm", fmt: "other" }
@@ -39,6 +41,9 @@
       if (!kidOn(k.id, k.dflt)) return;
       anyKid = true;
       if (k.kind === "pre") { if (s.partner) show = true; }
+      else if (k.kind === "past") {
+        if ((s.prereleasePast && s.prereleasePast.length) || (s.pastCount > 0)) show = true;
+      }
       else if (k.kind === "fnm" && s.fnm) {
         if (k.fmt === "other") {
           if (!list.length || list.every((f) => { return f !== "Commander" && f !== "Standard"; })) show = true;
@@ -59,7 +64,9 @@
           fnm: s.fnm ? 1 : 0, prerelease: s.prerelease ? 1 : 0,
           formats: (s.fnmFormats || []).join(", "),
           sets: sets,
+          pastCount: (s.prereleasePast || []).length,
           preJson: JSON.stringify(s.prereleaseNext || []),
+          pastJson: JSON.stringify(s.prereleasePast || []),
           fnmJson: JSON.stringify(s.fnmNext || [])
         }
       };
@@ -142,6 +149,7 @@
   }
   function cardHtml(p) {
     var pre = parseJson(p.preJson);
+    var past = parseJson(p.pastJson);
     var fnm = parseJson(p.fnmJson);
     var chips = [];
     if (p.partner) chips.push(chip("WPN", "mtg-chip-wpn"));
@@ -149,6 +157,13 @@
     if (p.fnm) chips.push(chip("FNM" + (p.formats ? " · " + K.esc(p.formats) : ""), "mtg-chip-fnm"));
     var blocks = [];
     blocks.push('<div class="mtg-chips">' + chips.join("") + "</div>");
+    if (past.length) {
+      var pastChips = past.slice(0, 2).map((e) => {
+        var label = ((e.name || e.set || "Set") + (e.date ? " · " + e.date : "")).trim();
+        return chip(K.esc(label), "mtg-chip-host-past");
+      });
+      blocks.push('<div class="mtg-past-row" title="Last prereleases this store hosted (from locator history)"><span class="mtg-past-label">Past</span>' + pastChips.join("") + "</div>");
+    }
     /* Group prerelease rows by set */
     var bySet = {};
     pre.forEach((e) => {
@@ -197,6 +212,7 @@
       blocks.join("") +
       '<div class="pf-src">Source: <a href="https://locator.wizards.com/" target="_blank" rel="noopener">Wizards locator</a>' +
       (built ? " · snapshot " + K.esc(built) : "") +
+      (past.length ? "; past from locator history snapshots" : "") +
       (setCat && setCat.source ? '; sets <a href="https://scryfall.com/sets" target="_blank" rel="noopener">Scryfall</a>' : "") +
       "</div></div>";
   }
@@ -334,7 +350,7 @@
   }
   L.add({
     id: "mtg", name: "Magic: The Gathering stores", icon: "🃏", group: "Fun & Games",
-    tip: "Wizards Play Network stores in Canada. Prerelease schedule + FNM filters. Snapshot from the public locator.",
+    tip: "Wizards Play Network stores in Canada. Upcoming + past prereleases (history) + FNM filters. Snapshot from the public locator.",
     taps: [DOT, STAR], dflt: false, kids: KIDS,
     legend: K.legKeys([
       ["#c9a227", "dot", "Prerelease upcoming"],

@@ -95,6 +95,9 @@
 .mtg-chip-wpn{background:#1f6b4a}.mtg-chip-fnm{background:#3a2f6e}.mtg-chip-leg{background:#6a5310;color:#ffe9a0}
 .mtg-chip-date{background:rgba(201,162,39,.2);color:#ffe9a0;font-weight:600}
 .mtg-chip-past{background:rgba(255,255,255,.08);font-weight:600;margin-left:4px}
+.mtg-past-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 8px}
+.mtg-past-label{font:700 10px system-ui,sans-serif;opacity:.7;text-transform:uppercase;letter-spacing:.04em;margin-right:2px}
+.mtg-chip-host-past{background:rgba(140,150,170,.22);color:#cfd6e2;font-weight:600}
 .mtg-sec{border-top:1px solid rgba(255,255,255,.08);margin-top:6px;padding-top:4px}
 .mtg-sec-h{display:block;width:100%;text-align:left;border:0;background:transparent;color:#ffd34d;font:700 12px system-ui,sans-serif;padding:4px 0;cursor:pointer}
 .mtg-sec-b{padding:2px 0 4px}

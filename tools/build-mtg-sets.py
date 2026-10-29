@@ -10,7 +10,12 @@ Sources (all free, keyless):
 Writes:
   data/mtg-sets.json
   data/mtg-art/<code>.webp   (≈120px wide, heavily compressed)
-  updates data/mtg-stores.json prereleaseNext entries with set codes
+  updates data/mtg-stores.json prereleaseNext (+ set codes) and prereleasePast
+  data/mtg-prerelease-history.json  (accumulate-merge; never drops prior rows)
+
+Past hosts: Wizards locator has no date-range/past API (probed). Wayback was
+offline at seed time. History accumulates every snapshot so last 1–2 past
+prereleases per store survive after events fall off the live locator.
 
 Usage: python3 tools/build-mtg-sets.py
 """
@@ -23,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STORES = ROOT / "data" / "mtg-stores.json"
 OUT = ROOT / "data" / "mtg-sets.json"
 ART = ROOT / "data" / "mtg-art"
+HISTORY = ROOT / "data" / "mtg-prerelease-history.json"
 UA = {"User-Agent": "SunnyBuild/1.0 (github.com/xeea000/whereisthesun; research)", "Accept": "application/json"}
 
 # Known product page slugs when the auto slug guess fails
@@ -139,6 +145,159 @@ def prerelease_weekend(release: str) -> dict:
   end = start + timedelta(days=2)
   return {"start": start.isoformat(), "end": end.isoformat()}
 
+MONTH = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+         "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+
+def parse_event_date(date_str: str, hint_iso: str = "") -> str:
+  """Turn 'Fri, Nov 6' into YYYY-MM-DD using hint year (set prerelease/release)."""
+  if not date_str:
+    return ""
+  m = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})", date_str, re.I)
+  if not m:
+    return ""
+  month = MONTH[m.group(1).lower()[:3]]
+  day = int(m.group(2))
+  year = None
+  if hint_iso and len(hint_iso) >= 4 and hint_iso[:4].isdigit():
+    year = int(hint_iso[:4])
+  if year is None:
+    year = date.today().year
+  try:
+    d = date(year, month, day)
+  except ValueError:
+    return ""
+  # If far from hint, nudge year
+  if hint_iso:
+    try:
+      h = date.fromisoformat(hint_iso[:10])
+      if abs((d - h).days) > 180:
+        for y in (year - 1, year + 1):
+          try:
+            cand = date(y, month, day)
+          except ValueError:
+            continue
+          if abs((cand - h).days) < abs((d - h).days):
+            d = cand
+    except ValueError:
+      pass
+  return d.isoformat()
+
+def load_history() -> dict:
+  if HISTORY.exists():
+    try:
+      return json.loads(HISTORY.read_text())
+    except Exception:
+      pass
+  return {
+    "updated": "",
+    "source": {
+      "locator": "https://locator.wizards.com/",
+      "note": "Accumulate-merge of locator prerelease snapshots. Locator exposes no past/date-range API; Wayback seed attempted when reachable.",
+      "waybackSeed": False,
+    },
+    "byStore": {},
+  }
+
+def merge_history(stores_doc: dict, expansions: list[dict], today: str) -> dict:
+  """Merge current prereleaseNext into history; attach prereleasePast (last 1–2)."""
+  hist = load_history()
+  by = hist.setdefault("byStore", {})
+  exp_by_code = {s["code"]: s for s in expansions}
+  seen_day = today
+  added = 0
+  for store in stores_doc.get("stores", []):
+    sid = str(store.get("id") or "")
+    if not sid:
+      continue
+    rows = by.get(sid) or []
+    have = {(r.get("set") or "", r.get("dateIso") or r.get("date") or "") for r in rows}
+    for e in store.get("prereleaseNext") or []:
+      code = e.get("set") or ""
+      exp = exp_by_code.get(code) if code else None
+      if not code:
+        m = match_set(e.get("title") or "", expansions)
+        if m:
+          code = m["code"]
+          exp = m
+      hint = ""
+      if exp:
+        weekend = prerelease_weekend(exp["released"])
+        hint = weekend.get("start") or exp.get("released") or ""
+      date_iso = parse_event_date(e.get("date") or "", hint)
+      # fallback: set prerelease start if date string missing but set known
+      if not date_iso and hint:
+        date_iso = hint[:10]
+      key = (code, date_iso or (e.get("date") or ""))
+      if not key[1]:
+        continue
+      if key in have:
+        continue
+      name = (exp["name"] if exp else "") or ""
+      # strip subtitle noise for chip: keep primary name
+      row = {
+        "set": code,
+        "name": name,
+        "date": e.get("date") or "",
+        "dateIso": date_iso,
+        "title": (e.get("title") or "")[:100],
+        "seen": seen_day,
+      }
+      rows.append(row)
+      have.add(key)
+      added += 1
+    if rows:
+      by[sid] = rows
+    elif sid in by and not by[sid]:
+      del by[sid]
+    # Past = dateIso < today (or set prerelease end < today when dateIso missing)
+    past_cand = []
+    for r in rows:
+      iso = r.get("dateIso") or ""
+      if not iso and r.get("set") in exp_by_code:
+        w = prerelease_weekend(exp_by_code[r["set"]]["released"])
+        iso = w.get("end") or ""
+      if not iso or iso >= today:
+        continue
+      past_cand.append({**r, "dateIso": iso})
+    # unique by set, keep latest dateIso
+    best: dict[str, dict] = {}
+    for r in past_cand:
+      code = r.get("set") or ("_" + (r.get("title") or "")[:40])
+      prev = best.get(code)
+      if not prev or (r.get("dateIso") or "") > (prev.get("dateIso") or ""):
+        best[code] = r
+    ordered = sorted(best.values(), key=lambda r: r.get("dateIso") or "", reverse=True)[:2]
+    slim_past = []
+    for r in ordered:
+      name = r.get("name") or ""
+      if not name and r.get("set") in exp_by_code:
+        name = exp_by_code[r["set"]]["name"]
+      label_date = ""
+      iso = r.get("dateIso") or ""
+      if iso:
+        try:
+          d = date.fromisoformat(iso)
+          label_date = f"{d.strftime('%b')} {d.day}"
+        except ValueError:
+          label_date = r.get("date") or iso
+      else:
+        label_date = r.get("date") or ""
+      slim_past.append({
+        "set": r.get("set") or "",
+        "name": name,
+        "date": label_date,
+        "dateIso": iso,
+      })
+    store["prereleasePast"] = slim_past
+  hist["updated"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+  hist["source"]["waybackSeed"] = bool(hist.get("source", {}).get("waybackSeed"))
+  HISTORY.write_text(json.dumps(hist, ensure_ascii=False, separators=(",", ":")))
+  with_past = sum(1 for s in stores_doc.get("stores", []) if s.get("prereleasePast"))
+  print("History", HISTORY.name, "stores_tracked", len(by), "new_rows", added, "with_past", with_past)
+  stores_doc.setdefault("counts", {})["withPastPrerelease"] = with_past
+  return hist
+
+
 def main() -> None:
   stores_doc = json.loads(STORES.read_text())
   print("Fetching Scryfall sets…")
@@ -234,7 +393,7 @@ def main() -> None:
       except Exception as e:
         print("  icon fail", e)
     weekend = prerelease_weekend(s["released"])
-    # Prefer observed event date range when we have it
+    # Use observed event date range when present
     observed = sorted(event_dates.get(s["code"], []))
     catalog.append({
       "code": s["code"],
@@ -269,7 +428,12 @@ def main() -> None:
     # set codes on the store for quick filter
     store["prereleaseSets"] = sorted({r["set"] for r in enriched if r["set"]})
 
+  merge_history(stores_doc, expansions, today)
+
   stores_doc["setsBuilt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+  stores_doc.setdefault("source", {})
+  if isinstance(stores_doc["source"], dict):
+    stores_doc["source"]["history"] = "data/mtg-prerelease-history.json"
   STORES.write_text(json.dumps(stores_doc, ensure_ascii=False, separators=(",", ":")))
 
   payload = {
@@ -278,7 +442,7 @@ def main() -> None:
       "scryfall": "https://api.scryfall.com/sets",
       "wizardsProducts": "https://magic.wizards.com/en/products/",
       "locator": "https://locator.wizards.com/",
-      "note": "Set metadata from Scryfall (CC0-ish community DB, free). Key art from Wizards product og:image, resized. Event linkage from public locator scrape.",
+      "note": "Set metadata from Scryfall (CC0-ish community DB, free). Key art from Wizards product og:image, resized. Event linkage from public locator scrape. Past hosts from accumulate-merge history (locator has no past API).",
     },
     "sets": catalog,
   }
