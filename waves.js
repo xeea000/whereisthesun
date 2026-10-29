@@ -2,8 +2,9 @@
 /* SUNNY waves and surf: wave height, period and direction now, from Open-Meteo Marine (free, no key).
  * Viewport grid densifies with zoom. Sample points are pre-filtered with a small Natural Earth
  * water mask (data/wave-water-mask.json) and post-filtered by returned-cell distance and elevation
- * so dry land never gets an arrow (Great Lakes stay via the lakes index). Up to 300 spots per
- * request, even sample, one-hour cache. Arrows sized and coloured by height. Gap: model, not breaks. */
+ * so dry land never gets an arrow (Great Lakes stay via the lakes bits). Place on the request
+ * sample when it is water — Open-Meteo elev is for the request, and the nearest marine cell can
+ * sit on land. Up to 300 spots per request, even sample, one-hour cache. Gap: model, not breaks. */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
@@ -12,7 +13,7 @@
   var RAMP = [[0, "#3b8bd6", "calm"], [1, "#46c3a0", "1 m (3 ft)"], [2, "#f2d24b", "2 m (7 ft)"], [4, "#f28c28", "4 m (13 ft)"], [6, "#d7301f", "6 m+ (20 ft)"]];
   var IDS = ["wave-dot", "wave-arrow"], seen = Object.create(null), busy = false, wait = null;
   var MAX_REQ = 300, TTL = 36e5, MAX_SNAP_KM = 18, OCEAN_ELEV_M = 8;
-  var mask = null, lakeSet = null, maskWait = null;
+  var mask = null, maskWait = null;
   var stepOf = (z) => {
     if (z < 3) return 4;
     if (z < 4) return 2.5;
@@ -32,15 +33,25 @@
     for (i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   };
+  var gunzip = (u8) => {
+    if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("no decompress"));
+    return new Response(new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()
+      .then((ab) => { return new Uint8Array(ab); });
+  };
   var ensureMask = () => {
     if (mask) return Promise.resolve(mask);
     if (maskWait) return maskWait;
     maskWait = K.loadJson("data/wave-water-mask.json").then((m) => {
-      mask = { step: m.step, lon0: m.lon0, lat0: m.lat0, cols: m.cols, rows: m.rows,
-        fetch: b64(m.fetch || m.water), strict: b64(m.strict || m.water) };
-      lakeSet = Object.create(null);
-      (m.lakes || []).forEach((i) => { lakeSet[i] = 1; });
-      return mask;
+      var enc = m.enc === "gzip";
+      var decode = (s) => {
+        var raw = b64(s || "");
+        return enc ? gunzip(raw) : Promise.resolve(raw);
+      };
+      return Promise.all([decode(m.fetch || m.water), decode(m.strict || m.water), decode(m.lakes || "")]).then((bufs) => {
+        mask = { step: m.step, lon0: m.lon0, lat0: m.lat0, cols: m.cols, rows: m.rows,
+          fetch: bufs[0], strict: bufs[1], lakes: bufs[2] && bufs[2].length ? bufs[2] : null };
+        return mask;
+      });
     }).catch(() => { maskWait = null; return null; });
     return maskWait;
   };
@@ -50,9 +61,9 @@
     if (c < 0 || r < 0 || c >= mask.cols || r >= mask.rows) return -1;
     return r * mask.cols + c;
   };
-  var bitOn = (buf, i) => { return !!(buf[i >> 3] & (1 << (i & 7))); };
+  var bitOn = (buf, i) => { return !!(buf && buf[i >> 3] & (1 << (i & 7))); };
   var isFetchWater = (lon, lat) => {
-    if (!mask) return true; /* mask missing: fetch all; post-filter drops land */
+    if (!mask) return true;
     var i = maskIndex(lon, lat);
     return i >= 0 && bitOn(mask.fetch, i);
   };
@@ -62,26 +73,34 @@
     return i >= 0 && bitOn(mask.strict, i);
   };
   var isLake = (lon, lat) => {
-    if (!lakeSet) return false;
+    if (!mask || !mask.lakes) return false;
     var i = maskIndex(lon, lat);
-    return i >= 0 && !!lakeSet[i];
+    return i >= 0 && bitOn(mask.lakes, i);
   };
   var distKm = (lon1, lat1, lon2, lat2) => {
     var dy = (lat2 - lat1) * 111, dx = (lon2 - lon1) * 111 * Math.cos(lat1 * Math.PI / 180);
     return Math.sqrt(dx * dx + dy * dy);
   };
-  /* Open-Meteo often returns a nearest ocean cell for land; keep only real water */
+  /* Open-Meteo often returns a nearest ocean cell for land; elev is for the request point.
+   * Keep arrows on water: place on the request sample when it is water; else use the returned cell. */
   var accept = (reqLon, reqLat, o, cur) => {
     if (!cur || cur.wave_height == null) return null;
     var glon = o.longitude != null ? o.longitude : reqLon, glat = o.latitude != null ? o.latitude : reqLat;
     var elev = o.elevation, d = distKm(reqLon, reqLat, glon, glat);
     if (d > MAX_SNAP_KM) return null;
     if (typeof elev !== "number" || !isFinite(elev)) return null;
-    if (isLake(glon, glat)) return d <= 12 ? { lon: glon, lat: glat } : null;
+    var reqLake = isLake(reqLon, reqLat), gLake = isLake(glon, glat);
+    if (reqLake || gLake) {
+      if (d > 12) return null;
+      if (reqLake) return { lon: reqLon, lat: reqLat };
+      return { lon: glon, lat: glat };
+    }
     if (elev > OCEAN_ELEV_M) return null;
-    /* elev 0 = open water (ocean/bay). elev 1..8 only if undilated mask agrees (skip coastal hills) */
-    if (elev > 0 && mask && !isStrictWater(glon, glat)) return null;
-    return { lon: glon, lat: glat };
+    if (isStrictWater(reqLon, reqLat)) return { lon: reqLon, lat: reqLat };
+    if (isStrictWater(glon, glat)) return { lon: glon, lat: glat };
+    /* elev 0 bay / nearshore: only if undilated mask agrees on the returned cell */
+    if (elev === 0 && mask && isFetchWater(glon, glat) && isStrictWater(glon, glat)) return { lon: glon, lat: glat };
+    return null;
   };
   var cells = (map) => {
     var b = map.getBounds(), s = stepOf(map.getZoom()), out = [];
@@ -137,7 +156,7 @@
           if (!pt) return;
           var ok = accept(pt[0], pt[1], o || {}, cur);
           if (!ok) {
-            seen[key(pt)] = { t: t, h: null, lon: pt[0], lat: pt[1] }; /* dry / snapped: do not refetch this hour */
+            seen[key(pt)] = { t: t, h: null, lon: pt[0], lat: pt[1] };
             return;
           }
           seen[key(pt)] = { t: t, h: cur.wave_height, p: cur.wave_period, d: cur.wave_direction,
