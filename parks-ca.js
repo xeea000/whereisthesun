@@ -12,9 +12,9 @@
   var SS = { o: ["Operating park", "#2e7d32"], n: ["Non-operating park", "#ff6d00"], u: ["Park (status not recorded)", "#66bb6a"] };
   var PV = { AB: "Alberta", BC: "British Columbia", MB: "Manitoba", NB: "New Brunswick", NL: "Newfoundland and Labrador", NT: "Northwest Territories",
     NS: "Nova Scotia", NU: "Nunavut", ON: "Ontario", PE: "Prince Edward Island", QC: "Quebec", SK: "Saskatchewan", YT: "Yukon" };
-  var kidOn = (s) => { try { return localStorage.getItem("sunny-L-parks-" + s) !== "0"; } catch (e) { return true; } };
+  var PARK_KIDS = Object.keys(SS).map((s) => { return { id: "parks-" + s, dflt: true, code: s }; });
   var on = () => { return L.isOn("parks"); };
-  var filt = () => { return ["in", ["get", "s"], ["literal", Object.keys(SS).filter(kidOn)]]; };
+  var filt = () => { return K.kids.inFilter(["get", "s"], K.kids.activeCodes(PARK_KIDS, (k) => { return k.code; })); };
   var color = ["match", ["get", "s"], "o", SS.o[1], "n", SS.n[1], SS.u[1]];
   var NOTE = { ONo: "Status: Ontario LIO, Provincial Park Regulated", ONn: "Status: Ontario LIO, Provincial Park Regulated",
     BCo: "Status: BC Parks API lists an active operating season", BCn: "Status: BC Parks API lists no operating season or services",

@@ -10,7 +10,8 @@
   var L = window.SunnyLayers, K = window.SunnyKit, C = window.SunnyCaCell, map = null;
   var REACH = [[1, 8000], [2, 3000], [4, 1200], [8, 300]];
   var TG = [["5g", "5G", [3, 4]], ["lte", "LTE / 4G", [2]], ["3g", "3G (HSPA, CDMA)", [1, 8]], ["2g", "2G and other (GSM, Wi-Fi, WiMax, other)", [0, 5, 6, 7]]];
-  var kOn = (id) => { try { return localStorage.getItem("sunny-L-cellcover-" + id) !== "0"; } catch (e) { return true; } };
+  /* opt199: tech + carrier kids via SunnyKit.kids */
+  var kOn = (id) => { return K.kids.isOn("cellcover-" + id, true); };
   var on = () => { return L.isOn("cellcover"); };
   var reachOf = (bands, h) => {
     var r = 0; REACH.forEach((x) => { if (bands & x[0]) r = Math.max(r, x[1]); });

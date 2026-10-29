@@ -35,8 +35,13 @@
   function pointLayer(o) {
     o.layers.forEach((l) => { hoverOf[l.id] = o; });
     /* opt113: kids: true gives each map layer its own switch under the row (saved as sunny-L-<id>-<layer id>) */
-    var kidOn = (l) => { try { return !o.kids || localStorage.getItem("sunny-L-" + o.id + "-" + l.id) !== "0"; } catch (e) { return true; } };
-    var kidVis = (map, on) => { o.layers.forEach((l) => { K.vis(map, [l.id], on && kidOn(l)); }); };
+    /* opt199: per-sublayer visibility via SunnyKit.kids (zero kids on → all hidden) */
+    var kidVis = (map, on) => {
+      o.layers.forEach((l) => {
+        var show = !o.kids ? !!on : K.kids.layerOn(on, o.id + "-" + l.id, true);
+        K.vis(map, [l.id], show);
+      });
+    };
     function apply(map, on) {
       var ids = o.layers.map((l) => { return l.id; });
       K.vis(map, o.extraIds || [], on);
@@ -181,8 +186,11 @@
    * Code = type letter + height bucket. 150 m+ load once for all zooms; shorter ones stream per 10 degree tile from zoom 6. */
   var TT = [["b", "TV & radio broadcast", "#ff5a2a"], ["c", "Cell / LTE", "#4fc3f7"], ["m", "Microwave & utility", "#b388ff"], ["o", "Other", "#ffc2a6"]];
   var TN = {}; TT.forEach((t) => { TN[t[0]] = t[1]; });
-  var tOn = (t) => { try { return localStorage.getItem("sunny-L-towers-" + t) !== "0"; } catch (e) { return true; } };
-  var tFilter = () => { return ["in", ["slice", ["get", "k"], 0, 1], ["literal", TT.filter((t) => tOn(t[0])).map((t) => t[0])]]; };
+  /* opt199: tower type kids via SunnyKit.kids; empty → show nothing */
+  var TOWER_KIDS = TT.map((t) => { return { id: "towers-" + t[0], dflt: true, code: t[0] }; });
+  var tFilter = () => {
+    return K.kids.inFilter(["slice", ["get", "k"], 0, 1], K.kids.activeCodes(TOWER_KIDS, (k) => { return k.code; }));
+  };
   var tColor = ["match", ["slice", ["get", "k"], 0, 1]].concat([].concat.apply([], TT.map((t) => [t[0], t[2]])), ["#ffc2a6"]);
   var mastName = (r) => { return r.name || r.operator || "Unnamed tower"; };
   var MSRC = { wd: (r) => { return ["Wikidata " + r.ref, "https://www.wikidata.org/wiki/" + r.ref]; },

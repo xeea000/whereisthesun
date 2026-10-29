@@ -181,7 +181,49 @@
   var legKeys = (rows) => {
     return rows.map((r) => { return '<span class="ls-k"><i class="ls-sw ls-' + r[1] + '" style="background:' + r[0] + '"></i>' + r[2] + "</span>"; }).join("");
   };
-  window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz,
+  /* opt199: shared parent/kids visibility.
+   * Subset kids (default): a feature shows only when it matches ≥1 checked kid;
+   *   zero subset kids checked → show nothing (parent switch may stay on).
+   * Modifier kids (role: "mod"): display/option switches — ignored by matchAny /
+   *   activeCodes / anyOn. Do not use them for feature subsets.
+   * Storage: sunny-L-<kid.id>, same key layers-panel writes. */
+  function kidsDflt(k) { return k && k.dflt == null ? true : !!(k && k.dflt); }
+  function kidsIsOn(id, dflt) {
+    try {
+      var v = localStorage.getItem("sunny-L-" + id);
+      return v == null ? !!dflt : v === "1";
+    } catch (e) { return !!dflt; }
+  }
+  function kidsSubset(list) {
+    return (list || []).filter((k) => { return k.role !== "mod" && k.kind !== "mod"; });
+  }
+  function kidsActive(list) {
+    return kidsSubset(list).filter((k) => { return kidsIsOn(k.id, kidsDflt(k)); });
+  }
+  function kidsAnyOn(list) { return kidsActive(list).length > 0; }
+  /* JS feature gate: none on → false; else OR of pred(kid) over active subset kids */
+  function kidsMatchAny(list, pred) {
+    var on = kidsActive(list);
+    if (!on.length) return false;
+    for (var i = 0; i < on.length; i++) if (pred(on[i])) return true;
+    return false;
+  }
+  function kidsActiveCodes(list, codeOf) {
+    return kidsActive(list).map(codeOf || ((k) => { return k.code != null ? k.code : k.id; }))
+      .filter((c) => { return c != null && c !== ""; });
+  }
+  /* MapLibre filter: empty codes → never matches (do not use bare ["in", …, []]) */
+  function kidsInFilter(getExpr, codes) {
+    if (!codes || !codes.length) return ["==", 1, 0];
+    return ["in", getExpr, ["literal", codes]];
+  }
+  /* Per-sublayer visibility: parent on AND that kid on */
+  function kidsLayerOn(parentOn, kidId, dflt) {
+    return !!parentOn && kidsIsOn(kidId, dflt == null ? true : !!dflt);
+  }
+  var kids = { isOn: kidsIsOn, subset: kidsSubset, active: kidsActive, anyOn: kidsAnyOn,
+    matchAny: kidsMatchAny, activeCodes: kidsActiveCodes, inFilter: kidsInFilter, layerOn: kidsLayerOn };
+  window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc };
 })();

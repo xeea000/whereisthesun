@@ -27,9 +27,8 @@
   var sizeOf = (s) => { return MAJOR[s.id] || (CREWED.test(s.name) ? 10 : 0); };
   var map = null, recs = {}, loading = {}, fails = {}, focus = null, hereFix = null;
   var on = () => { return L.isOn("sats"); };
-  var gOn = (g) => {
-    try { var v = localStorage.getItem("sunny-L-sats-" + g[0]); return v == null ? g[2] : v === "1"; } catch (e) { return g[2]; }
-  };
+  /* opt199: group kids via SunnyKit.kids (unset → group default g[2]) */
+  var gOn = (g) => { return K.kids.isOn("sats-" + g[0], g[2]); };
   var url = (g) => { return "https://celestrak.org/NORAD/elements/gp.php?GROUP=" + g + "&FORMAT=tle"; };
   function parse(txt) {
     var l = txt.split(/\r?\n/).map((s) => { return s.trimEnd(); }).filter(Boolean), out = [];

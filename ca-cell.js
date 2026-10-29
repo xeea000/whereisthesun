@@ -8,8 +8,12 @@
   var ST = { T: "Purpose-built tower", R: "Rooftop", P: "Pole", O: "Other (e.g. indoor)", S: "Water tower or silo", F: "Street furniture", M: "Transportable" };
   var BR = [["Bell", "#1f6fe0"], ["Rogers", "#e0301e"], ["TELUS", "#4b286d"], ["Freedom (filed as Freedom)", "#ff7a00"], ["Vidéotron (incl. Freedom)", "#ffd400"], ["SaskTel", "#00a650"],
     ["Eastlink", "#00b5e2"], ["Xplore", "#8bc34a"], ["TBayTel", "#795548"], ["Ice Wireless", "#9fd8ff"], ["Other", "#9e9e9e"]];
-  var kidOn = () => { try { return localStorage.getItem("sunny-L-towers-ca") !== "0"; } catch (e) { return true; } };
-  var on = () => { return window.SunnyLayers && window.SunnyLayers.isOn("towers") && kidOn(); };
+  /* opt199: towers-ca is a subset kid of Towers (SunnyKit.kids) */
+  var on = () => {
+    var KK = window.SunnyKit && window.SunnyKit.kids;
+    var kid = KK ? KK.isOn("towers-ca", true) : true;
+    return window.SunnyLayers && window.SunnyLayers.isOn("towers") && kid;
+  };
   var need = () => { return on() || !!(window.SunnyCaCover && window.SunnyCaCover.on()); }; /* opt160: coverage uses the same tiles */
   var get = (url) => { /* the Cache API keeps tiles across visits; falls back to a plain fetch */
     if (!window.caches) return fetch(url).then((r) => { if (!r.ok) throw r.status; return r.json(); });

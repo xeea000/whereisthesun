@@ -3,7 +3,8 @@
  * Data: public Wizards locator scrape + Scryfall sets + tiny Wizards key-art thumbs.
  * Past prereleases: accumulate-merge history (locator has no past API).
  * Busyness: Quiet→Packed estimate; ONE ordinal range slider (not boolean kids) +
- * map dots coloured by level. Kids: Prerelease / FNM / hosted past. */
+ * map dots coloured by level. Kids: Prerelease / FNM / hosted past — visibility via
+ * SunnyKit.kids (opt199: zero subset kids on → show nothing). */
 (() => {
   "use strict";
   var K = window.SunnyKit, L = window.SunnyLayers;
@@ -23,12 +24,6 @@
   var BUSY_LEVELS = ["Quiet", "Steady", "Lively", "Busy", "Packed"];
   var BUSY_COLORS = ["#3d9b6e", "#4a9bb8", "#c9a227", "#d4782e", "#d44545"];
   var busyMin = 0, busyMax = 4; /* inclusive ordinal range; default full */
-  function kidOn(id, dflt) {
-    try {
-      var v = localStorage.getItem("sunny-L-" + id);
-      return v == null ? dflt : v === "1";
-    } catch (e) { return dflt; }
-  }
   function setByCode(code) {
     if (!setCat || !code) return null;
     for (var i = 0; i < setCat.sets.length; i++) if (setCat.sets[i].code === code) return setCat.sets[i];
@@ -48,22 +43,19 @@
       if (sets.indexOf(filterSet) < 0) return false;
     }
     if (!inBusyRange(busyRankOf(s))) return false;
-    var anyKid = false, show = false;
     var list = s.fnmFormats || [];
-    KIDS.forEach((k) => {
-      if (!kidOn(k.id, k.dflt)) return;
-      anyKid = true;
-      if (k.kind === "pre") { if (s.partner) show = true; }
-      else if (k.kind === "past") {
-        if ((s.prereleasePast && s.prereleasePast.length) || (s.pastCount > 0)) show = true;
-      }
-      else if (k.kind === "fnm" && s.fnm) {
+    /* opt199: SunnyKit.kids — zero subset kids checked → show nothing (no partner fallback) */
+    return K.kids.matchAny(KIDS, (k) => {
+      if (k.kind === "pre") return !!s.partner;
+      if (k.kind === "past") return !!(s.prereleasePast && s.prereleasePast.length) || (s.pastCount > 0);
+      if (k.kind === "fnm" && s.fnm) {
         if (k.fmt === "other") {
-          if (!list.length || list.every((f) => { return f !== "Commander" && f !== "Standard"; })) show = true;
-        } else if (list.indexOf(k.fmt) >= 0) show = true;
+          return !list.length || list.every((f) => { return f !== "Commander" && f !== "Standard"; });
+        }
+        return list.indexOf(k.fmt) >= 0;
       }
+      return false;
     });
-    return anyKid ? show : !!(s.partner);
   }
   function toFeats(stores) {
     return stores.filter(want).map((s) => {

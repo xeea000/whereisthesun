@@ -6,8 +6,12 @@
   "use strict";
   var K = window.SunnyKit, map = null, rows = null, hooked = false;
   var SS = { a: ["Fire lookout tower", "#ffea00"], d: ["Disused lookout", "#fff59d"], r: ["Ruins or destroyed", "#8d6e63"] };
-  var kidOn = () => { try { return localStorage.getItem("sunny-L-towers-fl") !== "0"; } catch (e) { return true; } };
-  var on = () => { return window.SunnyLayers && window.SunnyLayers.isOn("towers") && kidOn(); };
+  /* opt199: towers-fl is a subset kid of Towers (SunnyKit.kids) */
+  var on = () => {
+    var KK = window.SunnyKit && window.SunnyKit.kids;
+    var kid = KK ? KK.isOn("towers-fl", true) : true;
+    return window.SunnyLayers && window.SunnyLayers.isOn("towers") && kid;
+  };
   var color = ["match", ["get", "s"], "a", SS.a[1], "d", SS.d[1], "r", SS.r[1], SS.a[1]];
   var src = (p) => { var r = String(p.r); return r.indexOf("wd:") === 0 ? ["Wikidata " + r.slice(3), "https://www.wikidata.org/wiki/" + r.slice(3)]
     : ["OpenStreetMap", "https://www.openstreetmap.org/" + ({ n: "node", w: "way", r: "relation" }[r[0]] || "node") + "/" + r.slice(1)]; };

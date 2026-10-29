@@ -56,11 +56,13 @@
   /* four classes, each with its own switch under the Observatories row (sunny-L-observatories-<class>) */
   var CLS = [["scope", "Telescope (optical or radio)", "#7b5cff"], ["detector", "Detector (neutrino, gravitational wave, cosmic ray)", "#11a3a3"],
     ["darksky", "Dark Sky Reserve or Park", "#1c2b6b"], ["stargaze", "Stargazing site or planetarium", "#ffd34d"]];
-  function kidOn(c) {
-    try { return localStorage.getItem("sunny-L-observatories-" + c) !== "0"; } catch (e) { return true; }
-  }
+  /* opt199: kids via SunnyKit.kids (loaded before first refresh) */
+  var OBS_KIDS = CLS.map((c) => { return { id: "observatories-" + c[0], dflt: true, code: c[0] }; });
   function pointFilter() {
-    return ["all", ["!", ["has", "point_count"]], ["in", ["get", "cat"], ["literal", CLS.map((c) => { return c[0]; }).filter(kidOn)]]];
+    var KK = window.SunnyKit && window.SunnyKit.kids;
+    var codes = KK ? KK.activeCodes(OBS_KIDS, (k) => { return k.code; }) : CLS.map((c) => { return c[0]; });
+    var cat = KK ? KK.inFilter(["get", "cat"], codes) : ["in", ["get", "cat"], ["literal", codes]];
+    return ["all", ["!", ["has", "point_count"]], cat];
   }
   function refresh() {
     if (map && map.getLayer("obs-point")) map.setFilter("obs-point", pointFilter());

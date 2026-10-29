@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt198"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt199"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -60,12 +60,12 @@ var PRECACHE = [
   "craters.js?h=961f6df77a",
   "sky-glow.js?h=b325551c86",
   "beach-toggle.js?h=6ed1375f1c",
-  "observatories.js?h=3cfd516ec0",
+  "observatories.js?h=c5f1084177",
   "crown-land.js?h=4f17ab26f8",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
-  "layer-kit.js?h=2d853264a2",
+  "layer-kit.js?h=54257acbaa",
   "layers-panel.js?h=4dc5d4d125",
   "share-link.js?h=3313183833",
   "famous.js?h=cc6ba5ffd5",
@@ -90,15 +90,15 @@ var PRECACHE = [
   "coord-grid.js?h=a8528bd13f",
   "water-temp.js?h=6917bec6fc",
   "waves.js?h=ff9bd657df",
-  "ca-cell.js?h=87604440a1",
-  "fire-lookout.js?h=48723de234",
-  "ca-cover.js?h=3793788c5f",
-  "world-layers.js?h=3211a9d654",
+  "ca-cell.js?h=df9171272a",
+  "fire-lookout.js?h=0bf4746c86",
+  "ca-cover.js?h=28c00621eb",
+  "world-layers.js?h=fac952ecd9",
   "outdoor-layers.js?h=888e543c92",
-  "mtg-stores.js?h=d8884bb32e",
-  "parks-ca.js?h=239b668258",
+  "mtg-stores.js?h=29756670f5",
+  "parks-ca.js?h=89a48cd71e",
   "sky-card.js?h=29233a05a1",
-  "sats.js?h=7e53ca1d3e",
+  "sats.js?h=c1bbfde893",
   "sky-draw.js?h=73f5ab9b32",
   "offline.js?h=f591704655",
   "beach-ref.js?h=dab3a52757",
