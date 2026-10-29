@@ -1,8 +1,9 @@
 // workspace/whereisthesun/waves.js
 /* SUNNY waves and surf: wave height, period and direction now, from Open-Meteo Marine (free, no key).
- * Viewport grid gets finer with zoom (~5° world → ~0.08° close in). Up to 300 spots per request,
- * sampled evenly so the first batch fills the view (not just the SW corner). Spots kept one hour.
- * Arrows sized and coloured by height; Land returns no height so arrows stay offshore. Gap: model, not beach breaks. */
+ * Viewport grid densifies with zoom. Sample points are pre-filtered with a small Natural Earth
+ * water mask (data/wave-water-mask.json) and post-filtered by returned-cell distance and elevation
+ * so dry land never gets an arrow (Great Lakes stay via the lakes index). Up to 300 spots per
+ * request, even sample, one-hour cache. Arrows sized and coloured by height. Gap: model, not breaks. */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
@@ -10,7 +11,8 @@
   var US = /-US$/i.test((navigator.language || "") + "") || navigator.language === "en";
   var RAMP = [[0, "#3b8bd6", "calm"], [1, "#46c3a0", "1 m (3 ft)"], [2, "#f2d24b", "2 m (7 ft)"], [4, "#f28c28", "4 m (13 ft)"], [6, "#d7301f", "6 m+ (20 ft)"]];
   var IDS = ["wave-dot", "wave-arrow"], seen = Object.create(null), busy = false, wait = null;
-  var MAX_REQ = 300, TTL = 36e5;
+  var MAX_REQ = 300, TTL = 36e5, MAX_SNAP_KM = 18, OCEAN_ELEV_M = 8;
+  var mask = null, lakeSet = null, maskWait = null;
   var stepOf = (z) => {
     if (z < 3) return 4;
     if (z < 4) return 2.5;
@@ -25,12 +27,61 @@
     return 0.05;
   };
   var key = (c) => { return c[0].toFixed(2) + "," + c[1].toFixed(2); };
+  var b64 = (s) => {
+    var bin = atob(s), out = new Uint8Array(bin.length), i;
+    for (i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  };
+  var ensureMask = () => {
+    if (mask) return Promise.resolve(mask);
+    if (maskWait) return maskWait;
+    maskWait = K.loadJson("data/wave-water-mask.json").then((m) => {
+      mask = { step: m.step, lon0: m.lon0, lat0: m.lat0, cols: m.cols, rows: m.rows, water: b64(m.water) };
+      lakeSet = Object.create(null);
+      (m.lakes || []).forEach((i) => { lakeSet[i] = 1; });
+      return mask;
+    }).catch(() => { maskWait = null; return null; });
+    return maskWait;
+  };
+  var maskIndex = (lon, lat) => {
+    if (!mask) return -1;
+    var c = Math.floor((lon - mask.lon0) / mask.step), r = Math.floor((lat - mask.lat0) / mask.step);
+    if (c < 0 || r < 0 || c >= mask.cols || r >= mask.rows) return -1;
+    return r * mask.cols + c;
+  };
+  var bitOn = (buf, i) => { return !!(buf[i >> 3] & (1 << (i & 7))); };
+  var isFetchWater = (lon, lat) => {
+    if (!mask) return true; /* mask missing: fetch all; post-filter drops land */
+    var i = maskIndex(lon, lat);
+    return i >= 0 && bitOn(mask.water, i);
+  };
+  var isLake = (lon, lat) => {
+    if (!lakeSet) return false;
+    var i = maskIndex(lon, lat);
+    return i >= 0 && !!lakeSet[i];
+  };
+  var distKm = (lon1, lat1, lon2, lat2) => {
+    var dy = (lat2 - lat1) * 111, dx = (lon2 - lon1) * 111 * Math.cos(lat1 * Math.PI / 180);
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+  /* Open-Meteo often returns a nearest ocean cell for land; keep only real water */
+  var accept = (reqLon, reqLat, o, cur) => {
+    if (!cur || cur.wave_height == null) return null;
+    var glon = o.longitude != null ? o.longitude : reqLon, glat = o.latitude != null ? o.latitude : reqLat;
+    var elev = o.elevation, d = distKm(reqLon, reqLat, glon, glat);
+    if (d > MAX_SNAP_KM) return null;
+    var lake = isLake(reqLon, reqLat) || isLake(glon, glat);
+    if (elev != null && elev > OCEAN_ELEV_M && !lake) return null;
+    if (elev != null && elev > OCEAN_ELEV_M && lake && d > 12) return null;
+    return { lon: glon, lat: glat }; /* place on the model water cell, not dry land */
+  };
   var cells = (map) => {
     var b = map.getBounds(), s = stepOf(map.getZoom()), out = [];
     var w = Math.max(-180, Math.floor(b.getWest() / s) * s), e = Math.min(180, b.getEast());
     var so = Math.max(-75, Math.floor(b.getSouth() / s) * s), n = Math.min(75, b.getNorth());
     for (var x = w; x <= e + 1e-9; x += s) for (var y = so; y <= n + 1e-9; y += s) {
-      out.push([+(x + s / 2).toFixed(3), +(y + s / 2).toFixed(3)]);
+      var lon = +(x + s / 2).toFixed(3), lat = +(y + s / 2).toFixed(3);
+      if (isFetchWater(lon, lat)) out.push([lon, lat]);
     }
     return out;
   };
@@ -41,58 +92,57 @@
     return out;
   };
   var feats = (map) => {
-    var out = [], s = stepOf(map.getZoom()), bucket = Object.create(null);
-    cells(map).forEach((c) => {
-      var v = seen[key(c)];
-      if (v && v.h != null) out.push({ type: "Feature", properties: v, geometry: { type: "Point", coordinates: c } });
+    var out = [], s = stepOf(map.getZoom()), bucket = Object.create(null), b = map.getBounds(), t = Date.now();
+    Object.keys(seen).forEach((k) => {
+      var v = seen[k];
+      if (!v || v.h == null || t - v.t > TTL) return;
+      var lon = v.lon, lat = v.lat;
+      if (lon == null || lat < b.getSouth() || lat > b.getNorth()) return;
+      if (lon < b.getWest() || lon > b.getEast()) return;
+      var bk = Math.floor(lon / s) + ":" + Math.floor(lat / s);
+      if (bucket[bk]) return;
+      bucket[bk] = 1;
+      out.push({ type: "Feature", properties: v, geometry: { type: "Point", coordinates: [lon, lat] } });
     });
-    /* also show any cached spots in view (from a finer zoom) so zooming out stays useful */
-    if (out.length < 40) {
-      var b = map.getBounds(), t = Date.now();
-      Object.keys(seen).forEach((k) => {
-        var v = seen[k];
-        if (!v || v.h == null || t - v.t > TTL) return;
-        var lon = v.lon, lat = v.lat;
-        if (lon == null || lat < b.getSouth() || lat > b.getNorth()) return;
-        if (lon < b.getWest() || lon > b.getEast()) return;
-        var bk = Math.floor(lon / s) + ":" + Math.floor(lat / s);
-        if (bucket[bk]) return;
-        bucket[bk] = 1;
-        out.push({ type: "Feature", properties: v, geometry: { type: "Point", coordinates: [lon, lat] } });
-      });
-    }
     return K.fc(out);
   };
   var draw = (map) => { if (map.getSource("waves")) map.getSource("waves").setData(feats(map)); };
   var fetchView = (map) => {
     if (busy || !L.isOn("waves")) return;
-    var t = Date.now(), all = cells(map);
-    var need = all.filter((c) => { var v = seen[key(c)]; return !v || t - v.t > TTL; });
-    need = takeEven(need, MAX_REQ);
-    draw(map);
-    if (!need.length) return;
-    busy = true;
-    var body = "latitude=" + need.map((c) => { return c[1].toFixed(2); }).join(",") +
-      "&longitude=" + need.map((c) => { return c[0].toFixed(2); }).join(",") +
-      "&current=wave_height,wave_period,wave_direction";
-    var req = body.length < 5500
-      ? fetch(API + "?" + body)
-      : fetch(API, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
-    req.then((r) => { if (!r.ok) throw new Error("waves " + r.status); return r.json(); }).then((j) => {
-      (Array.isArray(j) ? j : [j]).forEach((o, i) => {
-        var c = o && o.current || {}, pt = need[i];
-        if (!pt) return;
-        seen[key(pt)] = { t: t, h: c.wave_height, p: c.wave_period, d: c.wave_direction,
-          r: c.wave_direction == null ? 0 : (c.wave_direction + 180) % 360, lon: pt[0], lat: pt[1] };
-      });
-      busy = false; draw(map);
-      if (all.some((c) => { var v = seen[key(c)]; return !v || t - v.t > TTL; })) {
-        setTimeout(() => { fetchView(map); }, 1200);
-      }
-    }).catch(() => { busy = false; setTimeout(() => { fetchView(map); }, 45000); });
+    ensureMask().then(() => {
+      if (busy || !L.isOn("waves")) return;
+      var t = Date.now(), all = cells(map);
+      var need = all.filter((c) => { var v = seen[key(c)]; return !v || t - v.t > TTL; });
+      need = takeEven(need, MAX_REQ);
+      draw(map);
+      if (!need.length) return;
+      busy = true;
+      var body = "latitude=" + need.map((c) => { return c[1].toFixed(2); }).join(",") +
+        "&longitude=" + need.map((c) => { return c[0].toFixed(2); }).join(",") +
+        "&current=wave_height,wave_period,wave_direction";
+      var req = body.length < 5500
+        ? fetch(API + "?" + body)
+        : fetch(API, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body });
+      req.then((r) => { if (!r.ok) throw new Error("waves " + r.status); return r.json(); }).then((j) => {
+        (Array.isArray(j) ? j : [j]).forEach((o, i) => {
+          var cur = o && o.current || {}, pt = need[i];
+          if (!pt) return;
+          var ok = accept(pt[0], pt[1], o || {}, cur);
+          if (!ok) {
+            seen[key(pt)] = { t: t, h: null, lon: pt[0], lat: pt[1] }; /* dry / snapped: do not refetch this hour */
+            return;
+          }
+          seen[key(pt)] = { t: t, h: cur.wave_height, p: cur.wave_period, d: cur.wave_direction,
+            r: cur.wave_direction == null ? 0 : (cur.wave_direction + 180) % 360, lon: ok.lon, lat: ok.lat };
+        });
+        busy = false; draw(map);
+        if (all.some((c) => { var v = seen[key(c)]; return !v || t - v.t > TTL; })) {
+          setTimeout(() => { fetchView(map); }, 1200);
+        }
+      }).catch(() => { busy = false; setTimeout(() => { fetchView(map); }, 45000); });
+    });
   };
   var color = ["interpolate", ["linear"], ["get", "h"]].concat(...RAMP.map((r) => { return [r[0], r[1]]; }));
-  /* taller waves → bigger ▲; also grows with zoom (MapLibre accepts nested interpolate here) */
   var size = ["interpolate", ["linear"], ["zoom"],
     2, ["interpolate", ["linear"], ["get", "h"], 0, 11, 1, 14, 2, 17, 4, 20, 6, 22],
     7, ["interpolate", ["linear"], ["get", "h"], 0, 14, 1, 18, 2, 22, 4, 26, 6, 30],
@@ -116,12 +166,12 @@
       } catch (e) { setTimeout(() => { if (L.isOn("waves")) apply(map, true); }, 2000); return; }
     }
     K.vis(map, IDS, on);
-    if (on) fetchView(map);
+    if (on) { ensureMask(); fetchView(map); }
   };
   L.add({ id: "waves", name: "Waves and surf", icon: "🌊", group: "Ocean", taps: ["wave-dot"], dflt: true, apply: apply,
     legend: K.legKeys(RAMP.map((r) => { return [r[1], "line", r[2]]; })) +
-      '<span class="ls-k">▲ travel direction · bigger = taller</span>',
-    tip: "Wave height, period and direction now (Open-Meteo Marine). Grid densifies as you zoom; only the view is loaded",
+      '<span class="ls-k">▲ travel direction · bigger = taller · water only</span>',
+    tip: "Wave height, period and direction now (Open-Meteo Marine). Ocean and large lakes only; densifies as you zoom",
     attach: (map, on) => {
       var hw = (window.SunnyHoverName = window.SunnyHoverName || {});
       hw["wave-dot"] = hw["wave-arrow"] = (f) => { return Promise.resolve(text(f.properties)); };
@@ -134,7 +184,7 @@
       });
       map.on("click", "wave-dot", (e) => {
         var p = e.features[0].properties, t = text(p);
-        var note = "Model value near this spot (" + stepOf(map.getZoom()) + "° grid), kept for an hour";
+        var note = "Model value for this water cell (" + stepOf(map.getZoom()) + "° grid), kept for an hour";
         K.show(map, e.lngLat, t[0], [t[1], note], ["Open-Meteo Marine", "https://open-meteo.com/en/docs/marine-weather-api"]);
       });
       apply(map, on);
