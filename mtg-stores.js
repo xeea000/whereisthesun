@@ -8,7 +8,7 @@
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=ad0f54c3";
+  var DATA = "data/mtg-stores.json?v=c060020e";
   var SETS = "data/mtg-sets.json?v=91fc2e44";
   var meta = null, setCat = null, pMap = null, filterSet = "";
   var panelEl = null, scheduleBtn = null;
@@ -17,8 +17,11 @@
     { id: "mtg-past", name: "Hosted a past prerelease", dflt: true, kind: "past" },
     { id: "mtg-fnm-cmd", name: "FNM · Commander", dflt: true, kind: "fnm", fmt: "Commander" },
     { id: "mtg-fnm-std", name: "FNM · Standard", dflt: true, kind: "fnm", fmt: "Standard" },
-    { id: "mtg-fnm-oth", name: "FNM · other formats", dflt: true, kind: "fnm", fmt: "other" }
+    { id: "mtg-fnm-oth", name: "FNM · other formats", dflt: true, kind: "fnm", fmt: "other" },
+    { id: "mtg-busy-lo", name: "Quieter first (Quiet–Steady)", dflt: true, kind: "busy", maxRank: 1 },
+    { id: "mtg-busy-hi", name: "Busier (Lively–Packed)", dflt: true, kind: "busy", minRank: 2 }
   ];
+  var busySort = ""; /* "" | "lo" | "hi" — set by schedule/filter UI */
   function kidOn(id, dflt) {
     try {
       var v = localStorage.getItem("sunny-L-" + id);
@@ -44,6 +47,12 @@
       else if (k.kind === "past") {
         if ((s.prereleasePast && s.prereleasePast.length) || (s.pastCount > 0)) show = true;
       }
+      else if (k.kind === "busy") {
+        var br = (s.busy && typeof s.busy.rank === "number") ? s.busy.rank : -1;
+        if (br < 0) return;
+        if (k.maxRank != null && br <= k.maxRank) show = true;
+        if (k.minRank != null && br >= k.minRank) show = true;
+      }
       else if (k.kind === "fnm" && s.fnm) {
         if (k.fmt === "other") {
           if (!list.length || list.every((f) => { return f !== "Commander" && f !== "Standard"; })) show = true;
@@ -65,6 +74,9 @@
           formats: (s.fnmFormats || []).join(", "),
           sets: sets,
           pastCount: (s.prereleasePast || []).length,
+          busyLevel: (s.busy && s.busy.level) || "",
+          busyRank: (s.busy && typeof s.busy.rank === "number") ? s.busy.rank : -1,
+          busyJson: JSON.stringify(s.busy || null),
           preJson: JSON.stringify(s.prereleaseNext || []),
           pastJson: JSON.stringify(s.prereleasePast || []),
           fnmJson: JSON.stringify(s.fnmNext || [])
@@ -155,8 +167,21 @@
     if (p.partner) chips.push(chip("WPN", "mtg-chip-wpn"));
     if (p.legendary) chips.push(chip("★ Legendary", "mtg-chip-leg"));
     if (p.fnm) chips.push(chip("FNM" + (p.formats ? " · " + K.esc(p.formats) : ""), "mtg-chip-fnm"));
+    var busy = null;
+    try { busy = JSON.parse(p.busyJson || "null"); } catch (e) { busy = null; }
+    if (busy && busy.level) {
+      chips.push(chip(K.esc(busy.level), "mtg-chip-busy mtg-chip-busy-" + (busy.rank != null ? busy.rank : "x")));
+    }
     var blocks = [];
     blocks.push('<div class="mtg-chips">' + chips.join("") + "</div>");
+    if (busy && busy.level) {
+      var why = (busy.why || []).map((w) => { return "<li>" + K.esc(w) + "</li>"; }).join("");
+      blocks.push('<div class="mtg-sec mtg-busy-sec"><button type="button" class="mtg-sec-h" aria-expanded="false">Estimate · how? ▸</button><div class="mtg-sec-b" hidden>' +
+        '<div class="mtg-muted">' + K.esc(busy.note || "Estimate from public signals — not measured attendance") + "</div>" +
+        (why ? "<ul class=\"mtg-busy-why\">" + why + "</ul>" : "") +
+        '<div class="mtg-muted">Sources: Statistics Canada table 98-10-0011-01; Wizards locator snapshot.</div>' +
+        "</div></div>");
+    }
     if (past.length) {
       var pastChips = past.slice(0, 2).map((e) => {
         var label = ((e.name || e.set || "Set") + (e.date ? " · " + e.date : "")).trim();
@@ -350,7 +375,7 @@
   }
   L.add({
     id: "mtg", name: "Magic: The Gathering stores", icon: "🃏", group: "Fun & Games",
-    tip: "Wizards Play Network stores in Canada. Upcoming + past prereleases (history) + FNM filters. Snapshot from the public locator.",
+    tip: "Wizards Play Network stores in Canada. Prereleases (upcoming + past history), FNM, and a Quiet→Busy estimate (StatsCan + nearby WPN density — not attendance).",
     taps: [DOT, STAR], dflt: false, kids: KIDS,
     legend: K.legKeys([
       ["#c9a227", "dot", "Prerelease upcoming"],

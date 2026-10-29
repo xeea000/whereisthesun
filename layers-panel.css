@@ -98,6 +98,14 @@
 .mtg-past-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 8px}
 .mtg-past-label{font:700 10px system-ui,sans-serif;opacity:.7;text-transform:uppercase;letter-spacing:.04em;margin-right:2px}
 .mtg-chip-host-past{background:rgba(140,150,170,.22);color:#cfd6e2;font-weight:600}
+.mtg-chip-busy{font-weight:700}
+.mtg-chip-busy-0{background:#2a4a3a;color:#b8e0c8}
+.mtg-chip-busy-1{background:#2a4a55;color:#b8d8e8}
+.mtg-chip-busy-2{background:#4a4a2a;color:#e8e0b8}
+.mtg-chip-busy-3{background:#5a3a20;color:#ffd4a0}
+.mtg-chip-busy-4{background:#5a2020;color:#ffc0c0}
+.mtg-busy-why{margin:6px 0 4px 16px;padding:0;font-size:11.5px;opacity:.9;line-height:1.35}
+.mtg-busy-why li{margin:2px 0}
 .mtg-sec{border-top:1px solid rgba(255,255,255,.08);margin-top:6px;padding-top:4px}
 .mtg-sec-h{display:block;width:100%;text-align:left;border:0;background:transparent;color:#ffd34d;font:700 12px system-ui,sans-serif;padding:4px 0;cursor:pointer}
 .mtg-sec-b{padding:2px 0 4px}
