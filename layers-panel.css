@@ -106,6 +106,18 @@
 .mtg-chip-busy-4{background:#5a2020;color:#ffc0c0}
 .mtg-busy-why{margin:6px 0 4px 16px;padding:0;font-size:11.5px;opacity:.9;line-height:1.35}
 .mtg-busy-why li{margin:2px 0}
+.mtg-busy-range{margin:8px 0 4px;padding:8px 8px 6px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.mtg-busy-range-lab{font:700 11.5px system-ui,sans-serif;color:#e8edf3;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+.mtg-busy-range-val{font-weight:600;opacity:.85;color:#ffd34d}
+.mtg-busy-range-track{position:relative;height:6px;margin:10px 4px 0;border-radius:999px;background:rgba(255,255,255,.12)}
+.mtg-busy-range-fill{position:absolute;top:0;height:100%;border-radius:999px;background:linear-gradient(90deg,#3d9b6e,#4a9bb8,#c9a227,#d4782e,#d44545);opacity:.85;pointer-events:none}
+.mtg-busy-range-inputs{position:relative;height:28px;margin-top:-16px}
+.mtg-busy-range-inputs input[type=range]{position:absolute;left:0;width:100%;margin:0;pointer-events:none;appearance:none;background:transparent;height:28px}
+.mtg-busy-range-inputs input[type=range]::-webkit-slider-thumb{pointer-events:auto;appearance:none;width:16px;height:16px;border-radius:50%;background:#ffd34d;border:2px solid #101418;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.mtg-busy-range-inputs input[type=range]::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;border-radius:50%;background:#ffd34d;border:2px solid #101418;cursor:pointer}
+.mtg-busy-range-inputs input[type=range]::-webkit-slider-runnable-track{background:transparent;height:6px}
+.mtg-busy-range-inputs input[type=range]::-moz-range-track{background:transparent;height:6px}
+.mtg-busy-range-ticks{display:flex;justify-content:space-between;font:700 10px system-ui,sans-serif;margin:2px 2px 0;opacity:.9}
 .mtg-sec{border-top:1px solid rgba(255,255,255,.08);margin-top:6px;padding-top:4px}
 .mtg-sec-h{display:block;width:100%;text-align:left;border:0;background:transparent;color:#ffd34d;font:700 12px system-ui,sans-serif;padding:4px 0;cursor:pointer}
 .mtg-sec-b{padding:2px 0 4px}

@@ -1,5 +1,5 @@
 // workspace/whereisthesun/share-link.js
-/* SUNNY share link (opt192/opt193): chain button copies camera + layers + kids + filters + selection
+/* SUNNY share link (opt192/opt193/opt198): chain button copies camera + layers + kids + filters + selection
  * into a short #s= hash. Opening restores after layers load. Unknown ids are ignored. */
 (() => {
   "use strict";
@@ -98,9 +98,13 @@
     if (kids.length) st.k = kids;
     var ov = overlayMode();
     if (ov && ov !== "clouds") st.o = ov;
-    if (window.SunnyMtg && window.SunnyMtg.getFilter) {
-      var mf = window.SunnyMtg.getFilter();
-      if (mf) st.f = { mtg: mf };
+    if (window.SunnyMtg) {
+      var mf = window.SunnyMtg.getFilter && window.SunnyMtg.getFilter();
+      var mb = window.SunnyMtg.getBusyRange && window.SunnyMtg.getBusyRange();
+      var f = {};
+      if (mf) f.mtg = mf;
+      if (mb && (mb[0] !== 0 || mb[1] !== 4)) f.mb = [mb[0]|0, mb[1]|0];
+      if (Object.keys(f).length) st.f = f;
     }
     if (window.SunnyBeachIcons && window.SunnyBeachIcons.getScale) {
       var bi = window.SunnyBeachIcons.getScale();
@@ -206,8 +210,13 @@
       });
     }
     if (st.o) setOverlay(st.o);
-    if (st.f && st.f.mtg && window.SunnyMtg && window.SunnyMtg.setFilter) {
-      try { window.SunnyMtg.setFilter(st.f.mtg); } catch (e) {}
+    if (st.f && window.SunnyMtg) {
+      if (st.f.mtg && window.SunnyMtg.setFilter) {
+        try { window.SunnyMtg.setFilter(st.f.mtg); } catch (e) {}
+      }
+      if (st.f.mb && window.SunnyMtg.setBusyRange && st.f.mb.length === 2) {
+        try { window.SunnyMtg.setBusyRange(st.f.mb[0], st.f.mb[1]); } catch (e) {}
+      }
     }
     if (st.bi != null && window.SunnyBeachIcons && window.SunnyBeachIcons.setScale) {
       try { window.SunnyBeachIcons.setScale(st.bi); } catch (e) {}

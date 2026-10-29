@@ -1,8 +1,9 @@
 // workspace/whereisthesun/mtg-stores.js
-/* SUNNY Fun & Games: Magic: The Gathering WPN stores (opt190/opt191).
+/* SUNNY Fun & Games: Magic: The Gathering WPN stores (opt190–opt198).
  * Data: public Wizards locator scrape + Scryfall sets + tiny Wizards key-art thumbs.
  * Past prereleases: accumulate-merge history (locator has no past API).
- * Off by default. Kids: Prerelease / FNM / hosted past. Schedule panel filters by set. */
+ * Busyness: Quiet→Packed estimate; ONE ordinal range slider (not boolean kids) +
+ * map dots coloured by level. Kids: Prerelease / FNM / hosted past. */
 (() => {
   "use strict";
   var K = window.SunnyKit, L = window.SunnyLayers;
@@ -17,11 +18,11 @@
     { id: "mtg-past", name: "Hosted a past prerelease", dflt: true, kind: "past" },
     { id: "mtg-fnm-cmd", name: "FNM · Commander", dflt: true, kind: "fnm", fmt: "Commander" },
     { id: "mtg-fnm-std", name: "FNM · Standard", dflt: true, kind: "fnm", fmt: "Standard" },
-    { id: "mtg-fnm-oth", name: "FNM · other formats", dflt: true, kind: "fnm", fmt: "other" },
-    { id: "mtg-busy-lo", name: "Quieter first (Quiet–Steady)", dflt: true, kind: "busy", maxRank: 1 },
-    { id: "mtg-busy-hi", name: "Busier (Lively–Packed)", dflt: true, kind: "busy", minRank: 2 }
+    { id: "mtg-fnm-oth", name: "FNM · other formats", dflt: true, kind: "fnm", fmt: "other" }
   ];
-  var busySort = ""; /* "" | "lo" | "hi" — set by schedule/filter UI */
+  var BUSY_LEVELS = ["Quiet", "Steady", "Lively", "Busy", "Packed"];
+  var BUSY_COLORS = ["#3d9b6e", "#4a9bb8", "#c9a227", "#d4782e", "#d44545"];
+  var busyMin = 0, busyMax = 4; /* inclusive ordinal range; default full */
   function kidOn(id, dflt) {
     try {
       var v = localStorage.getItem("sunny-L-" + id);
@@ -33,11 +34,20 @@
     for (var i = 0; i < setCat.sets.length; i++) if (setCat.sets[i].code === code) return setCat.sets[i];
     return null;
   }
+  function busyRankOf(s) {
+    if (s && s.busy && typeof s.busy.rank === "number") return s.busy.rank;
+    return -1;
+  }
+  function inBusyRange(rank) {
+    if (rank < 0) return busyMin === 0 && busyMax === 4; /* unknown: only when full range */
+    return rank >= busyMin && rank <= busyMax;
+  }
   function want(s) {
     if (filterSet) {
       var sets = s.prereleaseSets || [];
       if (sets.indexOf(filterSet) < 0) return false;
     }
+    if (!inBusyRange(busyRankOf(s))) return false;
     var anyKid = false, show = false;
     var list = s.fnmFormats || [];
     KIDS.forEach((k) => {
@@ -46,12 +56,6 @@
       if (k.kind === "pre") { if (s.partner) show = true; }
       else if (k.kind === "past") {
         if ((s.prereleasePast && s.prereleasePast.length) || (s.pastCount > 0)) show = true;
-      }
-      else if (k.kind === "busy") {
-        var br = (s.busy && typeof s.busy.rank === "number") ? s.busy.rank : -1;
-        if (br < 0) return;
-        if (k.maxRank != null && br <= k.maxRank) show = true;
-        if (k.minRank != null && br >= k.minRank) show = true;
       }
       else if (k.kind === "fnm" && s.fnm) {
         if (k.fmt === "other") {
@@ -101,10 +105,13 @@
         id: DOT, type: "circle", source: SRC,
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 10, 6, 14, 8],
-          "circle-color": ["case",
-            ["==", ["get", "prerelease"], 1], "#c9a227",
-            ["==", ["get", "fnm"], 1], "#5b4fc9",
-            "#2f9e6b"],
+          "circle-color": ["match", ["get", "busyRank"],
+            0, "#3d9b6e",
+            1, "#4a9bb8",
+            2, "#c9a227",
+            3, "#d4782e",
+            4, "#d44545",
+            "#6a7380"],
           "circle-stroke-color": "#101418", "circle-stroke-width": 0.9
         }
       }, K.before(map));
@@ -253,20 +260,88 @@
       });
     });
   }
+  function busyLabel() {
+    if (busyMin === 0 && busyMax === 4) return "Quiet–Packed";
+    if (busyMin === busyMax) return BUSY_LEVELS[busyMin];
+    return BUSY_LEVELS[busyMin] + "–" + BUSY_LEVELS[busyMax];
+  }
+  function setBusyRange(lo, hi, silent) {
+    lo = Math.max(0, Math.min(4, lo | 0));
+    hi = Math.max(0, Math.min(4, hi | 0));
+    if (lo > hi) { var t = lo; lo = hi; hi = t; }
+    busyMin = lo; busyMax = hi;
+    try {
+      localStorage.setItem("sunny-mtg-busy-range", busyMin + "," + busyMax);
+    } catch (e) {}
+    syncBusyRangeUi();
+    if (!silent && pMap) redraw(pMap);
+  }
+  function loadBusyRange() {
+    try {
+      var v = localStorage.getItem("sunny-mtg-busy-range");
+      if (v) {
+        var p = v.split(",");
+        if (p.length === 2) setBusyRange(+p[0], +p[1], true);
+      }
+    } catch (e) {}
+  }
+  function syncBusyRangeUi() {
+    var box = document.querySelector(".mtg-busy-range");
+    if (!box) return;
+    var lo = box.querySelector(".mtg-busy-lo");
+    var hi = box.querySelector(".mtg-busy-hi");
+    var val = box.querySelector(".mtg-busy-range-val");
+    if (lo) lo.value = String(busyMin);
+    if (hi) hi.value = String(busyMax);
+    if (val) val.textContent = busyLabel();
+    var fill = box.querySelector(".mtg-busy-range-fill");
+    if (fill) {
+      fill.style.left = (busyMin / 4 * 100) + "%";
+      fill.style.width = ((busyMax - busyMin) / 4 * 100) + "%";
+    }
+  }
   function mountScheduleBtn() {
     var input = document.querySelector('.lp-input[data-id="mtg"]');
     if (!input) return;
     var wrap = input.closest(".lp-fold");
     if (!wrap) return;
-    if (wrap.querySelector(".mtg-sched-btn")) return;
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "mtg-sched-btn";
-    b.textContent = "Prerelease schedule";
-    b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleSchedule(); });
-    /* Sit on the fold itself (outside .lp-kids) so the button stays visible without expanding filters. */
-    wrap.appendChild(b);
-    scheduleBtn = b;
+    if (!wrap.querySelector(".mtg-sched-btn")) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "mtg-sched-btn";
+      b.textContent = "Prerelease schedule";
+      b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleSchedule(); });
+      wrap.appendChild(b);
+      scheduleBtn = b;
+    }
+    if (!wrap.querySelector(".mtg-busy-range")) {
+      var box = document.createElement("div");
+      box.className = "mtg-busy-range";
+      box.innerHTML =
+        '<div class="mtg-busy-range-lab">Busyness <span class="mtg-busy-range-val">' + busyLabel() + "</span></div>" +
+        '<div class="mtg-busy-range-track" aria-hidden="true"><div class="mtg-busy-range-fill"></div></div>' +
+        '<div class="mtg-busy-range-inputs">' +
+        '<input type="range" class="mtg-busy-lo" min="0" max="4" step="1" value="' + busyMin + '" aria-label="Minimum busyness">' +
+        '<input type="range" class="mtg-busy-hi" min="0" max="4" step="1" value="' + busyMax + '" aria-label="Maximum busyness">' +
+        "</div>" +
+        '<div class="mtg-busy-range-ticks" aria-hidden="true">' +
+        BUSY_LEVELS.map((n, i) => { return '<span style="color:' + BUSY_COLORS[i] + '">' + n[0] + "</span>"; }).join("") +
+        "</div>";
+      wrap.appendChild(box);
+      var onSlide = () => {
+        var loEl = box.querySelector(".mtg-busy-lo");
+        var hiEl = box.querySelector(".mtg-busy-hi");
+        var lo = +loEl.value, hi = +hiEl.value;
+        if (lo > hi) {
+          if (document.activeElement === loEl) hi = lo;
+          else lo = hi;
+        }
+        setBusyRange(lo, hi);
+      };
+      box.querySelector(".mtg-busy-lo").addEventListener("input", onSlide);
+      box.querySelector(".mtg-busy-hi").addEventListener("input", onSlide);
+      syncBusyRangeUi();
+    }
   }
   function closeSchedule() {
     if (panelEl) panelEl.hidden = true;
@@ -378,9 +453,11 @@
     tip: "Wizards Play Network stores in Canada. Prereleases (upcoming + past history), FNM, and a Quiet→Busy estimate (StatsCan + nearby WPN density — not attendance).",
     taps: [DOT, STAR], dflt: false, kids: KIDS,
     legend: K.legKeys([
-      ["#c9a227", "dot", "Prerelease upcoming"],
-      ["#5b4fc9", "dot", "Friday Night Magic"],
-      ["#2f9e6b", "dot", "WPN partner store"],
+      ["#3d9b6e", "dot", "Quiet"],
+      ["#4a9bb8", "dot", "Steady"],
+      ["#c9a227", "dot", "Lively"],
+      ["#d4782e", "dot", "Busy"],
+      ["#d44545", "dot", "Packed"],
       ["#ffd45a", "dot", "★ Legendary"]
     ]),
     kidSet: () => { if (pMap) redraw(pMap); },
@@ -388,14 +465,18 @@
     note: (map, on) => {
       if (!on) return "";
       if (!meta) return "loading…";
+      var bits = [];
       if (filterSet) {
         var s = setByCode(filterSet);
-        return (s ? s.name : filterSet) + " filter";
+        bits.push((s ? s.name : filterSet) + " filter");
       }
+      if (!(busyMin === 0 && busyMax === 4)) bits.push(busyLabel());
+      if (bits.length) return bits.join(" · ");
       return ((meta.counts && meta.counts.stores) || 0) + " CA stores";
     },
     attach: (map, on) => {
       pMap = map;
+      loadBusyRange();
       map.on("idle", () => { if (L.isOn("mtg") && !map.getLayer(DOT)) apply(map, true); });
       (window.SunnyHoverName = window.SunnyHoverName || {})[DOT] = (g) => {
         return Promise.resolve([g.properties && g.properties.name || "Magic store", "Magic: The Gathering store"]);
@@ -422,5 +503,11 @@
       if (document.body) mo.observe(document.body, { childList: true, subtree: true });
     }
   });
-  window.SunnyMtg = { setFilter: setFilter, getFilter: () => { return filterSet || ""; }, openSchedule: openSchedule };
+  window.SunnyMtg = {
+    setFilter: setFilter,
+    getFilter: () => { return filterSet || ""; },
+    openSchedule: openSchedule,
+    getBusyRange: () => { return [busyMin, busyMax]; },
+    setBusyRange: (lo, hi) => { setBusyRange(lo, hi); }
+  };
 })();
