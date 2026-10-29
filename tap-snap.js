@@ -88,7 +88,8 @@
         if (c && typeof c === "object" && (c.type === "click" || ev === "click") && c.point) {
           try { snap(this, c); } catch (e) {}
         }
-        return orig.call(this, ev, props);
+        /* opt189: a throwing listener must not abort MapLibre resize/move */
+        try { return orig.call(this, ev, props); } catch (e) { try { console.error(e); } catch (e2) {} return this; }
       },
       on(type, layer, fn) {
         if (type !== "click" || typeof layer !== "string" || typeof fn !== "function") return on.apply(this, arguments);

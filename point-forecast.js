@@ -146,8 +146,14 @@
     popup = new window.maplibregl.Popup({ closeButton: true, maxWidth: "260px", className: "pf-popup", offset: 10 });
     popup._sunnyMap = map;
     map.on("click", onClick.bind(null, map, skip));
-    /* opt165: a card whose place has left the screen closes */
-    map.on("moveend", () => { if (popup.isOpen() && !map.getBounds().contains(popup.getLngLat())) popup.remove(); });
+    /* opt165/opt189: close when the pin leaves the screen; skip if coords are missing (info-panel stores them on _sLL) */
+    map.on("moveend", () => {
+      try {
+        var ll = popup.getLngLat && popup.getLngLat();
+        if (!popup.isOpen() || !ll || !isFinite(ll.lng) || !isFinite(ll.lat)) return;
+        if (!map.getBounds().contains(ll)) popup.remove();
+      } catch (e) {}
+    });
     document.addEventListener("click", onDoc, true);
   }
   window.SunnyPoint = { attach: attach };

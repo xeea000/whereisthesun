@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt188"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt189"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -36,11 +36,11 @@ var PRECACHE = [
   "info-panel.css?h=90932599a5",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
-  "tap-snap.js?h=8bb1b46efa",
+  "tap-snap.js?h=48651f9f2f",
   "points.js?h=bd3ec9c286",
   "peek-place.js?h=f0d14e00bc",
   "plus-code.js?h=f565a0bf77",
-  "info-panel.js?h=48513f9529",
+  "info-panel.js?h=63a32d2d30",
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=9bb675dbcd",
   "data-saver.js?h=ab8a4eacad",
@@ -56,7 +56,7 @@ var PRECACHE = [
   "radar-legend.js?h=82ca8259a4",
   "wind-field.js?h=a44ddd27bd",
   "wind-gl.js?h=48bdd93d99",
-  "point-forecast.js?h=d393a333b1",
+  "point-forecast.js?h=3a2a36247e",
   "craters.js?h=961f6df77a",
   "sky-glow.js?h=b325551c86",
   "beach-toggle.js?h=29ef62a7e1",
@@ -65,7 +65,7 @@ var PRECACHE = [
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
-  "layer-kit.js?h=eb56bcfbb3",
+  "layer-kit.js?h=2d853264a2",
   "layers-panel.js?h=487dc2ee13",
   "famous.js?h=cc6ba5ffd5",
   "bar-toggles.js?h=e6af9b608f",

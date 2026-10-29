@@ -30,7 +30,13 @@
     popup.setLngLat(lngLat).setHTML(html).addTo(map);
     if (!map._sunnyGone) {
       map._sunnyGone = true; /* opt165: a card whose place has left the screen closes */
-      map.on("moveend", () => { if (popup && popup.isOpen() && !map.getBounds().contains(popup.getLngLat())) popup.remove(); });
+      map.on("moveend", () => {
+        try {
+          var ll = popup && popup.getLngLat && popup.getLngLat();
+          if (!popup || !popup.isOpen() || !ll || !isFinite(ll.lng) || !isFinite(ll.lat)) return;
+          if (!map.getBounds().contains(ll)) popup.remove();
+        } catch (e) {}
+      });
     }
     return popup;
   }

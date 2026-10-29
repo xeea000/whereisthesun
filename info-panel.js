@@ -207,7 +207,11 @@
     Object.assign(P, {
       setLngLat(ll) {
         this._sLL = window.maplibregl.LngLat.convert(ll);
+        this._lngLat = this._sLL; /* keep MapLibre's field too so getLngLat / contains work */
         return this;
+      },
+      getLngLat() {
+        return this._sLL || this._lngLat;
       },
       setHTML(h) {
         this._sHtml = h;
