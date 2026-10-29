@@ -398,10 +398,17 @@ function sunnyStep14() {
       if (!t || t === overlaySeg) return;
       var mode = t.getAttribute("data-overlay");
       if (!mode) return;
-      if (mode === overlayMode && !overlayNone) { setOverlayNone(true); return; }
-      var was = overlayNone;
-      if (was) setOverlayNone(false, false, mode);
-      else setOverlayMode(mode);
+      try { cancelOverlayXfade(); } catch (eXf) {}
+      try {
+        if (mode === overlayMode && !overlayNone) { setOverlayNone(true); return; }
+        var was = overlayNone;
+        if (was) setOverlayNone(false, false, mode);
+        else setOverlayMode(mode);
+      } catch (eOv) {
+        try { console.error(eOv); } catch (e2) {}
+      }
+      try { syncOverlaySeg(); } catch (eSy) {}
+      try { if (window.SunnyLayers) window.SunnyLayers.refresh(); } catch (eLp) {}
     });
   })();
   (() => {

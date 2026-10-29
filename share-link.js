@@ -1,5 +1,5 @@
 // workspace/whereisthesun/share-link.js
-/* SUNNY share link (opt192): chain button copies camera + layers + kids + filters + selection
+/* SUNNY share link (opt192/opt193): chain button copies camera + layers + kids + filters + selection
  * into a short #s= hash. Opening restores after layers load. Unknown ids are ignored. */
 (() => {
   "use strict";
@@ -101,6 +101,10 @@
     if (window.SunnyMtg && window.SunnyMtg.getFilter) {
       var mf = window.SunnyMtg.getFilter();
       if (mf) st.f = { mtg: mf };
+    }
+    if (window.SunnyBeachIcons && window.SunnyBeachIcons.getScale) {
+      var bi = window.SunnyBeachIcons.getScale();
+      if (bi && bi !== 1) st.bi = bi;
     }
     var sel = captureSelection();
     if (sel) st.s = sel;
@@ -204,6 +208,9 @@
     if (st.o) setOverlay(st.o);
     if (st.f && st.f.mtg && window.SunnyMtg && window.SunnyMtg.setFilter) {
       try { window.SunnyMtg.setFilter(st.f.mtg); } catch (e) {}
+    }
+    if (st.bi != null && window.SunnyBeachIcons && window.SunnyBeachIcons.setScale) {
+      try { window.SunnyBeachIcons.setScale(st.bi); } catch (e) {}
     }
   }
   function matchFeat(f, key) {

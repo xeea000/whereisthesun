@@ -71,7 +71,7 @@
 /* opt191 Magic Fun & Games: compact chips, schedule panel, filter bar */
 .mtg-sched-btn{display:block;margin:6px 0 2px;border:0;border-radius:8px;padding:6px 10px;background:#3a2f6e;color:#fff;font:700 11.5px system-ui,sans-serif;cursor:pointer;width:100%;text-align:left}
 .mtg-sched-btn:hover{background:#4d3f8f}
-.mtg-filter-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:40;display:flex;gap:10px;align-items:center;background:rgba(16,20,28,.94);color:#e8edf3;border:1px solid rgba(255,213,77,.35);border-radius:999px;padding:8px 12px;font:600 12.5px system-ui,sans-serif;max-width:92vw;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.mtg-filter-bar{position:fixed;left:50%;transform:translateX(-50%);top:max(52px,calc(env(safe-area-inset-top) + 44px));bottom:auto;z-index:35;display:flex;gap:10px;align-items:center;background:rgba(16,20,28,.94);color:#e8edf3;border:1px solid rgba(255,213,77,.35);border-radius:999px;padding:8px 12px;font:600 12.5px system-ui,sans-serif;max-width:92vw;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 .mtg-filter-bar .mtg-clear,.mtg-sched-filt .mtg-clear{border:0;border-radius:999px;padding:4px 10px;background:#5a2b2b;color:#fff;font:700 11.5px system-ui,sans-serif;cursor:pointer}
 .mtg-schedule{position:fixed;z-index:45;right:12px;top:72px;width:min(340px,94vw);max-height:min(70vh,560px);overflow:auto;background:rgba(14,18,26,.96);color:#e8edf3;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px 10px 12px;box-shadow:0 12px 40px rgba(0,0,0,.45);font:13px/1.35 system-ui,sans-serif}
 .mtg-sched-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
@@ -110,5 +110,6 @@
 .mtg-muted{font-size:11.5px;opacity:.7}
 @media (max-width:520px){
   .mtg-schedule{left:8px;right:8px;width:auto;top:auto;bottom:64px;max-height:55vh}
-  .mtg-filter-bar{bottom:10px;font-size:12px}
+  .mtg-filter-bar{top:max(48px,calc(env(safe-area-inset-top) + 40px));bottom:auto;font-size:12px}
 }
+.lp-bscale{display:flex;align-items:center;gap:8px;padding:2px 12px 8px 40px;font:600 12px system-ui,sans-serif;color:#c6c2b6}.lp-bscale-h{flex:0 0 auto}.lp-bscale input[type=range]{flex:1;min-width:0;accent-color:#f0c14b;height:18px}.lp-bscale-v{flex:0 0 2.4em;text-align:right;color:#ffd34d;font-variant-numeric:tabular-nums}.set-row .lp-bscale{padding:4px 0;width:100%}

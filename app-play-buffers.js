@@ -118,7 +118,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     if (!m) return;
     var i, id;
     if (hidden) {
-      var idsHide = [GIBS_LAYER, "iem-vis"];
+      var idsHide = [GIBS_LAYER, "iem-vis", "msg-clouds"];
       for (i = 0; i < idsHide.length; i++) {
         id = idsHide[i];
         if (!m.getLayer(id)) continue;
@@ -131,6 +131,13 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     if (m.getLayer(GIBS_LAYER)) {
       try { m.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eG) {}
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+    }
+    /* msg-clouds.js mirrors gibs on its timer; show it again when clouds are on */
+    if (m.getLayer("msg-clouds") && m.getLayer(GIBS_LAYER)) {
+      try {
+        var vis = m.getLayoutProperty(GIBS_LAYER, "visibility") || "visible";
+        m.setLayoutProperty("msg-clouds", "visibility", vis);
+      } catch (eM) {}
     }
   }
   function showPlayOverlay() {

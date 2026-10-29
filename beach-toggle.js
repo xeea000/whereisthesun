@@ -5,7 +5,7 @@
  * reaches the search handler. */
 (function () {
   "use strict";
-  var LAYERS = ["beaches-fill", "beaches-line", "beaches-dot"];
+  var LAYERS = ["beaches-fill", "beaches-line", "beaches-dot", "beaches-sun"];
   var shown = false;
   function setLayers(on) {
     var m = window.map;

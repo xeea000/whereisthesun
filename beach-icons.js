@@ -1,5 +1,5 @@
 // workspace/whereisthesun/beach-icons.js
-/* SUNNY beach icons (opt95, ring design). Outer ring: 12 segments for the next 12 hours, clockwise from
+/* SUNNY beach icons (opt95/opt193, ring design). Outer ring: 12 segments for the next 12 hours, clockwise from
  * 12 o'clock, coloured by a blend of cloud cover and daylight (clear day blue, overcast day white, clear
  * night black, overcast night dark grey; dawn and dusk ramp with SunCalc at the beach). Inner disc: direct
  * sun, yellow when clear, greyer with cloud, black when the sun is down. Centre: weather glyph from the
@@ -11,8 +11,16 @@
   var PX = 2;
   var TTL = 30 * 60 * 1000;
   var MODE_KEY = "sunny-beach-icon";
+  var SIZE_KEY = "sunny-beach-icon-scale";
   var mode = "advanced";
+  var scale = 1;
   try { mode = localStorage.getItem(MODE_KEY) === "simple" ? "simple" : "advanced"; } catch (e) {}
+  try {
+    var _sc = parseFloat(localStorage.getItem(SIZE_KEY));
+    if (isFinite(_sc) && _sc >= 0.75 && _sc <= 3) scale = Math.round(_sc * 100) / 100;
+  } catch (e) {}
+  var SIZE_BASE = ["interpolate", ["linear"], ["zoom"], 3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8];
+  var iconSizeExpr = () => { return ["*", scale, SIZE_BASE]; };
   var wx = {};
   var pending = {};
   var lastKey = "";
@@ -105,7 +113,10 @@
     }
     return { cl: cl.map((x) => { return Math.round(x / 10) * 10; }), lt: lt, g: GLYPH(code, up), up: up, ev: ev };
   };
-  var keyOf = (s) => { return s ? mode.charAt(0) + (spriteReady ? "L" : "") + s.cl.join(".") + "|" + s.lt.join(".") + "|" + s.g + "|" + (s.up ? 1 : 0) + "|" + s.ev.join(".") : "bx-u"; };
+  var keyOf = (s) => {
+    return s ? mode.charAt(0) + (spriteReady ? "L" : "") + s.cl.join(".") + "|" +
+      s.lt.join(".") + "|" + s.g + "|" + (s.up ? 1 : 0) + "|" + s.ev.join(".") : "bx-u";
+  };
   var pin = (g, ang, sc, col) => {
     g.save();
     g.translate(32, 32); g.rotate(ang); g.translate(0, -26.5); g.scale(sc, sc);
@@ -189,12 +200,13 @@
     if (!m.getLayer("beaches-sun") && m.getLayer("beaches-dot")) {
       m.addLayer({ id: "beaches-sun", type: "symbol", source: "beach-suns",
         layout: { "icon-image": ["get", "i"], "icon-allow-overlap": true, "icon-ignore-placement": true,
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8] } }, "beaches-dot");
+          "icon-size": iconSizeExpr() } }, "beaches-dot");
       m.setPaintProperty("beaches-dot", "circle-opacity", 0);
       m.setPaintProperty("beaches-dot", "circle-stroke-opacity", 0);
       var vis = m.getLayoutProperty("beaches-dot", "visibility");
       if (vis) m.setLayoutProperty("beaches-sun", "visibility", vis);
-    }
+      applyScale();
+    } else applyScale();
   };
   var paint = (list) => {
     var m = getMap();
@@ -210,13 +222,32 @@
       fetchBatch(lastList);
     } catch (e) {}
   };
+  var applyScale = () => {
+    var m = getMap();
+    if (!m || !m.getLayer || !m.getLayer("beaches-sun")) return;
+    try { m.setLayoutProperty("beaches-sun", "icon-size", iconSizeExpr()); } catch (e) {}
+  };
+  var setScale = (v) => {
+    var n = Number(v);
+    if (!isFinite(n)) return scale;
+    scale = Math.max(0.75, Math.min(3, Math.round(n * 100) / 100));
+    try { localStorage.setItem(SIZE_KEY, String(scale)); } catch (e) {}
+    applyScale();
+    sliders.forEach((s) => {
+      s.input.value = String(scale);
+      s.lab.textContent = scale + "×";
+    });
+    return scale;
+  };
+  var getScale = () => { return scale; };
   var setMode = (v) => {
     mode = v === "simple" ? "simple" : "advanced";
     try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
     lastKey = ""; paint(lastList);
   };
-  /* "Detailed beach icons" checkbox: under Beaches in the left sidebar and mirrored in Settings. */
+  /* "Detailed beach icons" checkbox + icon size slider: under Beaches in the blade and Settings. */
   var boxes = [];
+  var sliders = [];
   var addBox = (parent, before, cls) => {
     var l = document.createElement("label");
     l.className = cls;
@@ -230,13 +261,29 @@
     parent.insertBefore(l, before || null);
     boxes.push(cb);
   };
+  var addScale = (parent, before, cls) => {
+    var wrap = document.createElement("div");
+    wrap.className = cls || "lp-bscale";
+    wrap.innerHTML = '<span class="lp-bscale-h">Icon size</span>' +
+      '<input type="range" min="0.75" max="3" step="0.25" aria-label="Beach icon size">' +
+      '<span class="lp-bscale-v">1×</span>';
+    var inp = wrap.querySelector("input");
+    var lab = wrap.querySelector(".lp-bscale-v");
+    inp.value = String(scale);
+    lab.textContent = scale + "×";
+    inp.addEventListener("input", () => { setScale(inp.value); });
+    parent.insertBefore(wrap, before || null);
+    sliders.push({ input: inp, lab: lab });
+  };
   var buildSwitch = () => {
     var row = [].slice.call(document.querySelectorAll("#layers-panel .lp-row")).filter((r) => { return /Beaches/.test(r.textContent); })[0];
     var sun = document.getElementById("toggle-sunny");
     if (!row || !sun) { setTimeout(buildSwitch, 800); return; }
     if (boxes.length) return;
     addBox(row.parentNode, row.nextSibling, "lp-bicon");
+    addScale(row.parentNode, row.nextSibling ? row.nextSibling.nextSibling : null, "lp-bscale");
     addBox(sun.closest(".set-row"), null, "sun-opt");
+    addScale(sun.closest(".set-row"), null, "lp-bscale sun-opt");
   };
   var credit = () => {
     var b = document.getElementById("set-build");
@@ -271,5 +318,5 @@
     return out;
   };
   var glyphUrl = (code, day) => { var im = ICONS[GLYPH(code, day)]; return im ? im.src : ""; };
-  window.SunnyBeachIcons = { paint: paint, setMode: setMode, state: state, draw: draw, hourly: hourly, glyphUrl: glyphUrl, light: light };
+  window.SunnyBeachIcons = { paint: paint, setMode: setMode, setScale: setScale, getScale: getScale, state: state, draw: draw, hourly: hourly, glyphUrl: glyphUrl, light: light };
 })();
