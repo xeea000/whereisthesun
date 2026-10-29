@@ -19,8 +19,13 @@
     var _sc = parseFloat(localStorage.getItem(SIZE_KEY));
     if (isFinite(_sc) && _sc >= 0.75 && _sc <= 3) scale = Math.round(_sc * 100) / 100;
   } catch (e) {}
-  var SIZE_BASE = ["interpolate", ["linear"], ["zoom"], 3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8];
-  var iconSizeExpr = () => { return ["*", scale, SIZE_BASE]; };
+  // MapLibre 4.x rejects ["*", n, zoom-interp] for icon-size; bake scale into stops.
+  var SIZE_STOPS = [3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8];
+  var iconSizeExpr = () => {
+    var e = ["interpolate", ["linear"], ["zoom"]];
+    for (var i = 0; i < SIZE_STOPS.length; i += 2) e.push(SIZE_STOPS[i], SIZE_STOPS[i + 1] * scale);
+    return e;
+  };
   var wx = {};
   var pending = {};
   var lastKey = "";
