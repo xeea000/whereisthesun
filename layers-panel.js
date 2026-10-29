@@ -1,5 +1,5 @@
 // workspace/whereisthesun/layers-panel.js
-/* SUNNY layers sidebar (opt94). An arrow tab on the left edge folds a Windy-style panel in
+/* SUNNY layers sidebar (opt94/opt192). An arrow tab on the left edge folds a Windy-style panel in
  * and out. Every layer is one row: icon, name, on/off switch, grouped by type. Older layers
  * keep a hidden input as their saved state (the row flips it). This panel is the only place that
  * switches map layers. Open/closed and each layer's state are saved. */
@@ -122,6 +122,7 @@
       var kl = el("label", "lp-kid");
       var ki = el("input");
       ki.type = "checkbox";
+      ki.dataset.kid = k.id;
       ki.checked = saved(k.id, k.dflt);
       ki.addEventListener("change", () => {
         try { localStorage.setItem("sunny-L-" + k.id, ki.checked ? "1" : "0"); } catch (e) {}
@@ -143,6 +144,12 @@
     var b = document.querySelector("#overlay-seg .seg-btn.is-on");
     if (b) b.click();
     setTimeout(refresh, 80);
+  }
+  /* opt192: Fold all collapses every group and kid twisty in the blade */
+  function foldAll() {
+    if (!panel) return;
+    panel.querySelectorAll(".lp-head[aria-expanded='true']").forEach((h) => { h.click(); });
+    panel.querySelectorAll(".lp-twisty[aria-expanded='true']").forEach((tw) => { tw.click(); });
   }
   /* opt103: sections and sub-groups fold with twisty triangles (state saved per path, open by default).
    * PLACE moves a layer into a "Section/Sub" path without touching the layer's own file. */
@@ -198,12 +205,20 @@
     panel = el("aside", "lp-panel");
     panel.id = "layers-panel";
     panel.setAttribute("aria-label", "Layers");
-    var head = el("div", "lp-title", "Layers");
+    var head = el("div", "lp-title");
+    head.appendChild(el("span", "lp-title-txt", "Layers"));
+    var acts = el("span", "lp-actions");
+    var foldBtn = el("button", "lp-foldall", "Fold all");
+    foldBtn.type = "button";
+    foldBtn.title = "Collapse every section in this list";
+    foldBtn.addEventListener("click", foldAll);
     var clr = el("button", "lp-clear", "Clear all");
     clr.type = "button";
     clr.title = "Turn off every overlay layer (keeps the base map, beaches and the tap pin)";
     clr.addEventListener("click", clearAll);
-    head.appendChild(clr);
+    acts.appendChild(foldBtn);
+    acts.appendChild(clr);
+    head.appendChild(acts);
     panel.appendChild(head);
     panel.appendChild(el("div", "lp-body"));
     var tab = el("button", "lp-tab", "›");
@@ -245,11 +260,28 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
-  window.SunnyLayers = { add: add, attach: attach, refresh: refresh, isOn: (id) => {
+  window.SunnyLayers = { add: add, attach: attach, refresh: refresh, foldAll: foldAll, clearAll: clearAll, set: (id, on) => {
+    var d = defs.filter((x) => { return x.id === id; })[0];
+    if (d) setOn(d, !!on);
+  }, isOn: (id) => {
     var d = defs.filter((x) => { return x.id === id; })[0];
     return d ? isOn(d) : false;
-  }, list: () => { return defs.filter((d) => { return d.name && isOn(d); }); }, tapIds: tapIds, nameOf: (lid) => { /* opt105: friendly layer name for hover labels */
+  }, list: () => {
+    return defs.filter((d) => { return d.name && isOn(d); });
+  }, defs: () => { return defs.slice(); }, tapIds: tapIds,
+  nameOf: (lid) => { /* opt105: friendly layer name for hover labels */
     var d = defs.filter((x) => { return x.taps && x.taps.indexOf(lid) >= 0; })[0];
     return d ? d.name : "";
+  }, kidSet: (kidId, on) => {
+    try { localStorage.setItem("sunny-L-" + kidId, on ? "1" : "0"); } catch (e) {}
+    document.querySelectorAll(".lp-kid input[data-kid]").forEach((i) => {
+      if (i.dataset.kid !== kidId) return;
+      if (i.checked !== !!on) i.checked = !!on;
+    });
+    defs.forEach((d) => {
+      if (!d.kids || !d.kids.some((k) => { return k.id === kidId; })) return;
+      if (d.kidSet) d.kidSet();
+    });
+    refresh();
   } };
 })();

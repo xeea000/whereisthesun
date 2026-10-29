@@ -381,5 +381,5 @@
       if (document.body) mo.observe(document.body, { childList: true, subtree: true });
     }
   });
-  window.SunnyMtg = { setFilter: setFilter, openSchedule: openSchedule };
+  window.SunnyMtg = { setFilter: setFilter, getFilter: () => { return filterSet || ""; }, openSchedule: openSchedule };
 })();

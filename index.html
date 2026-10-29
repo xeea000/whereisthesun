@@ -50,8 +50,8 @@
   <link rel="stylesheet" href="vendor/maplibre-gl.slim.css?h=5ae31c574f">
   <link rel="stylesheet" href="styles.css?h=cd37db5056">
   <link rel="stylesheet" href="settings-panel.css?h=f5be224c45">
-  <link rel="stylesheet" href="side-buttons.css?h=de1efe43ac">
-  <link rel="stylesheet" href="layers-panel.css?h=97d85dc948">
+  <link rel="stylesheet" href="side-buttons.css?h=9e18a6b16c">
+  <link rel="stylesheet" href="layers-panel.css?h=164d157a3f">
   <link rel="stylesheet" href="info-panel.css?h=90932599a5">
 </head>
 <body>
@@ -232,6 +232,12 @@
       <span class="round-emoji" aria-hidden="true">☄️</span>
       <span class="ctrl-label"><span>Craters</span></span>
     </button>
+    <button id="btn-share" class="ctrl ctrl-share" type="button" aria-label="Copy link to this view" title="Copy link to this view">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07L10.8 6.14"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.4a5 5 0 0 0 7.07 7.07L13.2 17.86"/>
+      </svg>
+    </button>
     <button id="btn-sun" class="ctrl ctrl-sun" type="button" title="Find beaches near you (or near the map centre if your location is off)">
       <span class="beach-emoji" aria-hidden="true">🏖️</span>
       <span class="ctrl-label"><span>Find</span><span>Beaches</span></span>
@@ -253,7 +259,7 @@
   <script defer src="points.js?h=bd3ec9c286"></script>
   <script defer src="peek-place.js?h=f0d14e00bc"></script>
   <script defer src="plus-code.js?h=f565a0bf77"></script>
-  <script defer src="info-panel.js?h=63a32d2d30"></script>
+  <script defer src="info-panel.js?h=f8dfb33aff"></script>
   <script defer src="beach-card.js?h=0237ca65e1"></script>
   <script defer src="beach-icons.js?h=9bb675dbcd"></script>
   <script defer src="data-saver.js?h=ab8a4eacad"></script>
@@ -279,7 +285,8 @@
   <script defer src="vendor/suncalc-2.1.1.js?h=3f2bf4d522"></script>
   <script defer src="vendor/satellite-5.0.0.min.js?h=272c249d24"></script>
   <script defer src="layer-kit.js?h=2d853264a2"></script>
-  <script defer src="layers-panel.js?h=90b5c78384"></script>
+  <script defer src="layers-panel.js?h=4dc5d4d125"></script>
+  <script defer src="share-link.js?h=c952573d27"></script>
   <script defer src="famous.js?h=cc6ba5ffd5"></script>
   <script defer src="bar-toggles.js?h=e6af9b608f"></script>
   <script defer src="overzoom.js?h=1dc114f61d"></script>
@@ -307,7 +314,7 @@
   <script defer src="ca-cover.js?h=3793788c5f"></script>
   <script defer src="world-layers.js?h=3211a9d654"></script>
   <script defer src="outdoor-layers.js?h=888e543c92"></script>
-  <script defer src="mtg-stores.js?h=c1565c965e"></script>
+  <script defer src="mtg-stores.js?h=4477a322f0"></script>
   <script defer src="parks-ca.js?h=239b668258"></script>
   <script defer src="sky-card.js?h=29233a05a1"></script>
   <script defer src="sats.js?h=7e53ca1d3e"></script>

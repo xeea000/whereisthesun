@@ -281,5 +281,12 @@
   else build();
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", pinSwitch);
   else pinSwitch();
-  window.SunnyInfo = { section: section, open: setOpen, isOpen: isOpen, src: srcLink };
+  function selection() {
+    var p = where();
+    if (!p) return null;
+    var ll = p._sLL || p._lngLat;
+    if (!ll) return null;
+    return { lng: ll.lng, lat: ll.lat };
+  }
+  window.SunnyInfo = { section: section, open: setOpen, isOpen: isOpen, src: srcLink, selection: selection };
 })();
