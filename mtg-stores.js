@@ -1,15 +1,16 @@
 // workspace/whereisthesun/mtg-stores.js
-/* SUNNY Fun & Games: Magic: The Gathering WPN stores (opt190).
- * Data: public Wizards Store & Event Locator HTML (no API key), Canada snapshot in
- * data/mtg-stores.json (tools/build-mtg-stores.py). Off by default. Kids filter
- * Prerelease and Friday Night Magic by format. */
+/* SUNNY Fun & Games: Magic: The Gathering WPN stores (opt190/opt191).
+ * Data: public Wizards locator scrape + Scryfall sets + tiny Wizards key-art thumbs.
+ * Off by default. Kids filter Prerelease / FNM formats. Schedule panel filters by set. */
 (() => {
   "use strict";
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=6e78f9e5";
-  var meta = null, feats = [], pMap = null;
+  var DATA = "data/mtg-stores.json?v=117cb162";
+  var SETS = "data/mtg-sets.json?v=d842a175";
+  var meta = null, setCat = null, pMap = null, filterSet = "";
+  var panelEl = null, scheduleBtn = null;
   var KIDS = [
     { id: "mtg-pre", name: "Prerelease (WPN partners)", dflt: true, kind: "pre" },
     { id: "mtg-fnm-cmd", name: "FNM · Commander", dflt: true, kind: "fnm", fmt: "Commander" },
@@ -22,16 +23,23 @@
       return v == null ? dflt : v === "1";
     } catch (e) { return dflt; }
   }
+  function setByCode(code) {
+    if (!setCat || !code) return null;
+    for (var i = 0; i < setCat.sets.length; i++) if (setCat.sets[i].code === code) return setCat.sets[i];
+    return null;
+  }
   function want(s) {
+    if (filterSet) {
+      var sets = s.prereleaseSets || [];
+      if (sets.indexOf(filterSet) < 0) return false;
+    }
     var anyKid = false, show = false;
     var list = s.fnmFormats || [];
     KIDS.forEach((k) => {
       if (!kidOn(k.id, k.dflt)) return;
       anyKid = true;
-      if (k.kind === "pre") {
-        /* Prerelease switch: WPN partner stores (badge + dates on the card when listed) */
-        if (s.partner) show = true;
-      } else if (k.kind === "fnm" && s.fnm) {
+      if (k.kind === "pre") { if (s.partner) show = true; }
+      else if (k.kind === "fnm" && s.fnm) {
         if (k.fmt === "other") {
           if (!list.length || list.every((f) => { return f !== "Commander" && f !== "Standard"; })) show = true;
         } else if (list.indexOf(k.fmt) >= 0) show = true;
@@ -41,6 +49,7 @@
   }
   function toFeats(stores) {
     return stores.filter(want).map((s) => {
+      var sets = (s.prereleaseSets || []).join(",");
       return {
         type: "Feature",
         geometry: { type: "Point", coordinates: [s.lon, s.lat] },
@@ -49,17 +58,17 @@
           partner: s.partner ? 1 : 0, legendary: s.legendary ? 1 : 0,
           fnm: s.fnm ? 1 : 0, prerelease: s.prerelease ? 1 : 0,
           formats: (s.fnmFormats || []).join(", "),
-          preDates: (s.prereleaseNext || []).map((e) => { return (e.date + " " + e.time).trim(); }).join(" · "),
-          fnmNext: (s.fnmNext || []).map((e) => { return e.title + " (" + (e.date + " " + e.time).trim() + ")"; }).join(" · "),
-          color: s.prerelease ? "#c9a227" : s.fnm ? "#5b4fc9" : "#2f9e6b"
+          sets: sets,
+          preJson: JSON.stringify(s.prereleaseNext || []),
+          fnmJson: JSON.stringify(s.fnmNext || [])
         }
       };
     });
   }
   function redraw(map) {
     if (!map.getSource(SRC) || !meta) return;
-    feats = toFeats(meta.stores || []);
-    map.getSource(SRC).setData(K.fc(feats));
+    map.getSource(SRC).setData(K.fc(toFeats(meta.stores || [])));
+    syncFilterChip();
   }
   function ensure(map) {
     if (!map.getSource(SRC)) {
@@ -90,40 +99,239 @@
       }, K.before(map));
     }
   }
+  function loadAll() {
+    return Promise.all([
+      meta ? Promise.resolve(meta) : K.loadJson(DATA).then((d) => { meta = d; return d; }),
+      setCat ? Promise.resolve(setCat) : K.loadJson(SETS).then((d) => { setCat = d; return d; }).catch(() => { setCat = { sets: [] }; return setCat; })
+    ]);
+  }
   function apply(map, on) {
     K.vis(map, [DOT, STAR], on);
-    if (!on) return;
+    if (!on) { filterSet = ""; closeSchedule(); return; }
     ensure(map);
     K.vis(map, [DOT, STAR], L.isOn("mtg"));
-    if (meta) { redraw(map); return; }
-    K.loadJson(DATA).then((d) => {
-      meta = d;
-      redraw(map);
-    }).catch(() => {});
+    loadAll().then(() => { redraw(map); mountScheduleBtn(); }).catch(() => {});
+  }
+  function chip(text, cls) {
+    return '<span class="mtg-chip' + (cls ? " " + cls : "") + '">' + text + "</span>";
+  }
+  function thumbHtml(set, big) {
+    if (!set) return "";
+    var src = set.thumb || set.icon;
+    if (!src) return '<span class="mtg-thumb mtg-thumb-empty" aria-hidden="true"></span>';
+    return '<img class="mtg-thumb' + (big ? " mtg-thumb-lg" : "") + '" src="' + K.esc(src) + '" alt="" loading="lazy" decoding="async" width="' + (big ? 96 : 48) + '" height="' + (big ? 50 : 26) + '"/>';
+  }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    if (p.length < 3) return iso;
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return months[+p[1] - 1] + " " + (+p[2]) + ", " + p[0];
+  }
+  function weekendLabel(set) {
+    if (!set || !set.prerelease) return "";
+    var a = set.prerelease.start, b = set.prerelease.end;
+    if (!a) return "";
+    if (set.observedDates && set.observedDates.length) {
+      return set.observedDates.slice(0, 4).join(" · ");
+    }
+    return fmtDate(a) + " – " + fmtDate(b);
+  }
+  function parseJson(s) {
+    try { return JSON.parse(s || "[]"); } catch (e) { return []; }
   }
   function cardHtml(p) {
-    var lines = [];
-    if (p.partner) lines.push("Wizards Play Network partner store");
-    if (p.legendary) lines.push("★ Legendary WPN store");
-    if (p.prerelease) {
-      lines.push("Prerelease host" + (p.preDates ? ": " + K.esc(p.preDates) : " (upcoming dates when listed)"));
+    var pre = parseJson(p.preJson);
+    var fnm = parseJson(p.fnmJson);
+    var chips = [];
+    if (p.partner) chips.push(chip("WPN", "mtg-chip-wpn"));
+    if (p.legendary) chips.push(chip("★ Legendary", "mtg-chip-leg"));
+    if (p.fnm) chips.push(chip("FNM" + (p.formats ? " · " + K.esc(p.formats) : ""), "mtg-chip-fnm"));
+    var blocks = [];
+    blocks.push('<div class="mtg-chips">' + chips.join("") + "</div>");
+    /* Group prerelease rows by set */
+    var bySet = {};
+    pre.forEach((e) => {
+      var code = e.set || "_";
+      (bySet[code] = bySet[code] || []).push(e);
+    });
+    var codes = Object.keys(bySet);
+    if (codes.length) {
+      blocks.push('<div class="mtg-sec"><button type="button" class="mtg-sec-h" aria-expanded="true">Prerelease ▾</button><div class="mtg-sec-b">');
+      codes.forEach((code) => {
+        var set = setByCode(code);
+        var rows = bySet[code];
+        var name = set ? set.name : (rows[0] && rows[0].title) || "Prerelease";
+        var dates = rows.map((e) => { return ((e.date || "") + " " + (e.time || "")).trim(); }).filter(Boolean);
+        blocks.push('<div class="mtg-pre">');
+        blocks.push(thumbHtml(set, false));
+        blocks.push('<div class="mtg-pre-body">');
+        blocks.push('<div class="mtg-pre-name">' + K.esc(set ? set.name : name) + "</div>");
+        if (set && set.released) blocks.push('<div class="mtg-pre-meta">Release ' + K.esc(fmtDate(set.released)) + "</div>");
+        if (dates.length) {
+          blocks.push('<div class="mtg-dates">' + dates.slice(0, 6).map((d) => { return chip(K.esc(d), "mtg-chip-date"); }).join("") + "</div>");
+        }
+        if (set && set.wizards) {
+          blocks.push('<a class="mtg-link" href="' + K.esc(set.wizards) + '" target="_blank" rel="noopener">Wizards set page ↗</a>');
+        }
+        blocks.push("</div></div>");
+      });
+      blocks.push("</div></div>");
+    } else if (p.prerelease) {
+      blocks.push('<div class="mtg-muted">Prerelease partner — set not named in the locator snapshot.</div>');
     }
-    if (p.fnm) {
-      lines.push("Friday Night Magic" + (p.formats ? " · " + K.esc(p.formats) : ""));
-      if (p.fnmNext) lines.push(K.esc(p.fnmNext));
+    if (fnm.length || p.fnm) {
+      blocks.push('<div class="mtg-sec"><button type="button" class="mtg-sec-h" aria-expanded="false">Friday Night Magic ▸</button><div class="mtg-sec-b" hidden>');
+      if (p.formats) blocks.push('<div class="mtg-chips">' + String(p.formats).split(", ").filter(Boolean).map((f) => { return chip(K.esc(f), "mtg-chip-fnm"); }).join("") + "</div>");
+      fnm.slice(0, 4).forEach((e) => {
+        blocks.push('<div class="mtg-row">' + K.esc(e.title || "FNM") +
+          '<span class="mtg-row-meta">' + K.esc(((e.date || "") + " " + (e.time || "")).trim()) + "</span></div>");
+      });
+      blocks.push("</div></div>");
     }
-    if (p.addr) lines.push(K.esc(p.addr));
-    if (p.phone) lines.push(K.esc(p.phone));
-    if (p.web) lines.push('<a href="' + K.esc(p.web) + '" target="_blank" rel="noopener">Website</a>');
-    var built = meta && meta.built ? " Snapshot " + K.esc(meta.built) + "." : "";
-    return K.card(p.name || "Magic store", lines, [
-      "Wizards Store & Event Locator" + built,
-      "https://locator.wizards.com/en/search?query=" + encodeURIComponent(p.name || "") + "&searchType=stores"
-    ]);
+    if (p.addr) blocks.push('<div class="mtg-addr">' + K.esc(p.addr) + "</div>");
+    if (p.phone) blocks.push('<div class="mtg-addr">' + K.esc(p.phone) + "</div>");
+    if (p.web) blocks.push('<a class="mtg-link" href="' + K.esc(p.web) + '" target="_blank" rel="noopener">Store website ↗</a>');
+    var built = meta && meta.built ? meta.built : "";
+    return '<div class="mtg-card"><div class="mtg-card-title">' + K.esc(p.name || "Magic store") + "</div>" +
+      blocks.join("") +
+      '<div class="pf-src">Source: <a href="https://locator.wizards.com/" target="_blank" rel="noopener">Wizards locator</a>' +
+      (built ? " · snapshot " + K.esc(built) : "") +
+      (setCat && setCat.source ? '; sets <a href="https://scryfall.com/sets" target="_blank" rel="noopener">Scryfall</a>' : "") +
+      "</div></div>";
+  }
+  function bindCardToggles(root) {
+    if (!root) return;
+    root.querySelectorAll(".mtg-sec-h").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        var body = btn.nextElementSibling;
+        var open = btn.getAttribute("aria-expanded") === "true";
+        btn.setAttribute("aria-expanded", open ? "false" : "true");
+        btn.textContent = btn.textContent.replace(/[▾▸]/, open ? "▸" : "▾");
+        if (body) body.hidden = open;
+      });
+    });
+  }
+  function mountScheduleBtn() {
+    var fold = document.querySelector('.lp-input[data-id="mtg"]');
+    if (!fold) return;
+    var wrap = fold.closest(".lp-fold");
+    if (!wrap) return;
+    var leg = wrap.querySelector(".lp-leg");
+    if (!leg) return;
+    if (leg.querySelector(".mtg-sched-btn")) return;
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "mtg-sched-btn";
+    b.textContent = "Prerelease schedule";
+    b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleSchedule(); });
+    leg.appendChild(b);
+    scheduleBtn = b;
+  }
+  function closeSchedule() {
+    if (panelEl) panelEl.hidden = true;
+  }
+  function toggleSchedule() {
+    if (!panelEl) buildSchedule();
+    panelEl.hidden = !panelEl.hidden;
+    if (!panelEl.hidden) renderSchedule();
+  }
+  function buildSchedule() {
+    panelEl = document.createElement("div");
+    panelEl.id = "mtg-schedule";
+    panelEl.className = "mtg-schedule";
+    panelEl.hidden = true;
+    panelEl.innerHTML = '<div class="mtg-sched-top"><strong>Prerelease schedule</strong>' +
+      '<button type="button" class="mtg-sched-x" aria-label="Close">✕</button></div>' +
+      '<div class="mtg-sched-filt"></div><div class="mtg-sched-list"></div>' +
+      '<div class="mtg-sched-foot">Tap a set to show only stores running that prerelease. Art from Wizards product pages; dates from Scryfall + locator.</div>';
+    document.body.appendChild(panelEl);
+    panelEl.querySelector(".mtg-sched-x").addEventListener("click", closeSchedule);
+  }
+  function setFilter(code) {
+    filterSet = code || "";
+    if (pMap) redraw(pMap);
+    if (!L.isOn("mtg") && filterSet) L && null;
+    renderSchedule();
+    syncFilterChip();
+  }
+  function syncFilterChip() {
+    var bar = document.getElementById("mtg-filter-bar");
+    if (!filterSet) {
+      if (bar) bar.hidden = true;
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "mtg-filter-bar";
+      bar.className = "mtg-filter-bar";
+      document.body.appendChild(bar);
+    }
+    var set = setByCode(filterSet);
+    bar.hidden = false;
+    bar.innerHTML = '<span>Showing: <b>' + K.esc(set ? set.name : filterSet) + "</b> prerelease</span>" +
+      '<button type="button" class="mtg-clear">Clear</button>';
+    bar.querySelector(".mtg-clear").onclick = () => { setFilter(""); };
+  }
+  function renderSchedule() {
+    if (!panelEl || !setCat) return;
+    var list = panelEl.querySelector(".mtg-sched-list");
+    var filt = panelEl.querySelector(".mtg-sched-filt");
+    filt.innerHTML = filterSet
+      ? '<button type="button" class="mtg-clear">Clear filter</button>'
+      : '<span class="mtg-muted">Upcoming &amp; recent sets</span>';
+    var clear = filt.querySelector(".mtg-clear");
+    if (clear) clear.onclick = () => { setFilter(""); };
+    var today = new Date().toISOString().slice(0, 10);
+    list.textContent = "";
+    (setCat.sets || []).forEach((set) => {
+      /* Skip commander products with zero store events; keep those with events. */
+      if (set.type === "commander" && !(set.stores > 0)) return;
+      var row = document.createElement("button");
+      row.type = "button";
+      row.className = "mtg-sched-row" + (filterSet === set.code ? " is-on" : "");
+      var stores = set.stores || 0;
+      var soon = set.released >= today;
+      row.innerHTML = thumbHtml(set, true) +
+        '<span class="mtg-sched-main"><span class="mtg-sched-name">' + K.esc(set.name) +
+        (soon ? "" : ' <span class="mtg-chip mtg-chip-past">released</span>') + "</span>" +
+        '<span class="mtg-sched-meta">Prerelease ' + K.esc(weekendLabel(set) || "—") + "</span>" +
+        '<span class="mtg-sched-meta">Release ' + K.esc(fmtDate(set.released)) +
+        (stores ? " · " + stores + " CA events in snapshot" : "") + "</span></span>";
+      row.addEventListener("click", () => {
+        if (!L.isOn("mtg")) {
+          /* turn the layer on so the filter is visible */
+          var input = document.querySelector('.lp-input[data-id="mtg"]');
+          if (input && !input.checked) input.click();
+        }
+        setFilter(filterSet === set.code ? "" : set.code);
+        if (set.stores > 0 && pMap) {
+          /* nudge toward Canada so filtered dots are in view */
+          try { pMap.easeTo({ center: [-96, 56], zoom: 3.2, duration: 600 }); } catch (e) {}
+        }
+      });
+      list.appendChild(row);
+      if (set.wizards) {
+        var a = document.createElement("a");
+        a.className = "mtg-sched-wiz";
+        a.href = set.wizards;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "Wizards page ↗";
+        a.addEventListener("click", (ev) => { ev.stopPropagation(); });
+        /* place under the row */
+        var wrap = document.createElement("div");
+        wrap.className = "mtg-sched-wrap" + (filterSet === set.code ? " is-on" : "");
+        list.removeChild(row);
+        wrap.appendChild(row);
+        wrap.appendChild(a);
+        list.appendChild(wrap);
+      }
+    });
   }
   L.add({
     id: "mtg", name: "Magic: The Gathering stores", icon: "🃏", group: "Fun & Games",
-    tip: "Wizards Play Network stores in Canada (public Store & Event Locator). Prerelease and Friday Night Magic filters. Snapshot, not live.",
+    tip: "Wizards Play Network stores in Canada. Prerelease schedule + FNM filters. Snapshot from the public locator.",
     taps: [DOT, STAR], dflt: false, kids: KIDS,
     legend: K.legKeys([
       ["#c9a227", "dot", "Prerelease upcoming"],
@@ -136,27 +344,39 @@
     note: (map, on) => {
       if (!on) return "";
       if (!meta) return "loading…";
-      var n = (meta.counts && meta.counts.stores) || 0;
-      return n + " CA stores";
+      if (filterSet) {
+        var s = setByCode(filterSet);
+        return (s ? s.name : filterSet) + " filter";
+      }
+      return ((meta.counts && meta.counts.stores) || 0) + " CA stores";
     },
     attach: (map, on) => {
       pMap = map;
       map.on("idle", () => { if (L.isOn("mtg") && !map.getLayer(DOT)) apply(map, true); });
       (window.SunnyHoverName = window.SunnyHoverName || {})[DOT] = (g) => {
-        var n = g.properties && g.properties.name;
-        return Promise.resolve([n || "Magic store", "Magic: The Gathering store"]);
+        return Promise.resolve([g.properties && g.properties.name || "Magic store", "Magic: The Gathering store"]);
       };
-      (window.SunnyHoverName = window.SunnyHoverName || {})[STAR] = (window.SunnyHoverName)[DOT];
+      window.SunnyHoverName[STAR] = window.SunnyHoverName[DOT];
       var open = (e) => {
         var p = e.features[0].properties;
-        var pp = K.show(map, e.features[0].geometry.coordinates, "", ["Magic store"], ["Wizards Store & Event Locator", "https://locator.wizards.com/"]);
-        if (pp && pp.setHTML) pp.setHTML(cardHtml(p));
+        var ll = e.features[0].geometry.coordinates;
+        loadAll().then(() => {
+          var pp = K.show(map, ll, "", ["Magic store"], ["Wizards Store & Event Locator", "https://locator.wizards.com/"]);
+          if (pp && pp.setHTML) {
+            pp.setHTML(cardHtml(p));
+            setTimeout(() => {
+              bindCardToggles(document.getElementById("ip-peek") || document.querySelector(".mtg-card"));
+            }, 0);
+          }
+        });
       };
       map.on("click", DOT, open);
       map.on("click", STAR, open);
-      /* register for tap-snap hit targets */
-      if (window.SunnyTapSnap) { /* layers registered via map.on click above through patched on() */ }
       apply(map, on);
+      /* remount schedule button when the blade rebuilds */
+      var mo = new MutationObserver(() => { if (L.isOn("mtg")) mountScheduleBtn(); });
+      if (document.body) mo.observe(document.body, { childList: true, subtree: true });
     }
   });
+  window.SunnyMtg = { setFilter: setFilter, openSchedule: toggleSchedule };
 })();
