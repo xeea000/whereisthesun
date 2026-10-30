@@ -223,7 +223,74 @@
   }
   var kids = { isOn: kidsIsOn, subset: kidsSubset, active: kidsActive, anyOn: kidsAnyOn,
     matchAny: kidsMatchAny, activeCodes: kidsActiveCodes, inFilter: kidsInFilter, layerOn: kidsLayerOn };
-  window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids,
+  /* opt200: global Marker size (0.5x–3x, default 1x). Bake into interpolate stops —
+   * MapLibre 4.7.1 drops layers with ["*", k, interpolate(zoom)]. Per-layer scales
+   * (e.g. beach icon size) pass as extra and multiply on top. Not for raster/heatmap/line. */
+  var MS_KEY = "sunny-marker-scale", MS_MIN = 0.5, MS_MAX = 3, MS_DEF = 1;
+  var msVal = MS_DEF, msListen = [], msTrack = [];
+  try {
+    var _ms = parseFloat(localStorage.getItem(MS_KEY));
+    if (isFinite(_ms) && _ms >= MS_MIN && _ms <= MS_MAX) msVal = Math.round(_ms * 100) / 100;
+  } catch (e) {}
+  function msMul(n, k) { return Math.round(n * k * 1000) / 1000; }
+  function msScaleInterp(expr, k) {
+    var out = expr.slice(0, 3);
+    for (var i = 3; i < expr.length; i += 2) {
+      out.push(expr[i]);
+      out.push(msScaleVal(expr[i + 1], k));
+    }
+    return out;
+  }
+  function msScaleVal(v, k) {
+    if (typeof v === "number") return msMul(v, k);
+    if (!Array.isArray(v)) return v;
+    if (v[0] === "interpolate" || v[0] === "interpolate-hcl" || v[0] === "interpolate-lab") return msScaleInterp(v, k);
+    if (k === 1) return v;
+    return ["*", k, v];
+  }
+  function msSize(expr, extra) {
+    var k = msVal * (extra == null || extra === "" ? 1 : Number(extra));
+    if (!isFinite(k) || k <= 0) k = 1;
+    if (typeof expr === "number") return msMul(expr, k);
+    if (!Array.isArray(expr)) return expr;
+    if (expr[0] === "interpolate" || expr[0] === "interpolate-hcl" || expr[0] === "interpolate-lab") return msScaleInterp(expr, k);
+    return msScaleVal(expr, k);
+  }
+  function msGet() { return msVal; }
+  function msApplyOne(t) {
+    if (!t.map || !t.map.getLayer || !t.map.getLayer(t.id)) return;
+    var ex = typeof t.extra === "function" ? t.extra() : t.extra;
+    var v = msSize(t.base, ex);
+    try {
+      if (t.kind === "layout") t.map.setLayoutProperty(t.id, t.prop, v);
+      else t.map.setPaintProperty(t.id, t.prop, v);
+    } catch (e) {}
+  }
+  function msRefresh() { msTrack.forEach(msApplyOne); }
+  function msSet(n) {
+    var x = Number(n);
+    if (!isFinite(x)) return msVal;
+    msVal = Math.max(MS_MIN, Math.min(MS_MAX, Math.round(x * 100) / 100));
+    try { localStorage.setItem(MS_KEY, String(msVal)); } catch (e) {}
+    msRefresh();
+    msListen.slice().forEach((fn) => { try { fn(msVal); } catch (e) {} });
+    return msVal;
+  }
+  function msOnChange(fn) {
+    if (typeof fn === "function") msListen.push(fn);
+    return fn;
+  }
+  /* Register a circle-radius / icon-size / text-size so live slider updates re-bake it. Returns scaled expr for addLayer. */
+  function msBind(map, layerId, prop, base, opts) {
+    opts = opts || {};
+    var kind = opts.layout ? "layout" : "paint";
+    msTrack = msTrack.filter((t) => { return !(t.map === map && t.id === layerId && t.prop === prop); });
+    msTrack.push({ map: map, id: layerId, prop: prop, base: base, kind: kind, extra: opts.extra });
+    return msSize(base, typeof opts.extra === "function" ? opts.extra() : opts.extra);
+  }
+  var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
+    get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
+  window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc };
 })();

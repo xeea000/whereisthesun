@@ -28,7 +28,8 @@
       src(map);
       if (!map.getLayer("volc-dot")) map.addLayer({ id: "volc-dot", type: "circle", source: "volcanoes", paint: {
         "circle-color": ["match", ["get", "c"], 0, CLS[0][0], 1, CLS[1][0], 2, CLS[2][0], CLS[3][0]],
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, ["+", 2, ["*", 0.5, ["max", 0, ["get", "vei"]]]], 8, ["+", 4, ["*", 1.2, ["max", 0, ["get", "vei"]]]]],
+        "circle-radius": K.markerScale.bind(map, "volc-dot", "circle-radius",
+          ["interpolate", ["linear"], ["zoom"], 1, ["+", 2, ["*", 0.5, ["max", 0, ["get", "vei"]]]], 8, ["+", 4, ["*", 1.2, ["max", 0, ["get", "vei"]]]]]),
         "circle-stroke-color": "#2b1200", "circle-stroke-width": 1 } });
       K.vis(map, ["volc-dot"], L.isOn("volcanoes"));
     }).catch(() => {});
@@ -39,7 +40,8 @@
     data().then(() => {
       src(map);
       if (!map.getLayer("volc-due")) map.addLayer({ id: "volc-due", type: "circle", source: "volcanoes", filter: [">=", ["get", "due"], 1],
-        paint: { "circle-color": "rgba(0,0,0,0)", "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 6, 8, 13],
+        paint: { "circle-color": "rgba(0,0,0,0)", "circle-radius": K.markerScale.bind(map, "volc-due", "circle-radius",
+          ["interpolate", ["linear"], ["zoom"], 1, 6, 8, 13]),
           "circle-stroke-width": 2, "circle-stroke-color": ["step", ["get", "due"], "#ffe066", 2, "#ff9f1c", 5, "#e63946"] } },
         map.getLayer("volc-dot") ? "volc-dot" : undefined);
       K.vis(map, ["volc-due"], L.isOn("volcdue"));

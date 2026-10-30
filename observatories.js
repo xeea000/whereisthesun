@@ -45,12 +45,18 @@
     if (!map.getLayer("obs-cluster")) {
       map.addLayer({ id: "obs-cluster", type: "circle", source: SRC, filter: ["has", "point_count"],
         paint: { "circle-color": "rgba(123,92,255,0.55)", "circle-stroke-color": "#fff", "circle-stroke-width": 1.2,
-          "circle-radius": ["interpolate", ["linear"], ["get", "point_count"], 2, 7, 50, 13, 500, 20] } }, before);
+          "circle-radius": (window.SunnyKit && window.SunnyKit.markerScale)
+            ? window.SunnyKit.markerScale.bind(map, "obs-cluster", "circle-radius",
+              ["interpolate", ["linear"], ["get", "point_count"], 2, 7, 50, 13, 500, 20])
+            : ["interpolate", ["linear"], ["get", "point_count"], 2, 7, 50, 13, 500, 20] } }, before);
     }
     if (!map.getLayer("obs-point")) {
       map.addLayer({ id: "obs-point", type: "circle", source: SRC, filter: pointFilter(),
         paint: { "circle-color": ["match", ["get", "cat"]].concat(CLS.map((c) => { return [c[0], c[2]]; }).flat(), ["#7b5cff"]),
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 3, 8, 6], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } }, before);
+          "circle-radius": (window.SunnyKit && window.SunnyKit.markerScale)
+            ? window.SunnyKit.markerScale.bind(map, "obs-point", "circle-radius",
+              ["interpolate", ["linear"], ["zoom"], 1, 3, 8, 6])
+            : ["interpolate", ["linear"], ["zoom"], 1, 3, 8, 6], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } }, before);
     }
   }
   /* four classes, each with its own switch under the Observatories row (sunny-L-observatories-<class>) */

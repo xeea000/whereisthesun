@@ -30,9 +30,12 @@
       if (!map.getLayer("torn-hit")) map.addLayer({ id: "torn-hit", type: "line", source: "torn", filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": "#000", "line-width": 16, "line-opacity": 0 } }, K.before(map)); /* wide see-through strip so a thin track is easy to tap */
       if (!map.getLayer("torn-dot")) map.addLayer({ id: "torn-dot", type: "circle", source: "torn", filter: ["==", ["geometry-type"], "Point"],
-        paint: { "circle-color": color, "circle-radius": 2.5, "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
+        paint: { "circle-color": color, "circle-radius": K.markerScale.bind(map, "torn-dot", "circle-radius", 2.5),
+          "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
       if (!map.getLayer("torn-star")) map.addLayer({ id: "torn-star", type: "symbol", source: "torn", filter: ["==", ["get", "m"], 5],
-        layout: { "text-field": "★", "text-font": ["Noto Sans Regular"], "text-size": 14, "text-allow-overlap": true, "symbol-placement": "point" },
+        layout: { "text-field": "★", "text-font": ["Noto Sans Regular"],
+          "text-size": K.markerScale.bind(map, "torn-star", "text-size", 14, { layout: true }),
+          "text-allow-overlap": true, "symbol-placement": "point" },
         paint: { "text-color": "#ffd34d", "text-halo-color": "#000", "text-halo-width": 1 } });
       K.vis(map, IDS, L.isOn("tornadoes"));
     }).catch(() => {});

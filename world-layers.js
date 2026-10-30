@@ -53,8 +53,9 @@
         if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: K.fc(P.toFeatures(d)), attribution: o.attrib });
         o.layers.forEach((l) => {
           if (map.getLayer(l.id)) return;
+          var radBase = o.radius || ["interpolate", ["linear"], ["zoom"], 1, l.r || 2.5, 8, (l.r || 2.5) * 2.2];
           var spec = { id: l.id, type: "circle", source: sid, filter: l.filter || ["in", ["get", "k"], ["literal", l.codes]], paint: {
-            "circle-radius": o.radius || ["interpolate", ["linear"], ["zoom"], 1, l.r || 2.5, 8, (l.r || 2.5) * 2.2],
+            "circle-radius": K.markerScale.bind(map, l.id, "circle-radius", radBase),
             "circle-color": l.color, "circle-stroke-color": "#101418", "circle-stroke-width": 0.8 } };
           if (K.gz(l.minzoom || 0)) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
@@ -232,7 +233,8 @@
     if (!map.getSource("w-towers")) {
       map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR, ISED" });
       map.addLayer({ id: "tower-dot", type: "circle", source: "w-towers", filter: tFilter(), paint: {
-        "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, ["+", 1, ["/", TH, 170]], 6, ["+", 1.6, ["/", TH, 90]], 12, ["+", 3, ["/", TH, 40]]],
+        "circle-radius": K.markerScale.bind(map, "tower-dot", "circle-radius",
+          ["interpolate", ["linear"], ["zoom"], 1, ["+", 1, ["/", TH, 170]], 6, ["+", 1.6, ["/", TH, 90]], 12, ["+", 3, ["/", TH, 40]]]),
         "circle-color": tColor, "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
       map.on("moveend", tView);
     }
@@ -416,7 +418,8 @@
       if (!map.getLayer("osm-pipe")) map.addLayer({ id: "osm-pipe", type: "line", source: "w-osm-sea", filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": "#d98c2b", "line-width": 1.6, "line-dasharray": [3, 1.5] } }, K.before(map));
       if (!map.getLayer("osm-plat")) map.addLayer({ id: "osm-plat", type: "circle", source: "w-osm-sea", filter: ["==", ["geometry-type"], "Point"],
-        paint: { "circle-radius": 4, "circle-color": "#ffcc33", "circle-stroke-color": "#3a2a00", "circle-stroke-width": 1 } }, K.before(map));
+        paint: { "circle-radius": K.markerScale.bind(map, "osm-plat", "circle-radius", 4),
+          "circle-color": "#ffcc33", "circle-stroke-color": "#3a2a00", "circle-stroke-width": 1 } }, K.before(map));
     },
     title: (p) => { return p.ty === "pipeline" ? "Undersea pipeline" : "Offshore platform"; },
     lines: (p) => { return [p.ty === "pipeline" ? "Underwater pipeline" + (p.sub ? ", carries " + K.esc(p.sub) : "") : "Offshore platform"].concat(common(p)); } });

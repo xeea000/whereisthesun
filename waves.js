@@ -170,7 +170,7 @@
     });
   };
   var color = ["interpolate", ["linear"], ["get", "h"]].concat(...RAMP.map((r) => { return [r[0], r[1]]; }));
-  var size = ["interpolate", ["linear"], ["zoom"],
+  var sizeBase = ["interpolate", ["linear"], ["zoom"],
     2, ["interpolate", ["linear"], ["get", "h"], 0, 11, 1, 14, 2, 17, 4, 20, 6, 22],
     7, ["interpolate", ["linear"], ["get", "h"], 0, 14, 1, 18, 2, 22, 4, 26, 6, 30],
     11, ["interpolate", ["linear"], ["get", "h"], 0, 16, 1, 20, 2, 26, 4, 32, 6, 36]];
@@ -185,9 +185,12 @@
         map.addSource("waves", { type: "geojson", data: K.fc([]),
           attribution: 'Waves: <a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener">Open-Meteo Marine</a>' });
         map.addLayer({ id: "wave-dot", type: "circle", source: "waves", paint: { "circle-color": "#000", "circle-opacity": 0,
-          "circle-radius": ["interpolate", ["linear"], ["get", "h"], 0, 10, 6, 18] } }, K.before(map));
+          "circle-radius": K.markerScale.bind(map, "wave-dot", "circle-radius",
+            ["interpolate", ["linear"], ["get", "h"], 0, 10, 6, 18]) } }, K.before(map));
         map.addLayer({ id: "wave-arrow", type: "symbol", source: "waves",
-          layout: { "text-field": "▲", "text-font": ["Noto Sans Regular"], "text-size": size, "text-rotate": ["get", "r"],
+          layout: { "text-field": "▲", "text-font": ["Noto Sans Regular"],
+            "text-size": K.markerScale.bind(map, "wave-arrow", "text-size", sizeBase, { layout: true }),
+            "text-rotate": ["get", "r"],
             "text-allow-overlap": true, "text-ignore-placement": true, "text-rotation-alignment": "map" },
           paint: { "text-color": color, "text-halo-color": "#0b1a2a", "text-halo-width": 1.2 } }, K.before(map));
       } catch (e) { setTimeout(() => { if (L.isOn("waves")) apply(map, true); }, 2000); return; }

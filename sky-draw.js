@@ -179,7 +179,8 @@
             "line-opacity": ["match", ["get", "k"], "sat-past", 0.4, 0.9],
             "line-dasharray": ["match", ["get", "k"], "pass-link", ["literal", [2, 2]], "moon-rise", ["literal", [3, 2]], "moon-set", ["literal", [1, 2]], ["literal", [1, 0]]] } });
         map.addLayer({ id: "sky-moon", type: "circle", source: "sky-draw", filter: ["==", ["get", "k"], "moon"],
-          paint: { "circle-radius": 9, "circle-color": "#f4f1de", "circle-stroke-color": "#333", "circle-stroke-width": 1.5 } });
+          paint: { "circle-radius": K.markerScale.bind(map, "sky-moon", "circle-radius", 9),
+            "circle-color": "#f4f1de", "circle-stroke-color": "#333", "circle-stroke-width": 1.5 } });
       } else {
         map.getSource("sky-draw").setData(K.fc(f));
       }

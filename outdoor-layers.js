@@ -32,7 +32,13 @@
     var shown = "";
     function ensure(map) {
       if (!map.getSource(src)) map.addSource(src, { type: "geojson", data: K.fc(), attribution: o.attr });
-      if (!map.getLayer(ids[0])) map.addLayer({ id: ids[0], type: "circle", source: src, minzoom: K.gz(o.minZoom), paint: o.paint }, K.before(map));
+      if (!map.getLayer(ids[0])) {
+        var paint = Object.assign({}, o.paint);
+        if (paint["circle-radius"] != null) {
+          paint["circle-radius"] = K.markerScale.bind(map, ids[0], "circle-radius", paint["circle-radius"]);
+        }
+        map.addLayer({ id: ids[0], type: "circle", source: src, minzoom: K.gz(o.minZoom), paint: paint }, K.before(map));
+      }
     }
     function draw(map, want) {
       var have = want.filter((id) => { return mem[id]; });

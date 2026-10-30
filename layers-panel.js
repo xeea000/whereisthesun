@@ -219,6 +219,24 @@
     acts.appendChild(foldBtn);
     acts.appendChild(clr);
     head.appendChild(acts);
+    /* opt200: Marker size sticky with the title row (stays pinned while the list scrolls) */
+    var msRow = el("div", "lp-msize");
+    msRow.innerHTML = '<span class="lp-msize-h">Marker size</span>' +
+      '<input type="range" min="0.5" max="3" step="0.25" aria-label="Marker size">' +
+      '<span class="lp-msize-v">1×</span>';
+    var msInp = msRow.querySelector("input");
+    var msLab = msRow.querySelector(".lp-msize-v");
+    var syncMs = (v) => {
+      msInp.value = String(v);
+      msLab.textContent = v + "×";
+    };
+    var MS = window.SunnyKit && window.SunnyKit.markerScale;
+    if (MS) {
+      syncMs(MS.get());
+      msInp.addEventListener("input", () => { syncMs(MS.set(msInp.value)); });
+      MS.onChange(syncMs);
+    }
+    head.appendChild(msRow);
     panel.appendChild(head);
     panel.appendChild(el("div", "lp-body"));
     var tab = el("button", "lp-tab", "›");

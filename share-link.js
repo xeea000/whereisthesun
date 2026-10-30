@@ -109,6 +109,8 @@
     if (window.SunnyBeachIcons && window.SunnyBeachIcons.getScale) {
       var bi = window.SunnyBeachIcons.getScale();
       if (bi && bi !== 1) st.bi = bi;
+      var ms = window.SunnyKit && window.SunnyKit.markerScale && window.SunnyKit.markerScale.get();
+      if (ms && ms !== 1) st.ms = ms;
     }
     var sel = captureSelection();
     if (sel) st.s = sel;
@@ -220,6 +222,9 @@
     }
     if (st.bi != null && window.SunnyBeachIcons && window.SunnyBeachIcons.setScale) {
       try { window.SunnyBeachIcons.setScale(st.bi); } catch (e) {}
+    }
+    if (st.ms != null && window.SunnyKit && window.SunnyKit.markerScale) {
+      try { window.SunnyKit.markerScale.set(st.ms); } catch (e) {}
     }
   }
   function matchFeat(f, key) {

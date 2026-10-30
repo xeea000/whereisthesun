@@ -29,7 +29,9 @@
     if (!map.getLayer("famous-star")) {
       img();
       map.addLayer({ id: "famous-star", type: "symbol", source: "famous", layout: { "icon-image": "famous-star", "icon-offset": [0, 0],
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.7, 8, 1.1], "icon-allow-overlap": true, "icon-ignore-placement": true } });
+        "icon-size": K.markerScale.bind(map, "famous-star", "icon-size",
+          ["interpolate", ["linear"], ["zoom"], 1, 0.7, 8, 1.1], { layout: true }),
+          "icon-allow-overlap": true, "icon-ignore-placement": true } });
     }
     map.setFilter("famous-star", ["in", ["get", "l"], ["literal", ids]]);
     map.setLayoutProperty("famous-star", "visibility", "visible");

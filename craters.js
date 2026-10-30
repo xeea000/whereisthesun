@@ -70,7 +70,9 @@
     }
     if (!map.getLayer("craters-dot")) {
       map.addLayer({ id: "craters-dot", type: "circle", source: SRC, filter: ["==", ["geometry-type"], "Point"],
-        paint: { "circle-radius": 3, "circle-color": "#ff9a3c", "circle-stroke-color": "rgba(40,20,0,0.6)", "circle-stroke-width": 0.8 } }, before);
+        paint: { "circle-radius": (window.SunnyKit && window.SunnyKit.markerScale)
+          ? window.SunnyKit.markerScale.bind(map, "craters-dot", "circle-radius", 3) : 3,
+          "circle-color": "#ff9a3c", "circle-stroke-color": "rgba(40,20,0,0.6)", "circle-stroke-width": 0.8 } }, before);
     }
   }
   /* keep the crater layers directly under the beach markers, above any weather layer */

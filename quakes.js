@@ -7,10 +7,11 @@
   var L = window.SunnyLayers, K = window.SunnyKit;
   var USGS = ["USGS ComCat (public domain)", "https://earthquake.usgs.gov/earthquakes/search/"];
   var LIVE = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson";
-  var rad = (lo) => {
+  var radBase = (lo) => {
     return ["interpolate", ["linear"], ["zoom"], 1, ["min", 16, ["*", 2.2, ["^", 1.9, ["-", ["get", "m"], lo]]]],
       7, ["min", 34, ["*", 5, ["^", 1.9, ["-", ["get", "m"], lo]]]]];
   };
+  var rad = (map, id, lo) => { return K.markerScale.bind(map, id, "circle-radius", radBase(lo)); };
   var depthColor = ["step", ["get", "d"], "#ff5a36", 70, "#ffc93c", 300, "#5aa9ff"];
   var day = (n) => { var s = String(n); return s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8); };
   var histApply = (map, on) => {
@@ -24,7 +25,7 @@
         f.sort((a, b) => { return a.properties.m - b.properties.m; });
         map.addSource("quakes", { type: "geojson", data: K.fc(f), attribution: 'Earthquakes: <a href="' + USGS[1] + '" target="_blank" rel="noopener">USGS</a>' });
       }
-      if (!map.getLayer("quake-old")) map.addLayer({ id: "quake-old", type: "circle", source: "quakes", paint: { "circle-radius": rad(6.5),
+      if (!map.getLayer("quake-old")) map.addLayer({ id: "quake-old", type: "circle", source: "quakes", paint: { "circle-radius": rad(map, "quake-old", 6.5),
         "circle-color": depthColor, "circle-opacity": 0.45, "circle-stroke-color": "#3a1a10", "circle-stroke-width": 0.6 } }, K.before(map));
       K.vis(map, ["quake-old"], L.isOn("quakes"));
     }).catch(() => {});
@@ -62,7 +63,7 @@
       g.features.forEach((f) => { var p = f.properties; p.m = p.mag; p.d = f.geometry.coordinates[2]; p.age = (Date.now() - p.time) / 3600000; p.t = p.time; });
       if (map.getSource("quakes-live")) { map.getSource("quakes-live").setData(g); return; }
       map.addSource("quakes-live", { type: "geojson", data: g });
-      map.addLayer({ id: "quake-new", type: "circle", source: "quakes-live", paint: { "circle-radius": rad(4.5),
+      map.addLayer({ id: "quake-new", type: "circle", source: "quakes-live", paint: { "circle-radius": rad(map, "quake-new", 4.5),
         "circle-color": ["step", ["get", "age"], "#ff1744", 24, "#ff9100"], "circle-opacity": 0.75, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } });
       K.vis(map, ["quake-new"], L.isOn("quakeslive"));
     }).catch(() => { liveAt = 0; });

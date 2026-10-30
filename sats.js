@@ -153,11 +153,14 @@
           "line-width": ["case", ["==", ["get", "f"], 1], 2, 1.2], "line-opacity": ["case", ["==", ["get", "f"], 1], 0.9, 0.3] } });
         starImg();
         map.addLayer({ id: "sat-dot", type: "circle", source: "sat-pts", filter: ["!=", ["get", "star"], 1], paint: { "circle-color": ["case", ["==", ["get", "m"], 99], "#7d8596", MCOL],
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, ["case", ["==", ["get", "big"], 1], 1.2, 4], 6, ["case", ["==", ["get", "big"], 1], 2.5, 6]],
+          "circle-radius": K.markerScale.bind(map, "sat-dot", "circle-radius",
+            ["interpolate", ["linear"], ["zoom"], 1, ["case", ["==", ["get", "big"], 1], 1.2, 4], 6, ["case", ["==", ["get", "big"], 1], 2.5, 6]]),
           "circle-opacity": ["case", ["==", ["get", "lit"], 0], 0.3, ["==", ["get", "big"], 1], 0.55, 1],
           "circle-stroke-color": "#0b1020", "circle-stroke-width": ["case", ["==", ["get", "big"], 1], 0, 1.5] } });
         map.addLayer({ id: "sat-star", type: "symbol", source: "sat-pts", filter: ["==", ["get", "star"], 1],
-          layout: { "icon-image": "sat-star", "icon-size": ["get", "sz"], "icon-allow-overlap": true, "icon-ignore-placement": true },
+          layout: { "icon-image": "sat-star",
+            "icon-size": K.markerScale.bind(map, "sat-star", "icon-size", ["get", "sz"], { layout: true }),
+            "icon-allow-overlap": true, "icon-ignore-placement": true },
           paint: { "icon-color": ["case", ["==", ["get", "m"], 99], "#ffd34d", MCOL], "icon-opacity": ["case", ["==", ["get", "lit"], 0], 0.45, 1] } });
       } else {
         map.getSource("sat-pts").setData(K.fc(pts));

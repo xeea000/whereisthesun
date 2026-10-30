@@ -136,3 +136,10 @@
   .mtg-filter-bar{top:max(48px,calc(env(safe-area-inset-top) + 40px));bottom:auto;font-size:12px}
 }
 .lp-bscale{display:flex;align-items:center;gap:8px;padding:2px 12px 8px 40px;font:600 12px system-ui,sans-serif;color:#c6c2b6}.lp-bscale-h{flex:0 0 auto}.lp-bscale input[type=range]{flex:1;min-width:0;accent-color:#f0c14b;height:18px}.lp-bscale-v{flex:0 0 2.4em;text-align:right;color:#ffd34d;font-variant-numeric:tabular-nums}.set-row .lp-bscale{padding:4px 0;width:100%}
+
+/* opt200: global Marker size, sticky with .lp-title */
+.lp-title{flex-wrap:wrap;align-items:flex-start}
+.lp-msize{display:flex;align-items:center;gap:8px;width:100%;padding:4px 2px 2px;font:600 12px system-ui,sans-serif;color:#c6c2b6}
+.lp-msize-h{flex:0 0 auto}
+.lp-msize input[type=range]{flex:1;min-width:0;accent-color:#7eb6ff;height:18px}
+.lp-msize-v{flex:0 0 2.6em;text-align:right;color:#9ec5ff;font-variant-numeric:tabular-nums}

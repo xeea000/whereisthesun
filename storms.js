@@ -66,9 +66,11 @@
         });
         if (map.getSource("tc-now")) { map.getSource("tc-now").setData(K.fc(f)); return; }
         map.addSource("tc-now", { type: "geojson", data: K.fc(f), attribution: 'Active storms: <a href="https://www.gdacs.org/" target="_blank" rel="noopener">GDACS</a>' });
-        map.addLayer({ id: "storm-now", type: "circle", source: "tc-now", paint: { "circle-color": color, "circle-radius": ["+", 7, ["*", 2, ["get", "c"]]],
+        map.addLayer({ id: "storm-now", type: "circle", source: "tc-now", paint: { "circle-color": color,
+          "circle-radius": K.markerScale.bind(map, "storm-now", "circle-radius", ["+", 7, ["*", 2, ["get", "c"]]]),
           "circle-stroke-color": "#fff", "circle-stroke-width": 2, "circle-opacity": 0.85 } });
-        map.addLayer({ id: "storm-now-label", type: "symbol", source: "tc-now", layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.6] },
+        map.addLayer({ id: "storm-now-label", type: "symbol", source: "tc-now", layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
+          "text-size": K.markerScale.bind(map, "storm-now-label", "text-size", 11, { layout: true }), "text-offset": [0, 1.6] },
           paint: { "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.2 } });
         K.vis(map, ["storm-now", "storm-now-label"], L.isOn("stormsnow"));
       }).catch(() => { liveAt = 0; });

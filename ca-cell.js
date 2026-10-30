@@ -49,7 +49,8 @@
     if (map.getSource("ca-cell")) return;
     map.addSource("ca-cell", { type: "geojson", data: K.fc([]), attribution: "Canada cell sites: ISED Canada (OGL-Canada)" });
     map.addLayer({ id: "ca-cell-dot", type: "circle", source: "ca-cell", minzoom: 8, paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2.2, 12, 4.5, 15, 7], "circle-color": color,
+      "circle-radius": K.markerScale.bind(map, "ca-cell-dot", "circle-radius",
+        ["interpolate", ["linear"], ["zoom"], 8, 2.2, 12, 4.5, 15, 7]), "circle-color": color,
       "circle-stroke-color": ["case", [">", ["get", "n"], 1], "#ffffff", "#101418"], "circle-stroke-width": ["case", [">", ["get", "n"], 1], 1.4, 0.6] } }, K.before(map));
   };
   var title = (p) => { return names(p.b).filter((x) => x !== "Other").concat(p.o ? [p.o] : []).join(", ") || "Cell site"; };

@@ -96,7 +96,8 @@
       map.addLayer({
         id: DOT, type: "circle", source: SRC,
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 10, 6, 14, 8],
+          "circle-radius": K.markerScale.bind(map, DOT, "circle-radius",
+            ["interpolate", ["linear"], ["zoom"], 3, 2.5, 10, 6, 14, 8]),
           "circle-color": ["match", ["get", "busyRank"],
             0, "#3d9b6e",
             1, "#4a9bb8",
@@ -112,7 +113,8 @@
       map.addLayer({
         id: STAR, type: "symbol", source: SRC,
         filter: ["==", ["get", "legendary"], 1],
-        layout: { "text-field": "★", "text-size": 12, "text-offset": [0.7, -0.7], "text-allow-overlap": true },
+        layout: { "text-field": "★", "text-size": K.markerScale.bind(map, STAR, "text-size", 12, { layout: true }),
+          "text-offset": [0.7, -0.7], "text-allow-overlap": true },
         paint: { "text-color": "#ffd45a", "text-halo-color": "#101418", "text-halo-width": 1 }
       }, K.before(map));
     }

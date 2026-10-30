@@ -22,8 +22,9 @@
   // MapLibre 4.x rejects ["*", n, zoom-interp] for icon-size; bake scale into stops.
   var SIZE_STOPS = [3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8];
   var iconSizeExpr = () => {
+    var g = (window.SunnyKit && window.SunnyKit.markerScale) ? window.SunnyKit.markerScale.get() : 1;
     var e = ["interpolate", ["linear"], ["zoom"]];
-    for (var i = 0; i < SIZE_STOPS.length; i += 2) e.push(SIZE_STOPS[i], SIZE_STOPS[i + 1] * scale);
+    for (var i = 0; i < SIZE_STOPS.length; i += 2) e.push(SIZE_STOPS[i], SIZE_STOPS[i + 1] * scale * g);
     return e;
   };
   var wx = {};
@@ -232,6 +233,14 @@
     if (!m || !m.getLayer || !m.getLayer("beaches-sun")) return;
     try { m.setLayoutProperty("beaches-sun", "icon-size", iconSizeExpr()); } catch (e) {}
   };
+  var _msHooked = false;
+  var hookMarkerScale = () => {
+    if (_msHooked || !window.SunnyKit || !window.SunnyKit.markerScale) return;
+    _msHooked = true;
+    window.SunnyKit.markerScale.onChange(applyScale);
+  };
+  setTimeout(hookMarkerScale, 0);
+  setTimeout(hookMarkerScale, 800);
   var setScale = (v) => {
     var n = Number(v);
     if (!isFinite(n)) return scale;

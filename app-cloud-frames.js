@@ -587,7 +587,10 @@ var labelsIdleHealArmed, labelsHealBusy;
         source: "beaches",
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 2.1, 3, 2.6, 6, 4.5, 9, 8, 12, 8],
+          "circle-radius": (window.SunnyKit && window.SunnyKit.markerScale)
+            ? window.SunnyKit.markerScale.bind(map, "beaches-dot", "circle-radius",
+              ["interpolate", ["linear"], ["zoom"], 1, 2.1, 3, 2.6, 6, 4.5, 9, 8, 12, 8])
+            : ["interpolate", ["linear"], ["zoom"], 1, 2.1, 3, 2.6, 6, 4.5, 9, 8, 12, 8],
           "circle-color": "#f0c14b",
           "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 1, 0.4, 6, 1.2, 10, 2],
           "circle-stroke-color": "#fff",
