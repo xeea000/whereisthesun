@@ -11,7 +11,7 @@ var overlaySeg, rangeSeg, sunnyApp_origin, homeCountry, beaches, waitingForTap, 
 var userMarker, destMarker, popup, hoverId, dwellTimer, playTimer, cloudTimes, cloudIndex;
 var hourlyCache, currentWxCache, CURRENT_WX_TTL_MS, wikiCache, cloudOpacity, _co, searchingSunny, overlayIds;
 var BASEMAP_KEY, OPACITY_KEY, LABELS_KEY, INTL_KEY, RADAR_KEY, OVERLAY_KEY, WIND_KEY, LOOP_KEY;
-var overlayNone = false; /* opt96: Clouds and Radar both off */
+var overlayNone = false; /* opt96/opt201: Clouds and Radar both off; fresh profile starts none */
 var SPEED_KEY, RANGE_KEY, LOOP_START_KEY, _sunnySavedLoopStartFrac, overlayMode, playLoop, playSpeed, cloudOpacitySavedForRadar;
 var OVERLAY_XFADE_MS, overlayXfadeRaf, overlayXfadeGen, overlayXfadeActive, VIEW_KEY, BASEMAP_IDS, basemapMode, MOVE_DEBOUNCE_MS;
 var viewSaveTimer, settingsRestored, savedBasemap, savedOp, opN, savedLabels, savedIntl, savedOverlay;
@@ -459,12 +459,20 @@ function sunnyStep01() {
   } catch (eIntl) {}
   try {
     savedOverlay = localStorage.getItem(OVERLAY_KEY);
+    savedRadar = localStorage.getItem(RADAR_KEY);
+    var savedNone = localStorage.getItem("sunny-overlay-none");
     if (savedOverlay === "clouds" || savedOverlay === "radar") {
       overlayMode = savedOverlay;
+    } else if (savedRadar === "1") {
+      overlayMode = "radar";
     } else {
-      savedRadar = localStorage.getItem(RADAR_KEY);
-      if (savedRadar === "1") overlayMode = "radar";
-      else overlayMode = "clouds";
+      overlayMode = "clouds"; /* remembered mode when user turns an overlay back on */
+    }
+    /* opt201: fresh profile (no overlay keys) starts with Clouds+Radar off; Layers panel / seg is the only switch */
+    if (savedNone === "1" || (savedNone == null && savedOverlay == null && savedRadar == null)) {
+      overlayNone = true;
+    } else if (savedNone === "0") {
+      overlayNone = false;
     }
   } catch (eRadar) {}
   windOn = false; /* opt53: default off — light boot */

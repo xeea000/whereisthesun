@@ -259,8 +259,8 @@
       } else applyOverlay();
     } catch (e3) {}
     try {
-      setOverlayMode(overlayMode, { force: true, silent: true, deferFetch: true });
-      if (localStorage.getItem("sunny-overlay-none") === "1") setOverlayNone(true, true);
+      if (overlayNone) setOverlayNone(true, true);
+      else setOverlayMode(overlayMode, { force: true, silent: true, deferFetch: true });
     } catch (eRadarR) {}
     try {
       var raw = localStorage.getItem(VIEW_KEY);
