@@ -1105,3 +1105,68 @@ label.ov.is-radar-muted {
   .update-banner-text { white-space: nowrap; }
   .update-banner-go { flex: 0 0 auto; padding: 4px 8px; }
 }
+/* opt202: GPS pre-permission explainer (geo-ask.js). Centre card; mobile-friendly. */
+.geo-ask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+  background: rgba(8, 10, 14, 0.55);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: auto;
+}
+.geo-ask.is-on { opacity: 1; }
+.geo-ask[hidden] { display: none; }
+.geo-ask-card {
+  width: min(420px, 100%);
+  padding: 16px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+}
+.geo-ask-title {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+.geo-ask-body {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.geo-ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.geo-ask-allow, .geo-ask-deny {
+  appearance: none;
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.geo-ask-allow {
+  border: 0;
+  background: #ffc94a;
+  color: #121417;
+}
+.geo-ask-deny {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+}
+@media (min-width: 641px) {
+  .geo-ask { align-items: center; padding: 24px; }
+}

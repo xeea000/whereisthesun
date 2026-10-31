@@ -337,16 +337,46 @@
     /* Always use fresh callback coords (the user can be far from home). */
     loadAround(lat, lon);
   }
+  function locateDeclineUi(boot) {
+    waitingForTap = true;
+    try {
+      document.body.classList.remove("loc-on");
+      if (btnLocate) {
+        btnLocate.classList.remove("is-on");
+        btnLocate.setAttribute("aria-pressed", "false");
+      }
+    } catch (eUi) {}
+    setStatus(boot
+      ? "Tap the map to set your spot."
+      : "Location off. Tap the map to drop a pin.");
+  }
   function locate(opts) {
     opts = opts || {};
     var boot = !!opts.boot;
     if (!navigator.geolocation) {
       waitingForTap = true;
+      try {
+        document.body.classList.remove("loc-on");
+        if (btnLocate) {
+          btnLocate.classList.remove("is-on");
+          btnLocate.setAttribute("aria-pressed", "false");
+        }
+      } catch (eUi) {}
       setStatus(boot
         ? "Tap the map to set your spot."
         : "Can't get your location. Tap the map to drop a pin.");
       return;
     }
+    var go = () => { locateRun(opts); };
+    if (!window.SunnyGeo || !SunnyGeo.ask) { go(); return; }
+    SunnyGeo.ask({ boot: boot }).then((choice) => {
+      if (choice === "allow") go();
+      else locateDeclineUi(boot);
+    }).catch(() => { locateDeclineUi(boot); });
+  }
+  function locateRun(opts) {
+    opts = opts || {};
+    var boot = !!opts.boot;
     clearLocateWatch();
     /* Quiet on boot — only show waiting HUD when user taps Locate. */
     if (!boot) setStatus("Waiting for device GPS…");
