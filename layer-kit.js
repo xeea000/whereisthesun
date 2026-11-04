@@ -542,24 +542,16 @@
     return { id: lyrId, src: srcId, ensure: ensure, syncZoom: syncZoom,
       vis: (map, on) => { vis(map, [lyrId], on); } };
   }
-  /* opt225: magnitude — shared relative/perceptual sizing for quantity-coded circle markers.
-   * Area-proportional (radius ∝ sqrt of normalised value). Optional log transform for multi-order
-   * data. Domain = min..max (or robust p2..p99.5) of filtered values when Relative sizing is on
-   * (else fixed opts.domain / full set). Recompute on filter/slider/toggle (debounced), not every pan.
-   * Bigger features sorted below smaller so small dots stay clickable. Legend shows real units. */
+  /* opt230: magnitude — true area-proportional circle sizing (area ∝ value from zero).
+   * radius = max(floor, rMax*sqrt(v/vmax)) so area∝value and mid-range ratio ≈ sqrt(v1/v2).
+   * Domain max = visible max (no percentile clamp). Floor keeps tiny dots clickable; never
+   * raises the top. Default linear (no log size) unless opts.transform==="log". */
   var REL_KEY = "sunny-rel-size";
   var relOn = true;
   try { if (localStorage.getItem(REL_KEY) === "0") relOn = false; } catch (eRel) {}
   var magRegs = {};
   var magListen = [];
   function magIsFinite(n) { return typeof n === "number" && isFinite(n); }
-  function magPct(sorted, p) {
-    if (!sorted.length) return 0;
-    var i = (sorted.length - 1) * p / 100;
-    var lo = Math.floor(i), hi = Math.ceil(i);
-    if (lo === hi) return sorted[lo];
-    return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
-  }
   function magXform(v, mode) {
     if (mode === "log") {
       if (!(v > 0)) return 0;
@@ -572,29 +564,25 @@
     if (mode === "log") return ["log10", ["+", ["max", 0, get], 1]];
     return get;
   }
+  function magPx(opts) {
+    var px0 = (opts.px && opts.px[0] != null) ? opts.px[0] : 4;
+    var px1 = (opts.px && opts.px[1] != null) ? opts.px[1] : 72;
+    if (!(px1 > px0)) px1 = px0 + 1;
+    return [px0, px1];
+  }
+  function magFloor(opts, px0) {
+    var f = opts.floor != null ? opts.floor : px0;
+    return f;
+  }
+  /* Domain: always from 0 → vmax (actual max). Relative → visible max; fixed → opts.domain[1] or all max. */
   function magDomainFrom(vals, opts) {
     var mode = opts.transform || "linear";
-    var rawSorted = vals.filter(magIsFinite).sort((a, b) => { return a - b; });
-    if (!rawSorted.length) return { domain: [0, 1], raw: [0, 1], hiRaw: 1 };
-    var xs = rawSorted.map((v) => { return magXform(v, mode); });
-    /* default min..max so huge outliers stretch the scale; opts.robust → p2..p99.5 + halo */
-    var robust = !!opts.robust;
-    var raw0, raw1, d0, d1;
-    if (robust) {
-      var pLo = opts.pLo != null ? opts.pLo : 2;
-      var pHi = opts.pHi != null ? opts.pHi : 99.5;
-      raw0 = magPct(rawSorted, pLo); raw1 = magPct(rawSorted, pHi);
-      d0 = magPct(xs, pLo); d1 = magPct(xs, pHi);
-    } else {
-      raw0 = rawSorted[0]; raw1 = rawSorted[rawSorted.length - 1];
-      d0 = xs[0]; d1 = xs[xs.length - 1];
-    }
-    if (!(raw1 > raw0)) raw1 = raw0 + 1;
-    if (!(d1 > d0)) d1 = d0 + 1;
-    /* halo threshold: p99.5 even when domain is min..max, so true spikes get a ring */
-    var hiRaw = robust ? raw1 : magPct(rawSorted, opts.pHi != null ? opts.pHi : 99.5);
-    if (!(hiRaw > raw0)) hiRaw = raw1;
-    return { domain: [d0, d1], raw: [raw0, raw1], hiRaw: hiRaw };
+    var rawSorted = vals.filter((v) => { return magIsFinite(v) && v > 0; }).sort((a, b) => { return a - b; });
+    if (!rawSorted.length) return { domain: [0, 1], raw: [0, 1], hiRaw: 1, vmax: 1 };
+    var vmaxRaw = rawSorted[rawSorted.length - 1];
+    var vmax = magXform(vmaxRaw, mode);
+    if (!(vmax > 0)) vmax = 1;
+    return { domain: [0, vmax], raw: [0, vmaxRaw], hiRaw: vmaxRaw, vmax: vmax };
   }
   function magFixedDomain(opts) {
     var mode = opts.transform || "linear";
@@ -603,24 +591,39 @@
       var all = typeof opts.allValues === "function" ? opts.allValues() : [];
       return magDomainFrom(all, opts);
     }
-    var d0 = magXform(raw[0], mode), d1 = magXform(raw[1], mode);
-    if (!(d1 > d0)) d1 = d0 + 1;
-    return { domain: [d0, d1], raw: [raw[0], raw[1]], hiRaw: raw[1] }; /* fixed: >domain max = outlier */
+    var vmaxRaw = raw[1];
+    var vmax = magXform(vmaxRaw, mode);
+    if (!(vmax > 0)) vmax = 1;
+    return { domain: [0, vmax], raw: [0, vmaxRaw], hiRaw: vmaxRaw, vmax: vmax };
+  }
+  /* Pure radius for value v given vmax (same math as paint). Used by legend + tests. */
+  function magRadiusAtValue(v, vmax, opts) {
+    opts = opts || {};
+    var mode = opts.transform || "linear";
+    var px = magPx(opts);
+    var px0 = px[0], px1 = px[1];
+    var floor = magFloor(opts, px0);
+    var vv = magXform(v, mode);
+    var vm = vmax > 0 ? vmax : 1;
+    var t = Math.max(0, Math.min(1, vv / vm));
+    if (t >= 1) return px1; /* top = rMax exactly */
+    var r = px1 * Math.sqrt(t); /* area ∝ value from zero */
+    return Math.max(floor, r);
   }
   function magRadiusMid(reg) {
     var o = reg.opts;
-    var px0 = (o.px && o.px[0] != null) ? o.px[0] : 3;
-    var px1 = (o.px && o.px[1] != null) ? o.px[1] : 48;
-    var d0 = reg.domain[0], d1 = reg.domain[1];
-    var span = Math.max(1e-9, d1 - d0);
+    var px = magPx(o);
+    var px0 = px[0], px1 = px[1];
+    var floor = magFloor(o, px0);
+    var vmax = reg.domain[1] > 0 ? reg.domain[1] : 1;
     var v = magValueExpr(o.prop, o.transform || "linear");
-    var t = ["max", 0, ["min", 1, ["/", ["-", v, d0], span]]];
-    /* area-proportional: radius grows with sqrt(t) so 1000× area reads clearly larger */
-    return ["+", px0, ["*", ["sqrt", t], px1 - px0]];
+    var t = ["max", 0, ["min", 1, ["/", v, vmax]]];
+    /* area ∝ value: r = rMax*sqrt(v/vmax); floor only lifts tiny dots */
+    var body = ["*", px1, ["sqrt", t]];
+    return ["max", floor, body];
   }
   function magRadiusStops(reg) {
     var mid = magRadiusMid(reg);
-    /* zoom smoothness via shared size curve multipliers — continuous, no band jump */
     return size({ stops: [
       [1, ["*", 0.55, mid]],
       [6, ["*", 0.9, mid]],
@@ -629,19 +632,16 @@
   }
   function magCollect(reg) {
     var o = reg.opts;
-    if (typeof o.values === "function") {
-      return o.values().filter(magIsFinite);
-    }
+    if (typeof o.values === "function") return o.values().filter(magIsFinite);
     return [];
   }
   function magRecompute(reg) {
     var vals = magCollect(reg);
-    var pack;
-    if (relOn && vals.length) pack = magDomainFrom(vals, reg.opts);
-    else pack = magFixedDomain(reg.opts);
+    var pack = (relOn && vals.length) ? magDomainFrom(vals, reg.opts) : magFixedDomain(reg.opts);
     reg.domain = pack.domain;
     reg.rawDomain = pack.raw;
     reg.hiRaw = pack.hiRaw;
+    reg.vmax = pack.vmax;
     return pack;
   }
   function magApply(reg) {
@@ -680,11 +680,10 @@
   function magBind(map, layerId, opts) {
     opts = opts || {};
     var id = opts.id || layerId;
-    var reg = { map: map, layerId: layerId, opts: opts, domain: [0, 1], rawDomain: [0, 1], hiRaw: 1, timer: null };
+    var reg = { map: map, layerId: layerId, opts: opts, domain: [0, 1], rawDomain: [0, 1], hiRaw: 1, vmax: 1, timer: null };
     magRegs[id] = reg;
     magRecompute(reg);
     var base = magRadiusStops(reg);
-    /* ensure track entry exists even before layer paint is set */
     return msBind(map, layerId, "circle-radius", base, opts.bindOpts || {});
   }
   function magSort(feats, prop) {
@@ -692,10 +691,9 @@
     return (feats || []).slice().sort((a, b) => {
       var av = +((a.properties && a.properties[prop]) || 0);
       var bv = +((b.properties && b.properties[prop]) || 0);
-      return bv - av; /* descending: bigger drawn first (below), small stay clickable */
+      return bv - av;
     });
   }
-  /* MapLibre: higher circle-sort-key draws on top — invert magnitude so small stay clickable */
   function magSortKey(prop) {
     prop = prop || "mag";
     return ["*", -1, ["to-number", ["get", prop]]];
@@ -704,31 +702,51 @@
     if (!(hiRaw > 0)) return feats;
     (feats || []).forEach((f) => {
       var v = +((f.properties && f.properties[prop]) || 0);
-      f.properties.magOut = v > hiRaw ? 1 : 0;
+      f.properties.magOut = v >= hiRaw * 0.98 ? 1 : 0;
     });
     return feats;
   }
   function magStroke() {
     return ["case", ["==", ["get", "magOut"], 1], 2.4, 0.7];
   }
+  function magNiceTicks(vmax) {
+    if (!(vmax > 0)) return [0, 1];
+    var targets = [0.1, 0.25, 0.5, 1].map((f) => { return vmax * f; });
+    /* round-ish ticks when values are large */
+    function nice(v) {
+      if (!(v > 0)) return 0;
+      var p = Math.pow(10, Math.floor(Math.log10(v)));
+      var n = v / p;
+      var r = n >= 7.5 ? 10 : n >= 3.5 ? 5 : n >= 1.5 ? 2 : 1;
+      return r * p;
+    }
+    var mid = nice(vmax * 0.25);
+    var hi = nice(vmax * 0.5);
+    if (!(mid > 0)) mid = vmax / 4;
+    if (!(hi > mid)) hi = vmax / 2;
+    if (hi >= vmax) hi = vmax * 0.5;
+    return [mid, hi, vmax];
+  }
   function magLegend(id) {
     var reg = magRegs[id];
     if (!reg || !reg.rawDomain) return "";
     var o = reg.opts;
     var fmt = typeof o.format === "function" ? o.format : (v) => { return String(Math.round(v)); };
-    var a = reg.rawDomain[0], b = reg.rawDomain[1];
-    var mid = (o.transform === "log" && a > 0 && b > 0)
-      ? Math.sqrt(a * b)
-      : (a + b) / 2;
-    var px0 = (o.px && o.px[0] != null) ? o.px[0] : 3;
-    var px1 = (o.px && o.px[1] != null) ? o.px[1] : 48;
-    var r0 = px0, rM = px0 + Math.sqrt(0.25) * (px1 - px0), r1 = px1;
+    var vmaxRaw = reg.rawDomain[1];
+    var vmaxX = reg.domain[1];
+    var ticks = typeof o.legendValues === "function" ? o.legendValues(vmaxRaw) : magNiceTicks(vmaxRaw);
+    if (!ticks || !ticks.length) ticks = [vmaxRaw];
     function dot(r) {
-      var s = Math.max(6, Math.round(r * 1.1));
+      var s = Math.max(6, Math.round(r));
       return '<span class="mag-dot" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:#c6c2b6;display:inline-block;vertical-align:middle;margin:0 4px 0 2px"></span>';
     }
+    var parts = [];
+    ticks.forEach((val) => {
+      var r = magRadiusAtValue(val, vmaxX, o);
+      parts.push(dot(r) + esc(fmt(val)));
+    });
     return '<div class="mag-leg ls-row"><small>Size' + (relOn ? " (relative)" : "") + ": "
-      + dot(r0) + esc(fmt(a)) + " · " + dot(rM) + esc(fmt(mid)) + " · " + dot(r1) + esc(fmt(b))
+      + parts.join(" · ")
       + (o.unit ? " " + esc(o.unit) : "") + "</small></div>";
   }
   function magGetRelative() { return relOn; }
@@ -743,12 +761,18 @@
     if (typeof fn === "function") magListen.push(fn);
     return fn;
   }
+  function magRadiusFor(id, v) {
+    var reg = magRegs[id];
+    if (!reg) return 0;
+    return magRadiusAtValue(v, reg.domain[1], reg.opts);
+  }
   var magnitude = {
     KEY: REL_KEY, bind: magBind, refresh: magRefresh, request: magRequest,
     sort: magSort, sortKey: magSortKey, markOutliers: magMarkOutliers, stroke: magStroke, legend: magLegend,
     getRelative: magGetRelative, setRelative: magSetRelative, onChange: magOnChange,
     domain: (id) => { return magRegs[id] && magRegs[id].rawDomain; },
-    hiRaw: (id) => { return magRegs[id] && magRegs[id].hiRaw; }
+    hiRaw: (id) => { return magRegs[id] && magRegs[id].hiRaw; },
+    radiusAt: magRadiusFor, radiusAtValue: magRadiusAtValue
   };
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };

@@ -1,7 +1,7 @@
 // workspace/whereisthesun/oil-spills.js
 /* SUNNY opt214: oil spill incidents (Human impact).
  * Data: NOAA ORR IncidentNews incidents.csv (United States federal public domain). Oil threat
- * rows with coordinates. Dot size ≈ log10(max potential gallons); year range slider.
+ * rows with coordinates. Dot size area∝max potential gallons (relative); year range slider.
  * Off by default; lazy; every zoom. Unknown volume = small fixed size. */
 (() => {
   "use strict";
@@ -66,7 +66,7 @@
       '<input type="range" class="hi-year-hi" min="' + Y0 + '" max="' + Y1 + '" step="1" value="' + yearMax + '" aria-label="Latest spill year">' +
       "</div>" +
       '<div class="hi-year-range-ticks" aria-hidden="true"><span>' + Y0 + "</span><span>" + Y1 + "</span></div>" +
-      '<div class="hi-year-hint">NOAA IncidentNews oil incidents with coordinates. Size ≈ log of max potential gallons (when known).</div>';
+      '<div class="hi-year-hint">NOAA IncidentNews oil incidents with coordinates. Size ∝ volume (max potential); area scales with barrels (when known).</div>';
     wrap.appendChild(box);
     var onSlide = () => {
       var loEl = box.querySelector(".hi-year-lo");
@@ -107,16 +107,23 @@
   }
   function magOpts() {
     return {
-      id: "oilspills", prop: "gal", transform: "log", px: [3, 40],
-      domain: [1, 5e7],
+      id: "oilspills", prop: "gal", transform: "linear", px: [4, 72], floor: 4,
+      domain: [0, 336000009],
       values: filteredGals, allValues: allGals,
       format: (g) => {
-        if (!(g > 0)) return "0";
-        if (g >= 1e6) return (g / 1e6).toFixed(g >= 1e8 ? 0 : 1) + "M";
-        if (g >= 1e3) return (g / 1e3).toFixed(0) + "k";
-        return String(Math.round(g));
+        var b = g / 42;
+        if (!(b > 0)) return "0";
+        if (b >= 1e6) return (b / 1e6).toFixed(b >= 1e7 ? 0 : 1) + "M";
+        if (b >= 1e3) return (b / 1e3).toFixed(b >= 1e4 ? 0 : 1) + "k";
+        return String(Math.round(b));
       },
-      unit: "gal",
+      unit: "bbl",
+      legendValues: (vmax) => {
+        var bmax = vmax / 42;
+        var ticks = [1e5, 4e5, 1e6, 3e6].filter((b) => { return b < bmax * 0.95; }).map((b) => { return b * 42; });
+        ticks.push(vmax);
+        return ticks;
+      },
       onDomain: () => { /* legend refreshes via layers-panel on change */ }
     };
   }
@@ -181,9 +188,9 @@
   }
   function fmtGal(g) {
     if (!(g > 0)) return "volume unknown";
-    if (g >= 1e6) return (g / 1e6).toFixed(2) + "M gal (max potential)";
-    if (g >= 1e3) return (g / 1e3).toFixed(1) + "k gal (max potential)";
-    return Math.round(g) + " gal (max potential)";
+    var b = g / 42;
+    var btxt = b >= 1e6 ? (b / 1e6).toFixed(2) + "M bbl" : b >= 1e3 ? (b / 1e3).toFixed(1) + "k bbl" : Math.round(b) + " bbl";
+    return btxt + " max potential (" + (g >= 1e6 ? (g / 1e6).toFixed(1) + "M" : Math.round(g)) + " gal)";
   }
   function card(map, e) {
     var p = e.features[0].properties;
@@ -220,7 +227,7 @@
         ["#d97820", "dot", "2000s"],
         ["#ffb347", "dot", "2010s–now"]
       ]) + (K.magnitude ? K.magnitude.legend("oilspills") : "") +
-        '<div class="ls-row"><small>Bigger ≈ more gallons. Halo = top outliers. NOAA PD · max potential when known.</small></div>';
+        '<div class="ls-row"><small>Bigger ∝ barrels (area). Data = NOAA max potential gallons ÷ 42. Halo = near-max.</small></div>';
     },
     note: () => { return L.isOn("oilspills") ? yearLabel() : ""; },
     apply: apply,

@@ -13,7 +13,7 @@
   function histMags() { return (histFeats || []).map((f) => { return +f.properties.m; }).filter((m) => { return m > 0; }); }
   function magHist(map, id) {
     return K.magnitude.bind(map, id, {
-      id: "quakes", prop: "m", transform: "linear", px: [4, 36],
+      id: "quakes", prop: "m", transform: "linear", px: [4, 56], floor: 4,
       domain: [6.5, 9.5], values: histMags, allValues: histMags,
       format: (m) => { return "M" + Number(m).toFixed(1); }, unit: ""
     });
@@ -88,7 +88,7 @@
       }
       map.addSource("quakes-live", { type: "geojson", data: g });
       var rad = K.magnitude.bind(map, "quake-new", {
-        id: "quakeslive", prop: "m", transform: "linear", px: [3.5, 32],
+        id: "quakeslive", prop: "m", transform: "linear", px: [3.5, 48], floor: 3.5,
         domain: [4.5, 8.5], values: liveMags, allValues: liveMags,
         format: (m) => { return "M" + Number(m).toFixed(1); }
       });

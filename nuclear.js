@@ -195,7 +195,7 @@
     }
     if (!map.getLayer(DOT)) {
       var rad = K.magnitude.bind(map, DOT, {
-        id: "nuclear", prop: "ines", transform: "linear", px: [5, 28],
+        id: "nuclear", prop: "ines", transform: "linear", px: [5, 40], floor: 5,
         domain: [1, 7], values: filteredInes, allValues: filteredInes,
         format: (n) => { return "INES " + Math.round(n); }
       });

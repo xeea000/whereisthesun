@@ -295,7 +295,7 @@
     if (!map.getSource("w-towers")) {
       map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR, ISED" });
       var rad = K.magnitude.bind(map, "tower-dot", {
-        id: "towers", prop: "h", transform: "linear", px: [3, 36],
+        id: "towers", prop: "h", transform: "linear", px: [3, 56], floor: 3,
         domain: [30, 600], values: tHeights, allValues: tHeights,
         format: (h) => { return Math.round(h) + " m"; }
       });

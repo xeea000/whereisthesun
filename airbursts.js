@@ -159,8 +159,8 @@
   }
   function magOpts() {
     return {
-      id: "airbursts", prop: "eng", transform: "log", px: [3, 40],
-      domain: [0.1, 1e7], values: filteredEng, allValues: allEng,
+      id: "airbursts", prop: "eng", transform: "linear", px: [4, 72], floor: 4,
+      domain: [0, 1e7], values: filteredEng, allValues: allEng,
       format: (e) => {
         if (!(e > 0)) return "0";
         if (e >= 1e6) return (e / 1e6).toFixed(1) + " Mt";

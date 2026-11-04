@@ -11,11 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-<<<<<<< Updated upstream
-var BUILD = "opt229"; /* deploy name, read by tools/write-version.js */
-=======
-var BUILD = "opt225"; /* deploy name, read by tools/write-version.js */
->>>>>>> Stashed changes
+var BUILD = "opt230"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -64,7 +60,7 @@ var PRECACHE = [
   "beach-toggle.js?h=6ed1375f1c",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
-  "layer-kit.js?h=2e0365ae3e",
+  "layer-kit.js?h=9e5b0e0d94",
   "layer-lazy.js?h=dc91d4950e",
   "layers-panel.js?h=679f239b54",
   "share-link.js?h=cf29a929f8",
@@ -110,20 +106,15 @@ var PRECACHE = [
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
   "sky-layers.js?h=a4e092c437",
-  "earth-layers.js?h=ddf3859ff8",
+  "earth-layers.js?h=9be3f18de9",
   "forest-loss.js?h=58e7516e55",
-  "oil-spills.js?h=bce28a6bb1",
-  "airbursts.js?h=626cdb191a",
-  "nuclear.js?h=e8a5e9893c",
-  "earth-layers.js?h=ddf3859ff8",
-  "forest-loss.js?h=58e7516e55",
-  "oil-spills.js?h=bce28a6bb1",
-  "airbursts.js?h=626cdb191a",
-  "nuclear.js?h=e8a5e9893c",
+  "oil-spills.js?h=88fee7e081",
+  "airbursts.js?h=9cf5524902",
+  "nuclear.js?h=df93eda14e",
   "spacecraft.js?h=cd67fa8236",
-  "ocean-garbage.js?h=e85ffa0779",
+  "ocean-garbage.js?h=4c7c07bf2c",
   "plates.js?h=fc25f7fdd7",
-  "quakes.js?h=42d2d2248f",
+  "quakes.js?h=96c8ef8693",
   "volcanoes.js?h=9767dc9a3d",
   "storms.js?h=d3f06c9fa6",
   "tornadoes.js?h=e268aebfac",
@@ -135,7 +126,7 @@ var PRECACHE = [
   "ca-cell.js?h=ec413b0157",
   "fire-lookout.js?h=3a7c53c59c",
   "ca-cover.js?h=52dc80f441",
-  "world-layers.js?h=9590056fbe",
+  "world-layers.js?h=9a3dc33d0b",
   "outdoor-layers.js?h=a63aab75b7",
   "mtg-stores.js?h=df3c88f7cc",
   "parks-ca.js?h=eefe5efb4e",

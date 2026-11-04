@@ -252,7 +252,7 @@
     put(map, R_SRC, riverFeats);
     if (!map.getLayer(R_LYR)) {
       var rad = K.magnitude.bind(map, R_LYR, {
-        id: "oceangarbage-rivers", prop: "ton", transform: "log", px: [3, 36],
+        id: "oceangarbage-rivers", prop: "ton", transform: "linear", px: [3, 64], floor: 3,
         domain: [0.01, 5e5], values: riverTons, allValues: riverTons,
         format: (n) => {
           if (!(n > 0)) return "0";

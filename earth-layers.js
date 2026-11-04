@@ -121,7 +121,7 @@
       }
       if (!map.getLayer("meteor-dot")) {
         var rad = K.magnitude.bind(map, "meteor-dot", {
-          id: "meteorites", prop: "m", transform: "log", px: [2.5, 36],
+          id: "meteorites", prop: "m", transform: "linear", px: [3, 64], floor: 3,
           domain: [1, 1e8], values: metMasses, allValues: metMasses,
           format: (g) => { return g >= 1000 ? (Math.round(g / 100) / 10) + " kg" : Math.round(g) + " g"; }
         });
