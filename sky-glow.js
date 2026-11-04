@@ -5,6 +5,7 @@
  * switch #toggle-skyglow saves the choice and the side button mirrors it. */
 (function () {
   "use strict";
+  var K = window.SunnyKit;
   var KEY = "sunny-skyglow";
   var SRC = "skyglow";
   var ID = "skyglow-raster";
@@ -34,8 +35,9 @@
   }
   function addLayer() {
     var ts = window.SunnyDataSaver && window.SunnyDataSaver.low() ? 512 : 256;
-    if (!map.getSource(SRC)) map.addSource(SRC, { type: "raster", tiles: [URL], tileSize: ts, maxzoom: 8, attribution: ATTRIB });
+    if (!map.getSource(SRC)) map.addSource(SRC, K.overzoom({ type: "raster", tiles: [URL], tileSize: ts, attribution: ATTRIB }, 8));
     if (!map.getLayer(ID)) map.addLayer({ id: ID, type: "raster", source: SRC, paint: { "raster-opacity": 0.7, "raster-fade-duration": 0 } }, beforeId());
+    K.uncapped(map, [ID]);
     if (!map._sgLow) { map._sgLow = true; map.on("idle", keepLow); }
   }
   function makeLegend() {

@@ -8,6 +8,7 @@
  * Note from the publisher: not an authoritative source for Crown, private or park boundaries. */
 (function () {
   "use strict";
+  var K = window.SunnyKit;
   var KEY = "sunny-crown";
   var SRC = "crown-land";
   var LAYER = "crown-land";
@@ -31,10 +32,11 @@
   }
   function addLayer() {
     if (!map.getSource(SRC)) {
-      map.addSource(SRC, { type: "raster", tiles: [tileUrl()], tileSize: 256, minzoom: 3, maxzoom: 14,
-        bounds: [-95.2, 41.6, -74.3, 56.9], attribution: ATTRIB });
+      map.addSource(SRC, K.overzoom({ type: "raster", tiles: [tileUrl()], tileSize: 256, minzoom: 3,
+        bounds: [-95.2, 41.6, -74.3, 56.9], attribution: ATTRIB }, 14));
     }
     if (!map.getLayer(LAYER)) map.addLayer({ id: LAYER, type: "raster", source: SRC, paint: { "raster-opacity": 0.85 } }, beforeId());
+    K.uncapped(map, [LAYER]);
   }
   /* off must hide at once, even while tiles are still loading (opt89) */
   function apply() {

@@ -7,6 +7,7 @@
  * Attribution: NOAA NEXRAD via Iowa Environmental Mesonet. */
 (function () {
   "use strict";
+  var K = window.SunnyKit;
   var BASE = "https://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0q-t.cgi";
   var LATEST = "https://mesonet.agron.iastate.edu/data/gis/images/4326/USCOMP/n0q_0.json";
   var LAYER = "nexrad-n0q-wmst";
@@ -73,7 +74,7 @@
   function ensureCoverLayer(map) {
     if (!window.SunnyRadarMask || !map.getSource || !map.isStyleLoaded || !map.isStyleLoaded()) return false;
     if (!map.getSource(COVER_SRC)) {
-      map.addSource(COVER_SRC, { type: "raster", tiles: [window.SunnyRadarMask.tiles()], tileSize: 256, maxzoom: 9 });
+      map.addSource(COVER_SRC, K.overzoom({ type: "raster", tiles: [window.SunnyRadarMask.tiles()], tileSize: 256 }, 9));
     }
     if (!map.getLayer(COVER_SRC)) {
       map.addLayer({ id: COVER_SRC, type: "raster", source: COVER_SRC,

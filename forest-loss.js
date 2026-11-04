@@ -241,46 +241,49 @@
   }
   function ensureLoss(map) {
     if (!map.getSource(LOSS_SRC)) {
-      map.addSource(LOSS_SRC, {
-        type: "raster", tiles: [lossUrl()], tileSize: 256, minzoom: 0, maxzoom: 12,
+      map.addSource(LOSS_SRC, K.overzoom({
+        type: "raster", tiles: [lossUrl()], tileSize: 256, minzoom: 0,
         attribution: 'Tree cover loss: <a href="https://www.globalforestwatch.org/" target="_blank" rel="noopener">Hansen/UMD/GFW</a> (CC BY 4.0)'
-      });
+      }, 12));
     }
     if (!map.getLayer(LOSS_LYR)) {
       map.addLayer({
         id: LOSS_LYR, type: "raster", source: LOSS_SRC, minzoom: 0,
         paint: { "raster-opacity": OPAC, "raster-fade-duration": 0 }
       }, K.before(map));
+      K.uncapped(map, [LOSS_LYR]);
     }
   }
   function ensureDrv(map) {
     ensureProtocol();
     if (!map.getSource(DRV_SRC)) {
-      map.addSource(DRV_SRC, {
-        type: "raster", tiles: [drvCompUrl()], tileSize: 256, minzoom: 0, maxzoom: 12,
+      map.addSource(DRV_SRC, K.overzoom({
+        type: "raster", tiles: [drvCompUrl()], tileSize: 256, minzoom: 0,
         attribution: 'Loss drivers: <a href="https://www.globalforestwatch.org/" target="_blank" rel="noopener">Curtis et al. 2018 / WRI/GFW</a> (CC BY 4.0), painted on Hansen loss pixels only'
-      });
+      }, 12));
     }
     if (!map.getLayer(DRV_LYR)) {
       map.addLayer({
         id: DRV_LYR, type: "raster", source: DRV_SRC, minzoom: 0,
         paint: { "raster-opacity": OPAC, "raster-fade-duration": 0 }
       }, K.before(map));
+      K.uncapped(map, [DRV_LYR]);
     }
   }
   function ensureIfl(map) {
     ensureProtocol();
     if (!map.getSource(IFL_SRC)) {
-      map.addSource(IFL_SRC, {
-        type: "raster", tiles: [iflUrl()], tileSize: 256, minzoom: 0, maxzoom: 12,
+      map.addSource(IFL_SRC, K.overzoom({
+        type: "raster", tiles: [iflUrl()], tileSize: 256, minzoom: 0,
         attribution: 'Intact Forest Landscapes: <a href="https://intactforests.org/" target="_blank" rel="noopener">Potapov et al. / IFL</a> via GFW (CC BY 4.0)'
-      });
+      }, 12));
     }
     if (!map.getLayer(IFL_LYR)) {
       map.addLayer({
         id: IFL_LYR, type: "raster", source: IFL_SRC, minzoom: 0,
         paint: { "raster-opacity": 0.85, "raster-fade-duration": 0 }
       }, K.before(map));
+      K.uncapped(map, [IFL_LYR]);
     }
   }
   function kidVis(map, parentOn) {

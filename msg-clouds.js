@@ -19,11 +19,11 @@
     var t = nowSlot();
     if (!map.getSource(ID)) {
       slot = t;
-      map.addSource(ID, { type: "raster", tiles: [url(t)], bounds: BOUNDS, tileSize: 256, maxzoom: 6, attribution: "Meteosat clouds: EUMETSAT EUMETView" });
+      map.addSource(ID, K.overzoom({ type: "raster", tiles: [url(t)], bounds: BOUNDS, tileSize: 256, attribution: "Meteosat clouds: EUMETSAT EUMETView" }, 6));
     } else if (t !== slot && Date.now() - Date.parse(slot) > 3600000 /* each slot lags 30 min; refresh hourly */) {
       slot = t; var s = map.getSource(ID); if (s.setTiles) s.setTiles([url(t)]);
     }
-    if (!map.getLayer(ID)) map.addLayer({ id: ID, type: "raster", source: ID, paint: { "raster-fade-duration": 300 } }, "gibs");
+    if (!map.getLayer(ID)) { map.addLayer({ id: ID, type: "raster", source: ID, paint: { "raster-fade-duration": 300 } }, "gibs"); K.uncapped(map, [ID]); }
     else if (!below(map)) { try { map.moveLayer(ID, "gibs"); } catch (e) {} }
     var vis = map.getLayoutProperty("gibs", "visibility") || "visible", op = map.getPaintProperty("gibs", "raster-opacity");
     if (map.getLayoutProperty(ID, "visibility") !== vis) map.setLayoutProperty(ID, "visibility", vis);

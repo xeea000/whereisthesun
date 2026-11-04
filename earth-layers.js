@@ -5,8 +5,8 @@
  *               at most once per 30 minutes. Open Government Licence - Canada.
  *   Meteorites  observed meteorite falls, data/met (points + shards from data/meteorite-falls.json), NASA
  *               (Meteoritical Society), public domain. Static.
- *   Geology     Macrostrat bedrock geology vector tiles (CC BY 4.0), zoom 5 and closer only;
- *               tap for rock type, age and unit name (Macrostrat API). */
+ *   Geology     Macrostrat bedrock geology vector tiles (CC BY 4.0); source maxzoom 12 so
+ *               MapLibre overzooms past native tiles (opt219). Tap for rock type / age. */
 (() => {
   "use strict";
   var K = window.SunnyKit;
@@ -40,9 +40,10 @@
   var PERIM = "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/wms?service=WMS&version=1.1.1&request=GetMap&layers=public:m3_polygons_current" +
     "&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}";
   function perimAdd(map) {
-    if (!map.getSource("fire-perim")) map.addSource("fire-perim", { type: "raster", tiles: [PERIM + "&t=" + Math.floor(Date.now() / 36e5)], tileSize: 256, minzoom: 3,
-      attribution: 'Fire perimeters: <a href="https://cwfis.cfs.nrcan.gc.ca/" target="_blank" rel="noopener">CWFIS (NRCan)</a>' });
+    if (!map.getSource("fire-perim")) map.addSource("fire-perim", K.overzoom({ type: "raster", tiles: [PERIM + "&t=" + Math.floor(Date.now() / 36e5)], tileSize: 256, minzoom: 3,
+      attribution: 'Fire perimeters: <a href="https://cwfis.cfs.nrcan.gc.ca/" target="_blank" rel="noopener">CWFIS (NRCan)</a>' }, 22));
     if (!map.getLayer("fire-perim")) map.addLayer({ id: "fire-perim", type: "raster", source: "fire-perim", minzoom: 3, paint: { "raster-opacity": 0.8 } }, K.before(map));
+    K.uncapped(map, ["fire-perim"]);
   }
   var DAY = 864e5;
   function perimTap(map, e) {
@@ -152,11 +153,12 @@
     if (!on) return;
     try {
       if (!map.getSource("geology")) {
-        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 0, maxzoom: 12,
-          attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' });
+        map.addSource("geology", K.overzoom({ type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 0,
+          attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' }, 12));
       }
       if (!map.getLayer("geo-fill")) map.addLayer({ id: "geo-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 0, paint: { "fill-color": ["coalesce", ["get", "color"], "#999"], "fill-opacity": 0.45 } }, K.before(map));
       if (!map.getLayer("geo-line")) map.addLayer({ id: "geo-line", type: "line", source: "geology", "source-layer": "lines", minzoom: 7, paint: { "line-color": "#3b1d0a", "line-width": 0.6, "line-opacity": 0.6 } }, K.before(map));
+      K.uncapped(map, GEO_IDS);
     } catch (e) {}
     K.vis(map, GEO_IDS, L.isOn("geology"));
   }
@@ -195,10 +197,11 @@
     if (!on) return;
     try {
       if (!map.getSource("geology")) {
-        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 0, maxzoom: 12,
-          attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' });
+        map.addSource("geology", K.overzoom({ type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 0,
+          attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' }, 12));
       }
       if (!map.getLayer("age-fill")) map.addLayer({ id: "age-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 0, paint: { "fill-color": icsStep, "fill-opacity": 0.5 } }, K.before(map));
+      K.uncapped(map, ["age-fill"]);
     } catch (e) {}
     K.vis(map, ["age-fill"], L.isOn("rockage"));
   }

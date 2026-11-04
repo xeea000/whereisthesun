@@ -189,8 +189,20 @@
   var TN = {}; TT.forEach((t) => { TN[t[0]] = t[1]; });
   /* opt199: tower type kids via SunnyKit.kids; empty → show nothing */
   var TOWER_KIDS = TT.map((t) => { return { id: "towers-" + t[0], dflt: true, code: t[0] }; });
+  var tTypeOn = () => { return K.kids.anyOn(TOWER_KIDS); };
   var tFilter = () => {
     return K.kids.inFilter(["slice", ["get", "k"], 0, 1], K.kids.activeCodes(TOWER_KIDS, (k) => { return k.code; }));
+  };
+  /* opt219: legend lists only enabled kids (type + CA cell + fire lookout) */
+  var tLegend = () => {
+    var rows = K.kids.active(TOWER_KIDS).map((k) => {
+      var t = TT.filter((x) => { return x[0] === k.code; })[0];
+      return t ? [t[2], "dot", t[1]] : null;
+    }).filter(Boolean);
+    var html = rows.length ? K.legKeys(rows) : "";
+    if (window.SunnyLayers && K.kids.layerOn(window.SunnyLayers.isOn("towers"), "towers-ca", true) && window.SunnyCaCell) html += window.SunnyCaCell.legend;
+    if (window.SunnyLayers && K.kids.layerOn(window.SunnyLayers.isOn("towers"), "towers-fl", true) && window.SunnyFireLook) html += window.SunnyFireLook.legend;
+    return html;
   };
   var tColor = ["match", ["slice", ["get", "k"], 0, 1]].concat([].concat.apply([], TT.map((t) => [t[0], t[2]])), ["#ffc2a6"]);
   var mastName = (r) => { return r.name || r.operator || "Unnamed tower"; };
@@ -244,6 +256,7 @@
   var tView = () => {
     var m = tMap, man = meta.manifest;
     if (!m || !L.isOn("towers")) return;
+    if (!tTypeOn()) { if (m.getSource("w-towers")) m.getSource("w-towers").setData(K.fc([])); return; }
     if (tBand() === "ov") { tLoadOv().then(() => { if (tBand() === "ov") tSet(); }); tLoad("big"); return; }
     if (!man || !man.towerTiles) { tSet(); return; }
     var b = m.getBounds();
@@ -256,7 +269,7 @@
   var TH = ["to-number", ["slice", ["get", "k"], 1]];
   var tApply = (map, on) => {
     tMap = map;
-    K.vis(map, ["tower-dot"], on);
+    K.vis(map, ["tower-dot"], on && tTypeOn());
     if (window.SunnyFireLook) window.SunnyFireLook.apply();
     if (window.SunnyCaCell) window.SunnyCaCell.apply(); /* opt159: Canadian cell sites (ca-cell.js) follow the Towers switch */
     if (!on) return;
@@ -278,9 +291,17 @@
     tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ always; shorter towers as corridor clusters far out, each tower when closer. Types are guessed from the owner.",
     kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true },
       { id: "towers-fl", name: "Fire lookout towers", dflt: true }]),
-    kidSet: () => { if (tMap && tMap.getLayer("tower-dot")) tMap.setFilter("tower-dot", tFilter()); if (window.SunnyCaCell) window.SunnyCaCell.apply();
-      if (window.SunnyFireLook) window.SunnyFireLook.apply(); },
-    legend: K.legKeys(TT.map((t) => [t[2], "dot", t[1]])) + (window.SunnyCaCell ? window.SunnyCaCell.legend : "") + (window.SunnyFireLook ? window.SunnyFireLook.legend : ""),
+    kidSet: () => {
+      if (tMap && tMap.getLayer("tower-dot")) {
+        tMap.setFilter("tower-dot", tFilter());
+        K.vis(tMap, ["tower-dot"], L.isOn("towers") && tTypeOn());
+      }
+      if (!tTypeOn() && tMap && tMap.getSource("w-towers")) tMap.getSource("w-towers").setData(K.fc([]));
+      else tView();
+      if (window.SunnyCaCell) window.SunnyCaCell.apply();
+      if (window.SunnyFireLook) window.SunnyFireLook.apply();
+    },
+    legend: tLegend,
     attach: (map) => {
       if (window.SunnyCaCell) window.SunnyCaCell.attach(map);
       if (window.SunnyFireLook) window.SunnyFireLook.attach(map);

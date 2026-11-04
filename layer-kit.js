@@ -6,6 +6,8 @@
  *   zoomGate shared no-hysteresis rule (opt206): hide when below minZoom or view too wide
  *   lod      opt207 level-of-detail band picker (overview → detail by zoom, no hysteresis)
  *   size     opt210 shared circle/icon size curve (smooth zoom + capped cluster boost)
+ *   overzoom opt219 source maxzoom = provider native max (MapLibre upscales past it);
+ *            uncapped drops layer maxzoom caps so overlays stay to map maxZoom
  *   popup    the same tap card the Craters layer uses */
 (() => {
   "use strict";
@@ -250,9 +252,11 @@
     return kidsActive(list).map(codeOf || ((k) => { return k.code != null ? k.code : k.id; }))
       .filter((c) => { return c != null && c !== ""; });
   }
-  /* MapLibre filter: empty codes → never matches (do not use bare ["in", …, []]) */
+  /* MapLibre filter: empty codes → never matches.
+   * opt219: return `false` (or ["literal", false]). MapLibre 4.7 ignores ["==", 1, 0] as a
+   * filter expression, so an empty kid set must use a real false filter or dots stay on. */
   function kidsInFilter(getExpr, codes) {
-    if (!codes || !codes.length) return ["==", 1, 0];
+    if (!codes || !codes.length) return false;
     return ["in", getExpr, ["literal", codes]];
   }
   /* Per-sublayer visibility: parent on AND that kid on */
@@ -355,6 +359,26 @@
     }
     return out;
   }
+  /* opt219: raster/vector source maxzoom = provider's real native max.
+   * MapLibre then overzooms (upscales the last tiles) past that zoom instead of requesting
+   * missing high-z tiles (404 / empty MVT → layer vanishes). Layer maxzoom stays 24 / unset. */
+  function overzoom(src, nativeMax) {
+    src = src || {};
+    var z = nativeMax == null ? src.maxzoom : nativeMax;
+    if (z != null && isFinite(+z)) src.maxzoom = +z;
+    return src;
+  }
+  /* Drop any layer maxzoom cap (keep its minzoom). Call after addLayer for tile overlays. */
+  function uncapped(map, ids) {
+    (ids || []).forEach((id) => {
+      if (!map || !map.getLayer(id)) return;
+      try {
+        var min = 0;
+        try { min = map.getLayer(id).minzoom || 0; } catch (e0) {}
+        if (map.setLayerZoomRange) map.setLayerZoomRange(id, min, 24);
+      } catch (e) {}
+    });
+  }
   /* opt207: level-of-detail band picker (Windy-style). cuts = [{ z: 8, id: "ov" }, { z: 24, id: "raw" }]
    * returns the id of the first cut whose z is above the current zoom (stateless; no hysteresis). */
   function lodBand(zoom, cuts) {
@@ -376,7 +400,7 @@
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
-    size: size,
+    size: size, overzoom: overzoom, uncapped: uncapped,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,
     zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote, lod: lod };

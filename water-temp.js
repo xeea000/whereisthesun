@@ -16,10 +16,11 @@
   var apply = (map, on) => {
     if (on && !map.getLayer("sst")) {
       try {
-        map.addSource("sst", { type: "raster", tileSize: 256, maxzoom: 7,
+        map.addSource("sst", K.overzoom({ type: "raster", tileSize: 256,
           attribution: 'Water temperature: <a href="https://podaac.jpl.nasa.gov/MEaSUREs-MUR" target="_blank" rel="noopener">NASA JPL MUR</a> via GIBS',
-          tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/" + day() + "/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png"] });
+          tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/" + day() + "/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png"] }, 7));
         map.addLayer({ id: "sst", type: "raster", source: "sst", paint: { "raster-opacity": 0.6, "raster-fade-duration": 0 } }, K.before(map));
+        K.uncapped(map, ["sst"]);
       } catch (e) { setTimeout(() => { if (L.isOn("watertemp")) apply(map, true); }, 2000); return; } /* style not ready yet */
     }
     if (on) low(map);

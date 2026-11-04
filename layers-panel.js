@@ -100,7 +100,7 @@
     rows[d.id] = { row: r, input: i, note: note };
     if (!d.kids && d.legend) { /* opt107: a plain row can carry a small legend under it */
       var lw = el("div", "lp-fold"), lg = el("div", "lp-leg");
-      lg.innerHTML = d.legend; lw.appendChild(r); lw.appendChild(lg);
+      lg.innerHTML = typeof d.legend === "function" ? d.legend() : d.legend; lw.appendChild(r); lw.appendChild(lg);
       return lw;
     }
     if (!d.kids) return r;
@@ -128,12 +128,18 @@
         try { localStorage.setItem("sunny-L-" + k.id, ki.checked ? "1" : "0"); } catch (e) {}
         if (ki.checked && !isOn(d)) setOn(d, true);
         if (d.kidSet) d.kidSet();
+        if (d._legEl && typeof d.legend === "function") d._legEl.innerHTML = d.legend() || "";
       });
       kl.appendChild(ki);
       kl.appendChild(document.createTextNode(" " + k.name));
       box.appendChild(kl);
     });
-    if (d.legend) box.insertAdjacentHTML("beforeend", d.legend); /* opt107: small legend under the groups */
+    if (d.legend) { /* opt107 / opt219: legend under kids; function → only enabled kids */
+      var lg = el("div", "lp-leg");
+      lg.innerHTML = typeof d.legend === "function" ? (d.legend() || "") : d.legend;
+      box.appendChild(lg);
+      d._legEl = lg;
+    }
     w.appendChild(r);
     w.appendChild(box);
     return w;
@@ -305,6 +311,7 @@
     defs.forEach((d) => {
       if (!d.kids || !d.kids.some((k) => { return k.id === kidId; })) return;
       if (d.kidSet) d.kidSet();
+      if (d._legEl && typeof d.legend === "function") d._legEl.innerHTML = d.legend() || "";
     });
     refresh();
   } };

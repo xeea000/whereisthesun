@@ -41,7 +41,8 @@
       body.hidden = !open;
       if (!open) return;
       var html = on.map((d) => {
-        var inner = d.legend ? '<div class="ls-own">' + d.legend + "</div>" : '<span class="ls-auto">' + auto(map, d) + "</span>";
+        var leg = typeof d.legend === "function" ? d.legend() : d.legend;
+        var inner = leg ? '<div class="ls-own">' + leg + "</div>" : '<span class="ls-auto">' + auto(map, d) + "</span>";
         return '<div class="ls-row"><b>' + (d.icon || "") + " " + d.name + "</b>" + inner + "</div>";
       }).join("");
       if (window.SunnyFamousOn && window.SunnyFamousOn()) html += '<div class="ls-row"><b style="color:#ffd34d">★</b> Famous</div>';
