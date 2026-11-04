@@ -4,6 +4,7 @@
  *   tiles    viewport loader: splits the view into zoom-10 tiles, loads only missing tiles,
  *            waits for the map to stop moving, and only above a zoom threshold
  *   zoomGate shared no-hysteresis rule (opt206): hide when below minZoom or view too wide
+ *   lod      opt207 level-of-detail band picker (overview → detail by zoom, no hysteresis)
  *   popup    the same tap card the Craters layer uses */
 (() => {
   "use strict";
@@ -324,10 +325,22 @@
     msTrack.push({ map: map, id: layerId, prop: prop, base: base, kind: kind, extra: opts.extra });
     return msSize(base, typeof opts.extra === "function" ? opts.extra() : opts.extra);
   }
+  /* opt207: level-of-detail band picker (Windy-style). cuts = [{ z: 8, id: "ov" }, { z: 24, id: "raw" }]
+   * returns the id of the first cut whose z is above the current zoom (stateless; no hysteresis). */
+  function lodBand(zoom, cuts) {
+    var z = zoom == null ? 0 : zoom, list = cuts || [];
+    for (var i = 0; i < list.length; i++) if (z < list[i].z) return list[i].id;
+    return list.length ? list[list.length - 1].id : null;
+  }
+  /* Tiny loading flag helper for layer-row notes ("loading…" while an overview fetches). */
+  function lodNote(loading, label) {
+    return loading ? (label || "loading…") : "";
+  }
+  var lod = { band: lodBand, note: lodNote, CUT_CELL: [{ z: 8, id: "ov" }, { z: 24, id: "raw" }] };
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,
-    zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote };
+    zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote, lod: lod };
 })();

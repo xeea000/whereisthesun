@@ -142,3 +142,5 @@
 .lp-msize-h{flex:0 0 auto}
 .lp-msize input[type=range]{flex:1;min-width:0;accent-color:#7eb6ff;height:18px}
 .lp-msize-v{flex:0 0 2.6em;text-align:right;color:#9ec5ff;font-variant-numeric:tabular-nums}
+/* opt207: loading note while a LOD overview fetches */
+.lp-note:not(:empty){transition:opacity .2s}

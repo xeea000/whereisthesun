@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt206"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt207"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,7 +32,7 @@ var PRECACHE = [
   "styles.css?h=abe35cdd07",
   "settings-panel.css?h=f5be224c45",
   "side-buttons.css?h=9e18a6b16c",
-  "layers-panel.css?h=a50093406b",
+  "layers-panel.css?h=7319852d70",
   "info-panel.css?h=90932599a5",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
@@ -60,7 +60,7 @@ var PRECACHE = [
   "beach-toggle.js?h=6ed1375f1c",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
-  "layer-kit.js?h=bfb62a1609",
+  "layer-kit.js?h=3f5595844e",
   "layer-lazy.js?h=dc91d4950e",
   "layers-panel.js?h=90a02d5521",
   "share-link.js?h=5582426f8f",
@@ -117,9 +117,9 @@ var PRECACHE = [
   "coord-grid.js?h=a8528bd13f",
   "water-temp.js?h=6917bec6fc",
   "waves.js?h=c1631fca41",
-  "ca-cell.js?h=ae656ad740",
+  "ca-cell.js?h=7f7b58c7b8",
   "fire-lookout.js?h=2f927a31cb",
-  "ca-cover.js?h=28c00621eb",
+  "ca-cover.js?h=e871af80fe",
   "world-layers.js?h=334c9edb27",
   "outdoor-layers.js?h=59d18abf82",
   "mtg-stores.js?h=2bdf71d545",
