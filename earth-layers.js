@@ -103,20 +103,36 @@
   /* meteorite falls: tiny points file, detail shard fetched on tap (opt96) */
   var MET = "data/met/falls";
   var metMeta = null;
+  var metFeats = null;
+  function metMasses() {
+    return (metFeats || []).map((f) => { return +f.properties.m; }).filter((m) => { return m > 0; });
+  }
   function metApply(map, on) {
     K.vis(map, ["meteor-dot"], on);
     if (!on) return;
     K.loadJson(MET + ".p.json?h=opt99").then((d) => {
       metMeta = d;
       if (!map.getSource("meteorites")) {
+        metFeats = window.SunnyPoints.toFeatures(d);
+        metFeats.forEach((f) => { if (!(+f.properties.m > 0)) f.properties.m = 1; });
+        metFeats = K.magnitude.sort(metFeats, "m");
         map.addSource("meteorites", { type: "geojson", attribution: 'Meteorites: <a href="https://www.lpi.usra.edu/meteor/" target="_blank" rel="noopener">Meteoritical Society</a> via NASA',
-          data: K.fc(window.SunnyPoints.toFeatures(d)) });
+          data: K.fc(metFeats) });
       }
       if (!map.getLayer("meteor-dot")) {
-        map.addLayer({ id: "meteor-dot", type: "circle", source: "meteorites", paint: {
-          "circle-radius": K.markerScale.bind(map, "meteor-dot", "circle-radius",
-            K.size({ stops: [[1, 1.8], [8, 5], [14, 6]] })),
-          "circle-color": ["match", ["get", "k"], "found", "#8a7bd0", "#b9a2ff"], "circle-stroke-color": "#2a1f4d", "circle-stroke-width": 0.7 } }, K.before(map));
+        var rad = K.magnitude.bind(map, "meteor-dot", {
+          id: "meteorites", prop: "m", transform: "log", px: [2.5, 36],
+          domain: [1, 1e8], values: metMasses, allValues: metMasses,
+          format: (g) => { return g >= 1000 ? (Math.round(g / 100) / 10) + " kg" : Math.round(g) + " g"; }
+        });
+        map.addLayer({ id: "meteor-dot", type: "circle", source: "meteorites", layout: { "circle-sort-key": K.magnitude.sortKey("m") }, paint: {
+          "circle-radius": rad, "circle-radius-transition": { duration: 450, delay: 0 },
+          "circle-color": ["match", ["get", "k"], "found", "#8a7bd0", "#b9a2ff"],
+          "circle-stroke-color": ["case", ["==", ["get", "magOut"], 1], "#fff6c8", "#2a1f4d"],
+          "circle-stroke-width": K.magnitude.stroke() } }, K.before(map));
+        K.magnitude.refresh("meteorites");
+        K.magnitude.markOutliers(metFeats, "m", K.magnitude.hiRaw("meteorites") || 0);
+        map.getSource("meteorites").setData(K.fc(metFeats));
       }
       K.vis(map, ["meteor-dot"], L.isOn("meteorites"));
     }).catch(() => {});
@@ -126,7 +142,9 @@
     return g >= 1000 ? (Math.round(g / 100) / 10) + " kg" : g + " g";
   }
   L.add({ id: "meteorites", name: "Meteorites", icon: "🪨", group: "Earth", taps: ["meteor-dot"],
-    tip: "Meteorites seen falling, plus finds of 1 kg or more, worldwide (Meteoritical Society, NASA)", apply: metApply,
+    tip: "Meteorites seen falling, plus finds of 1 kg or more, worldwide (Meteoritical Society, NASA), sized by mass",
+    legend: () => { return (K.magnitude ? K.magnitude.legend("meteorites") : "") + '<div class="ls-row"><small>Bigger ≈ heavier find/fall</small></div>'; },
+    apply: metApply,
     attach: (map, on) => {
       idleAdd(map, "meteorites", "meteor-dot", metApply);
       (window.SunnyHoverName = window.SunnyHoverName || {})["meteor-dot"] = (f) => {

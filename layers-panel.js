@@ -267,6 +267,22 @@
       BR.onChange(syncBr);
     }
     head.appendChild(brRow);
+    /* opt225: Relative sizing under Marker size / brightness (sticky; do not replace msRow/brRow) */
+    var relRow = el("label", "lp-relsize");
+    relRow.innerHTML = '<input type="checkbox" aria-label="Relative sizing"> <span>Relative sizing</span>';
+    var relInp = relRow.querySelector("input");
+    var MAG = window.SunnyKit && window.SunnyKit.magnitude;
+    if (MAG) {
+      relInp.checked = !!MAG.getRelative();
+      relInp.addEventListener("change", () => { MAG.setRelative(relInp.checked); });
+      MAG.onChange((on) => {
+        relInp.checked = !!on;
+        setTimeout(refresh, 0);
+      });
+    } else {
+      relInp.disabled = true;
+    }
+    head.appendChild(relRow);
     panel.appendChild(head);
     panel.appendChild(el("div", "lp-body"));
     var tab = el("button", "lp-tab", "›");

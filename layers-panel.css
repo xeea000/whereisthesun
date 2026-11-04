@@ -173,3 +173,8 @@
 .hi-year-range-ticks{display:flex;justify-content:space-between;font:700 10px system-ui,sans-serif;margin:2px 2px 0;opacity:.9}
 .hi-year-hint{font:500 10px system-ui,sans-serif;opacity:.65;margin-top:4px;line-height:1.35}
 .lp-bright .lp-msize-v{flex:0 0 2.8em}
+/* opt225: Relative sizing under Marker size in sticky header */
+.lp-relsize{display:flex;align-items:center;gap:6px;width:100%;padding:0 2px 4px;font:600 11px system-ui,sans-serif;color:#a8b0bc;cursor:pointer;user-select:none}
+.lp-relsize input{accent-color:#7eb6ff;width:14px;height:14px;margin:0}
+.mag-leg{margin-top:2px}
+.mag-leg .mag-dot{box-shadow:0 0 0 1px rgba(0,0,0,.35)}

@@ -26,7 +26,10 @@
     yearMin = lo; yearMax = hi;
     try { localStorage.setItem("sunny-air-year", yearMin + "," + yearMax); } catch (e) {}
     syncYearUi();
-    if (!silent && pMap && pMap.getLayer(DOT)) pMap.setFilter(DOT, yearFilter());
+    if (!silent && pMap && pMap.getLayer(DOT)) {
+      pMap.setFilter(DOT, ["all", ["==", ["geometry-type"], "Point"], yearFilter()]);
+      if (K.magnitude) K.magnitude.request("airbursts");
+    }
   }
   function loadYearRange() {
     try {
@@ -108,12 +111,14 @@
     (d.fireballs || []).forEach((r) => {
       var impact = r[4];
       var energy = r[3];
-      var mag = impact > 0 ? Math.log10(impact * 1000 + 1) : (energy > 0 ? Math.log10(energy + 1) : 0);
+      /* eng in kt TNT-equivalent for magnitude sizing */
+      var eng = impact > 0 ? impact * 1000 : (energy > 0 ? energy : 0);
+      var mag = eng > 0 ? Math.log10(eng + 1) : 0;
       var year = r[0] ? +r[0].slice(0, 4) : 0;
       out.push({
         type: "Feature",
         properties: {
-          kind: "cneos", date: r[0], year: year, energy: energy, impact: impact,
+          kind: "cneos", date: r[0], year: year, energy: energy, impact: impact, eng: eng,
           alt: r[5], vel: r[6], mag: mag, name: "Fireball " + (r[0] || "")
         },
         geometry: { type: "Point", coordinates: [r[2], r[1]] }
@@ -133,12 +138,49 @@
         type: "Feature",
         properties: {
           kind: "tunguska", date: t.date, year: 1908, name: t.name,
-          note: t.note, approx: 1, mag: 4
+          note: t.note, approx: 1, mag: 4, eng: 1e7 /* ~10 Mt */
         },
         geometry: { type: "Point", coordinates: [t.lon, t.lat] }
       });
     }
-    return out;
+    return K.magnitude.sort(out.filter((f) => { return f.geometry.type === "Point"; }).concat(out.filter((f) => { return f.geometry.type !== "Point"; })), "eng");
+  }
+  function filteredEng() {
+    return (feats || []).filter((f) => {
+      if (f.geometry.type !== "Point") return false;
+      if (f.properties.kind === "tunguska") return true;
+      var y = +f.properties.year;
+      return y >= yearMin && y <= yearMax && +f.properties.eng > 0;
+    }).map((f) => { return +f.properties.eng; });
+  }
+  function allEng() {
+    return (feats || []).filter((f) => { return f.geometry.type === "Point" && +f.properties.eng > 0; })
+      .map((f) => { return +f.properties.eng; });
+  }
+  function magOpts() {
+    return {
+      id: "airbursts", prop: "eng", transform: "log", px: [3, 40],
+      domain: [0.1, 1e7], values: filteredEng, allValues: allEng,
+      format: (e) => {
+        if (!(e > 0)) return "0";
+        if (e >= 1e6) return (e / 1e6).toFixed(1) + " Mt";
+        if (e >= 1e3) return (e / 1e3).toFixed(1) + " kt";
+        return e.toFixed(1) + " kt";
+      },
+      unit: ""
+    };
+  }
+  function pushDots(map) {
+    if (!map.getSource(SRC) || !feats) return;
+    if (K.magnitude) {
+      K.magnitude.refresh("airbursts");
+      var hi = K.magnitude.hiRaw("airbursts") || 0;
+      var pts = feats.filter((f) => { return f.geometry.type === "Point"; });
+      var polys = feats.filter((f) => { return f.geometry.type !== "Point"; });
+      pts = K.magnitude.sort(pts, "eng");
+      K.magnitude.markOutliers(pts, "eng", hi);
+      map.getSource(SRC).setData(K.fc(pts.concat(polys)));
+    } else map.getSource(SRC).setData(K.fc(feats));
   }
   function load() {
     if (!loading) {
@@ -174,27 +216,27 @@
       }, K.before(map));
     }
     if (!map.getLayer(DOT)) {
+      var rad = K.magnitude.bind(map, DOT, magOpts());
       map.addLayer({
         id: DOT, type: "circle", source: SRC,
         filter: ["all", ["==", ["geometry-type"], "Point"], yearFilter()],
+        layout: { "circle-sort-key": K.magnitude.sortKey("eng") },
         paint: {
           "circle-color": [
             "case", ["==", ["get", "kind"], "tunguska"], "#fde68a",
             ["interpolate", ["linear"], ["get", "mag"], 0, "#6b5cff", 1.5, "#a78bfa", 3, "#fde68a"]
           ],
-          "circle-radius": K.markerScale.bind(map, DOT, "circle-radius",
-            K.size({ stops: [
-              [1, ["+", 2, ["*", 1.1, ["get", "mag"]]]],
-              [6, ["+", 3, ["*", 1.8, ["get", "mag"]]]],
-              [12, ["+", 4.5, ["*", 2.4, ["get", "mag"]]]]
-            ] })),
-          "circle-opacity": 0.92,
-          "circle-stroke-color": "rgba(20,10,40,0.55)",
-          "circle-stroke-width": 1.1
+          "circle-radius": rad,
+          "circle-radius-transition": { duration: 450, delay: 0 },
+          "circle-opacity": 0.85,
+          "circle-stroke-color": ["case", ["==", ["get", "magOut"], 1], "#fff6c8", "rgba(20,10,40,0.55)"],
+          "circle-stroke-width": K.magnitude.stroke()
         }
       }, K.before(map));
+      pushDots(map);
     } else {
       map.setFilter(DOT, ["all", ["==", ["geometry-type"], "Point"], yearFilter()]);
+      if (K.magnitude) K.magnitude.request("airbursts");
     }
   }
   function card(map, e) {
@@ -226,6 +268,7 @@
     load().then(() => {
       ensure(map);
       K.vis(map, [DOT, FILL, LINE], L.isOn("airbursts"));
+      pushDots(map);
       mountYearUi();
     }).catch(() => {});
   }
@@ -234,12 +277,15 @@
     id: "airbursts", name: "Airbursts & fireballs", icon: "☄️", group: "Sky & Space",
     dflt: false, taps: [DOT, FILL, LINE],
     tip: "NASA CNEOS fireball airbursts (1988–now), sized by impact energy, plus Tunguska 1908 approximate forest-fall extent",
-    legend: K.legKeys([
-      ["#6b5cff", "dot", "Lower energy fireball"],
-      ["#a78bfa", "dot", "Mid energy"],
-      ["#fde68a", "dot", "Higher energy / Tunguska"],
-      ["#c4b5fd", "area", "Tunguska approximate extent"]
-    ]) + '<div class="ls-row"><small>CNEOS PD · Tunguska ellipse ≈ published ~2150 km² butterfly (approximate).</small></div>',
+    legend: () => {
+      return K.legKeys([
+        ["#6b5cff", "dot", "Lower energy fireball"],
+        ["#a78bfa", "dot", "Mid energy"],
+        ["#fde68a", "dot", "Higher energy / Tunguska"],
+        ["#c4b5fd", "area", "Tunguska approximate extent"]
+      ]) + (K.magnitude ? K.magnitude.legend("airbursts") : "") +
+        '<div class="ls-row"><small>CNEOS PD · Tunguska ellipse ≈ published ~2150 km² butterfly (approximate).</small></div>';
+    },
     note: () => { return L.isOn("airbursts") ? yearLabel() + " · +Tunguska" : ""; },
     apply: apply,
     attach: (map, on) => {

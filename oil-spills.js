@@ -24,7 +24,7 @@
     yearMin = lo; yearMax = hi;
     try { localStorage.setItem("sunny-oil-year", yearMin + "," + yearMax); } catch (e) {}
     syncYearUi();
-    if (!silent && pMap) applyFilter(pMap);
+    if (!silent && pMap) { applyFilter(pMap); magKick(); }
   }
   function loadYearRange() {
     try {
@@ -83,18 +83,59 @@
     syncYearUi();
   }
   function toFeats(d) {
-    return d.spills.map((r) => {
+    var out = d.spills.map((r) => {
       var gal = r[5];
-      var logg = gal > 0 ? Math.log10(gal) : 0;
       return {
         type: "Feature",
         properties: {
-          id: r[0], name: r[1], year: r[2], gal: gal, logg: logg,
+          id: r[0], name: r[1], year: r[2], gal: gal > 0 ? gal : 0,
           loc: r[6], com: r[7]
         },
         geometry: { type: "Point", coordinates: [r[4], r[3]] }
       };
     });
+    return K.magnitude.sort(out, "gal");
+  }
+  function filteredGals() {
+    return (feats || []).filter((f) => {
+      var y = +f.properties.year;
+      return y >= yearMin && y <= yearMax && +f.properties.gal > 0;
+    }).map((f) => { return +f.properties.gal; });
+  }
+  function allGals() {
+    return (feats || []).map((f) => { return +f.properties.gal; }).filter((g) => { return g > 0; });
+  }
+  function magOpts() {
+    return {
+      id: "oilspills", prop: "gal", transform: "log", px: [3, 40],
+      domain: [1, 5e7],
+      values: filteredGals, allValues: allGals,
+      format: (g) => {
+        if (!(g > 0)) return "0";
+        if (g >= 1e6) return (g / 1e6).toFixed(g >= 1e8 ? 0 : 1) + "M";
+        if (g >= 1e3) return (g / 1e3).toFixed(0) + "k";
+        return String(Math.round(g));
+      },
+      unit: "gal",
+      onDomain: () => { /* legend refreshes via layers-panel on change */ }
+    };
+  }
+  function magKick() {
+    if (K.magnitude) K.magnitude.request("oilspills");
+  }
+  function pushData(map) {
+    if (!map.getSource(SRC) || !feats) return;
+    var pack = null;
+    if (K.magnitude) {
+      /* mark outliers vs current domain after refresh */
+      K.magnitude.refresh("oilspills");
+      var hi = K.magnitude.hiRaw("oilspills") || 0;
+      var sorted = K.magnitude.sort(feats, "gal");
+      K.magnitude.markOutliers(sorted, "gal", hi);
+      map.getSource(SRC).setData(K.fc(sorted));
+      return;
+    }
+    map.getSource(SRC).setData(K.fc(feats));
   }
   function load() {
     if (!loading) {
@@ -110,30 +151,30 @@
   }
   function applyFilter(map) {
     if (map.getLayer(LYR)) map.setFilter(LYR, yearFilter());
+    magKick();
   }
   function ensure(map) {
     if (!map.getSource(SRC)) {
       map.addSource(SRC, { type: "geojson", data: K.fc(feats), attribution: ATTRIB });
     }
     if (!map.getLayer(LYR)) {
+      var rad = K.magnitude.bind(map, LYR, magOpts());
       map.addLayer({
         id: LYR, type: "circle", source: SRC, filter: yearFilter(),
+        layout: { "circle-sort-key": K.magnitude.sortKey("gal") },
         paint: {
           "circle-color": [
             "interpolate", ["linear"], ["get", "year"],
             1968, "#5c3a1e", 1990, "#a05a20", 2010, "#d97820", 2026, "#ffb347"
           ],
-          "circle-radius": K.markerScale.bind(map, LYR, "circle-radius",
-            K.size({ stops: [
-              [1, ["+", 1.6, ["*", 0.55, ["get", "logg"]]]],
-              [6, ["+", 2.4, ["*", 0.9, ["get", "logg"]]]],
-              [12, ["+", 3.5, ["*", 1.35, ["get", "logg"]]]]
-            ] })),
+          "circle-radius": rad,
+          "circle-radius-transition": { duration: 450, delay: 0 },
           "circle-opacity": 0.78,
-          "circle-stroke-color": "rgba(40,20,0,0.55)",
-          "circle-stroke-width": 0.7
+          "circle-stroke-color": ["case", ["==", ["get", "magOut"], 1], "#fff6c8", "rgba(40,20,0,0.55)"],
+          "circle-stroke-width": K.magnitude.stroke()
         }
       }, K.before(map));
+      pushData(map);
     } else {
       applyFilter(map);
     }
@@ -163,6 +204,7 @@
     load().then(() => {
       ensure(map);
       K.vis(map, [LYR], L.isOn("oilspills"));
+      pushData(map);
       mountYearUi();
     }).catch(() => {});
   }
@@ -170,13 +212,16 @@
   L.add({
     id: "oilspills", name: "Oil spills", icon: "🛢️", group: "Human impact",
     dflt: false, taps: [LYR],
-    tip: "Oil incidents from NOAA IncidentNews (mostly US/response cases). Dot size ≈ log of max potential gallons; filter by year",
-    legend: K.legKeys([
-      ["#5c3a1e", "dot", "1960s–80s"],
-      ["#a05a20", "dot", "1990s"],
-      ["#d97820", "dot", "2000s"],
-      ["#ffb347", "dot", "2010s–now"]
-    ]) + '<div class="ls-row"><small>Bigger ≈ more gallons (log). NOAA PD · max potential when known.</small></div>',
+    tip: "Oil incidents from NOAA IncidentNews (mostly US/response cases). Dot size by gallons (relative when enabled); filter by year",
+    legend: () => {
+      return K.legKeys([
+        ["#5c3a1e", "dot", "1960s–80s"],
+        ["#a05a20", "dot", "1990s"],
+        ["#d97820", "dot", "2000s"],
+        ["#ffb347", "dot", "2010s–now"]
+      ]) + (K.magnitude ? K.magnitude.legend("oilspills") : "") +
+        '<div class="ls-row"><small>Bigger ≈ more gallons. Halo = top outliers. NOAA PD · max potential when known.</small></div>';
+    },
     note: () => { return L.isOn("oilspills") ? yearLabel() : ""; },
     apply: apply,
     attach: (map, on) => {

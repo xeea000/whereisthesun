@@ -113,6 +113,8 @@
       if (ms && ms !== 1) st.ms = ms;
       var br = window.SunnyKit && window.SunnyKit.mapBrightness && window.SunnyKit.mapBrightness.get();
       if (br && br !== 1) st.br = br;
+      var Mag = window.SunnyKit && window.SunnyKit.magnitude;
+      if (Mag && !Mag.getRelative()) st.rs = 0; /* default on — only encode when off */
     }
     var sel = captureSelection();
     if (sel) st.s = sel;
@@ -230,6 +232,9 @@
     }
     if (st.br != null && window.SunnyKit && window.SunnyKit.mapBrightness) {
       try { window.SunnyKit.mapBrightness.set(st.br); } catch (e) {}
+    }
+    if (st.rs != null && window.SunnyKit && window.SunnyKit.magnitude) {
+      try { window.SunnyKit.magnitude.setRelative(st.rs !== 0); } catch (e) {}
     }
   }
   function matchFeat(f, key) {

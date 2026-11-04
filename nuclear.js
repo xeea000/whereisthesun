@@ -154,11 +154,19 @@
   function yearFilter() {
     return ["all", [">=", ["get", "year"], yearMin], ["<=", ["get", "year"], yearMax]];
   }
+  function filteredInes() {
+    return (feats || []).filter((f) => {
+      if (f.geometry.type !== "Point") return false;
+      var y = +f.properties.year;
+      return y >= yearMin && y <= yearMax && +f.properties.ines > 0;
+    }).map((f) => { return +f.properties.ines; });
+  }
   function applyFilters(map) {
     var f = yearFilter();
     if (map.getLayer(DOT)) map.setFilter(DOT, ["all", ["==", ["geometry-type"], "Point"], f]);
     if (map.getLayer(FILL)) map.setFilter(FILL, ["all", ["==", ["geometry-type"], "Polygon"], f]);
     if (map.getLayer(LINE)) map.setFilter(LINE, ["all", ["==", ["geometry-type"], "Polygon"], f]);
+    if (K.magnitude) K.magnitude.request("nuclear");
   }
   function ensure(map) {
     if (!map.getSource(SRC)) {
@@ -186,22 +194,25 @@
       }, K.before(map));
     }
     if (!map.getLayer(DOT)) {
+      var rad = K.magnitude.bind(map, DOT, {
+        id: "nuclear", prop: "ines", transform: "linear", px: [5, 28],
+        domain: [1, 7], values: filteredInes, allValues: filteredInes,
+        format: (n) => { return "INES " + Math.round(n); }
+      });
       map.addLayer({
         id: DOT, type: "circle", source: SRC,
         filter: ["all", ["==", ["geometry-type"], "Point"], f],
+        layout: { "circle-sort-key": K.magnitude.sortKey("ines") },
         paint: {
           "circle-color": ["match", ["get", "ines"], 7, INES_COL[7], 6, INES_COL[6], 5, INES_COL[5], 4, INES_COL[4], INES_COL[3]],
-          "circle-radius": K.markerScale.bind(map, DOT, "circle-radius",
-            K.size({ stops: [
-              [1, ["+", 3, ["*", 0.7, ["get", "ines"]]]],
-              [6, ["+", 4.5, ["*", 1.0, ["get", "ines"]]]],
-              [12, ["+", 6, ["*", 1.2, ["get", "ines"]]]]
-            ] })),
-          "circle-opacity": 0.94,
-          "circle-stroke-color": "rgba(10,14,22,0.8)",
-          "circle-stroke-width": 1.15
+          "circle-radius": rad,
+          "circle-radius-transition": { duration: 450, delay: 0 },
+          "circle-opacity": 0.9,
+          "circle-stroke-color": ["case", ["==", ["get", "magOut"], 1], "#fff6c8", "rgba(10,14,22,0.8)"],
+          "circle-stroke-width": K.magnitude.stroke()
         }
       }, K.before(map));
+      K.magnitude.refresh("nuclear");
     } else {
       applyFilters(map);
     }
@@ -233,13 +244,16 @@
     id: "nuclear", name: "Nuclear incidents", icon: "☢️", group: "Human impact",
     dflt: false, taps: [DOT, FILL, LINE],
     tip: "Major nuclear accidents/incidents (IAEA INES examples). Rings show approximate published zones — not modelled plumes",
-    legend: K.legKeys([
-      ["#dc2626", "dot", "INES 7 major accident"],
-      ["#ea580c", "dot", "INES 6 serious accident"],
-      ["#d97706", "dot", "INES 5"],
-      ["#ca8a04", "dot", "INES 4"],
-      ["#dc2626", "area", "Approximate published zone"]
-    ]) + '<div class="ls-row"><small>Extents labelled approximate (exclusion/evacuation/EURT). Not plume models.</small></div>',
+    legend: () => {
+      return K.legKeys([
+        ["#dc2626", "dot", "INES 7 major accident"],
+        ["#ea580c", "dot", "INES 6 serious accident"],
+        ["#d97706", "dot", "INES 5"],
+        ["#ca8a04", "dot", "INES 4"],
+        ["#dc2626", "area", "Approximate published zone"]
+      ]) + (K.magnitude ? K.magnitude.legend("nuclear") : "") +
+        '<div class="ls-row"><small>Extents labelled approximate (exclusion/evacuation/EURT). Not plume models.</small></div>';
+    },
     note: () => { return L.isOn("nuclear") ? yearLabel() : ""; },
     apply: apply,
     attach: (map, on) => {

@@ -230,20 +230,34 @@
     if (!tOv) return [];
     return (tOv.pts || []).map((r) => {
       /* [lat, lon, n, h, k] */
+      var h = +r[3] || 0;
       return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] },
-        properties: { k: r[4] + String(r[3] || 0), t: "ov", i: -1, ov: 1, sites: r[2], n: r[2] } };
+        properties: { k: r[4] + String(r[3] || 0), t: "ov", i: -1, ov: 1, sites: r[2], n: r[2], h: h } };
     });
   };
+  var tHeightOf = (f) => {
+    if (+f.properties.h > 0) return +f.properties.h;
+    var k = String(f.properties.k || "");
+    return +k.slice(1) || 0;
+  };
+  var tCurFeats = [];
+  var tHeights = () => { return tCurFeats.map(tHeightOf).filter((h) => { return h > 0; }); };
   var tSet = () => {
     if (!tMap || !tMap.getSource("w-towers")) return;
     var band = tBand();
-    if (band === "ov") {
-      var all = (tFeats.big || []).concat(tOvFeats());
-      tMap.getSource("w-towers").setData(K.fc(all));
-      return;
+    var all;
+    if (band === "ov") all = (tFeats.big || []).concat(tOvFeats());
+    else {
+      all = [];
+      Object.keys(tFeats).forEach((k) => { all = all.concat(tFeats[k] || []); });
     }
-    var all = [];
-    Object.keys(tFeats).forEach((k) => { all = all.concat(tFeats[k] || []); });
+    all.forEach((f) => { if (!(+f.properties.h > 0)) f.properties.h = tHeightOf(f); });
+    all = K.magnitude.sort(all, "h");
+    tCurFeats = all;
+    if (K.magnitude) {
+      K.magnitude.refresh("towers");
+      K.magnitude.markOutliers(all, "h", K.magnitude.hiRaw("towers") || 0);
+    }
     tMap.getSource("w-towers").setData(K.fc(all));
   };
   var tLoadOv = () => {
@@ -272,7 +286,6 @@
     });
     tSet();
   };
-  var TH = ["to-number", ["slice", ["get", "k"], 1]];
   var tApply = (map, on) => {
     tMap = map;
     K.vis(map, ["tower-dot"], on && tTypeOn());
@@ -281,11 +294,17 @@
     if (!on) return;
     if (!map.getSource("w-towers")) {
       map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR, ISED" });
-      map.addLayer({ id: "tower-dot", type: "circle", source: "w-towers", filter: tFilter(), paint: {
-        "circle-radius": K.markerScale.bind(map, "tower-dot", "circle-radius",
-          K.size({ stops: [[1, ["+", 1.2, ["/", TH, 200]]], [6, ["+", 1.8, ["/", TH, 110]]], [12, ["+", 3, ["/", TH, 50]]]],
-            cluster: { prop: "sites", max: 1.6, coef: 0.12 } })),
-        "circle-color": tColor, "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
+      var rad = K.magnitude.bind(map, "tower-dot", {
+        id: "towers", prop: "h", transform: "linear", px: [3, 36],
+        domain: [30, 600], values: tHeights, allValues: tHeights,
+        format: (h) => { return Math.round(h) + " m"; }
+      });
+      map.addLayer({ id: "tower-dot", type: "circle", source: "w-towers", filter: tFilter(), layout: { "circle-sort-key": K.magnitude.sortKey("h") }, paint: {
+        "circle-radius": rad,
+        "circle-radius-transition": { duration: 450, delay: 0 },
+        "circle-color": tColor,
+        "circle-stroke-color": ["case", ["==", ["get", "magOut"], 1], "#fff6c8", "#101418"],
+        "circle-stroke-width": K.magnitude.stroke() } }, K.before(map));
       map.on("moveend", tView);
     }
     K.loadJson(BASE + "manifest.json?h=" + V).then((m) => { meta.manifest = m; tView(); }).catch(() => {});
@@ -304,10 +323,13 @@
       }
       if (!tTypeOn() && tMap && tMap.getSource("w-towers")) tMap.getSource("w-towers").setData(K.fc([]));
       else tView();
+      if (K.magnitude) K.magnitude.request("towers");
       if (window.SunnyCaCell) window.SunnyCaCell.apply();
       if (window.SunnyFireLook) window.SunnyFireLook.apply();
     },
-    legend: tLegend,
+    legend: () => {
+      return (typeof tLegend === "function" ? tLegend() : tLegend) + (K.magnitude ? K.magnitude.legend("towers") : "");
+    },
     attach: (map) => {
       if (window.SunnyCaCell) window.SunnyCaCell.attach(map);
       if (window.SunnyFireLook) window.SunnyFireLook.attach(map);

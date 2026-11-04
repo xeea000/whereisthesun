@@ -47,7 +47,7 @@
     cutZ: 5,
     opacity: 0.92
   });
-  var pMap = null;
+  var pMap = null, riverFeats = null;
   var sampleBand = null, riverBand = null;
   var sampleCache = {}, riverCache = {}, beachCache = null, gyreCache = null;
   var sampleLoad = {}, riverLoad = {}, beachLoad = null, gyreLoad = null;
@@ -244,28 +244,42 @@
       }, K.before(map));
     }
   }
+  function riverTons() {
+    return (riverFeats || []).map((f) => { return +f.properties.ton; }).filter((n) => { return n > 0; });
+  }
   function ensureRivers(map, feats) {
-    put(map, R_SRC, feats);
+    riverFeats = K.magnitude.sort(feats || [], "ton");
+    put(map, R_SRC, riverFeats);
     if (!map.getLayer(R_LYR)) {
+      var rad = K.magnitude.bind(map, R_LYR, {
+        id: "oceangarbage-rivers", prop: "ton", transform: "log", px: [3, 36],
+        domain: [0.01, 5e5], values: riverTons, allValues: riverTons,
+        format: (n) => {
+          if (!(n > 0)) return "0";
+          if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k";
+          return n.toFixed(n >= 10 ? 0 : 1);
+        },
+        unit: "t/yr"
+      });
       map.addLayer({
         id: R_LYR, type: "circle", source: R_SRC,
+        layout: { "circle-sort-key": K.magnitude.sortKey("ton") },
         paint: {
           "circle-color": [
             "interpolate", ["linear"], ["get", "ton"],
             100, "#67e8f9", 2000, "#a78bfa", 20000, "#f59e0b", 100000, "#ef4444"
           ],
-          "circle-radius": K.markerScale.bind(map, R_LYR, "circle-radius",
-            K.size({ stops: [
-              [1, ["+", 1.8, ["*", 1.4, ["get", "logt"]]]],
-              [6, ["+", 2.6, ["*", 1.8, ["get", "logt"]]]],
-              [12, ["+", 3.5, ["*", 2.2, ["get", "logt"]]]]
-            ] })),
+          "circle-radius": rad,
+          "circle-radius-transition": { duration: 450, delay: 0 },
           "circle-opacity": 0.9,
-          "circle-stroke-color": "rgba(10,14,22,0.78)",
-          "circle-stroke-width": 1.1
+          "circle-stroke-color": ["case", ["==", ["get", "magOut"], 1], "#fff6c8", "rgba(10,14,22,0.78)"],
+          "circle-stroke-width": K.magnitude.stroke()
         }
       }, K.before(map));
     }
+    K.magnitude.refresh("oceangarbage-rivers");
+    K.magnitude.markOutliers(riverFeats, "ton", K.magnitude.hiRaw("oceangarbage-rivers") || 0);
+    map.getSource(R_SRC).setData(K.fc(riverFeats));
   }
   function ensureBeach(map, feats) {
     put(map, B_SRC, feats);
@@ -396,12 +410,15 @@
     dflt: false, taps: [S_LYR, G_FILL, G_LINE, R_LYR, B_LYR],
     tip: "Ocean plastic: NOAA measurements, a smooth model surface, five gyre zones, river outflows, and beach samples",
     kids: KIDS,
-    legend: K.legKeys([
-      ["#38bdf8", "dot", "Measured sample (low→high)"],
-      ["#f97316", "area", "Model surface / gyre zone"],
-      ["#22d3ee", "dot", "River outflow (bigger = more tons/yr)"],
-      ["#f472b6", "dot", "Beach sample"]
-    ]) + '<div class="ls-row"><small>Model surface is a smooth ocean-masked field (not dots). Gyres are ocean-only model contours. Samples are real measurements.</small></div>',
+    legend: () => {
+      return K.legKeys([
+        ["#38bdf8", "dot", "Measured sample (low→high)"],
+        ["#f97316", "area", "Model surface / gyre zone"],
+        ["#22d3ee", "dot", "River outflow (bigger = more tons/yr)"],
+        ["#f472b6", "dot", "Beach sample"]
+      ]) + (K.magnitude && K.kids.isOn("oceangarbage-rivers", true) ? K.magnitude.legend("oceangarbage-rivers") : "") +
+        '<div class="ls-row"><small>Model surface is a smooth ocean-masked field (not dots). Gyres are ocean-only model contours. Samples are real measurements.</small></div>';
+    },
     note: () => {
       if (!L.isOn("oceangarbage")) return "";
       var bits = [classLabel()];
@@ -409,6 +426,12 @@
       return bits.join(" · ");
     },
     apply: apply,
+    kidSet: () => {
+      if (pMap) {
+        sync(pMap);
+        if (K.magnitude) K.magnitude.request("oceangarbage-rivers");
+      }
+    },
     attach: (map, on) => {
       pMap = map;
       map.on("idle", () => {
