@@ -28,8 +28,8 @@
     samples_ov: "data/human/plastic/samples-ov.json?v=2e68b283",
     samples_mid: "data/human/plastic/samples-mid.json?v=9c285c23",
     samples_full: "data/human/plastic/samples-full.json?v=c6ed7f7e",
-    model_ov: "data/human/plastic/model-field.webp?v=e250d391",
-    model_hi: "data/human/plastic/model-field-2x.webp?v=7ae852a6",
+    model_ov: "data/human/plastic/model-field.webp?v=dc4d53c4",
+    model_hi: "data/human/plastic/model-field-2x.webp?v=e2c738ac",
     rivers_ov: "data/human/plastic/rivers-ov.json?v=8b52cc3d",
     rivers_mid: "data/human/plastic/rivers-mid.json?v=f9738546",
     rivers_full: "data/human/plastic/rivers-full.json?v=c7764ca7",
@@ -45,7 +45,7 @@
     urls: { ov: URLS.model_ov, hi: URLS.model_hi },
     bounds: [-180, -90, 180, 90],
     cutZ: 5,
-    opacity: 0.82
+    opacity: 0.92
   });
   var pMap = null;
   var sampleBand = null, riverBand = null;
