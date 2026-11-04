@@ -14,14 +14,30 @@
       }
     }
   } catch (eBareUrl) {}
-  /* opt58: new SW claims the page → reload once so bare /whereisthesun/ gets the new shell */
+  /* opt58: new SW claims the page → reload once so bare /whereisthesun/ gets the new shell.
+   * opt205: never reload while the GPS pre-permission card / prompt is in flight — that reload
+   * looked like confirming location refreshed the page and asked again. Offer the update banner. */
   try {
     if (typeof navigator !== "undefined" && navigator.serviceWorker) {
       var __sunnySwReloaded = false;
       /* opt77: first install claiming the page is not an update, so no reload (it re-downloaded everything) */
       var __sunnyHadSw = !!navigator.serviceWorker.controller;
+      function sunnyGeoHolding() {
+        try {
+          return !!(window.SunnyGeo && SunnyGeo.holdReload && SunnyGeo.holdReload());
+        } catch (eHold) { return false; }
+      }
+      function sunnyOfferUpdateBanner() {
+        try { if (window.SunnyUpdate && SunnyUpdate.check) SunnyUpdate.check(); } catch (eUp) {}
+      }
       function onSunnySwSwap() {
         if (__sunnySwReloaded || !__sunnyHadSw) return;
+        if (sunnyGeoHolding() || (typeof document !== "undefined" && document.visibilityState === "hidden")) {
+          /* Consume the swap without reloading; banner can still offer UPDATE. */
+          __sunnySwReloaded = true;
+          sunnyOfferUpdateBanner();
+          return;
+        }
         __sunnySwReloaded = true;
         try { location.reload(); } catch (eRel) {}
       }

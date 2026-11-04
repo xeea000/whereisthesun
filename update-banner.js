@@ -122,6 +122,11 @@
   }
   function check() {
     if (updating) return;
+    try {
+      /* Only pause while the GPS card is on screen — still offer UPDATE after confirm. */
+      var el = document.getElementById("geo-ask");
+      if (el && !el.hidden) return;
+    } catch (eHold) {}
     fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(readJson).then(compare).catch(ignore);
   }
   function onVisible() {

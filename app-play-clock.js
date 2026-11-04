@@ -367,12 +367,26 @@
         : "Can't get your location. Tap the map to drop a pin.");
       return;
     }
+    /* opt205: one shared ask; concurrent locate() calls share it (no second card/prompt). */
     var go = () => { locateRun(opts); };
     if (!window.SunnyGeo || !SunnyGeo.ask) { go(); return; }
-    SunnyGeo.ask({ boot: boot }).then((choice) => {
+    if (locate._askInflight) {
+      locate._askInflight.then((choice) => {
+        if (choice === "allow") go();
+        else locateDeclineUi(boot);
+      }).catch(() => { locateDeclineUi(boot); });
+      return;
+    }
+    locate._askInflight = SunnyGeo.ask({ boot: boot }).then((choice) => {
+      locate._askInflight = null;
       if (choice === "allow") go();
       else locateDeclineUi(boot);
-    }).catch(() => { locateDeclineUi(boot); });
+      return choice;
+    }).catch((err) => {
+      locate._askInflight = null;
+      locateDeclineUi(boot);
+      throw err;
+    });
   }
   function locateRun(opts) {
     opts = opts || {};
@@ -400,12 +414,14 @@
       clearLocateWatch();
       waitingForTap = true;
       setStatus(msg);
+      try { if (window.SunnyGeo && SunnyGeo.releaseHold) SunnyGeo.releaseHold(); } catch (eRh) {}
     }
     function finishOk(pos) {
       if (settled) return;
       settled = true;
       clearLocateWatch();
       applyLocateFix(pos, { fresh: true });
+      try { if (window.SunnyGeo && SunnyGeo.releaseHold) SunnyGeo.releaseHold(); } catch (eRh) {}
     }
     function onWatchPos(pos) {
       if (settled) return;
