@@ -1,5 +1,6 @@
 // workspace/whereisthesun/outdoor-layers.js
 /* SUNNY opt94 outdoors and history layers. All load a piece at a time and only when zoomed in.
+ * opt206: zoomGate clears the source when zoomed out or the view is too wide (no hysteresis).
  *   Provincial parks  moved to parks-ca.js (opt164, all of Canada).
  *   Campsites         OpenStreetMap (ODbL) tourism=camp_site and fire lookout towers, zoom 7+.
  *   Plaques           OpenStreetMap plaques, memorials, monuments and history boards, plus Ontario
@@ -52,11 +53,16 @@
     var metas = {};
     var built = "";
     function refresh(map) {
-      if (!L.isOn(o.id) || map.getZoom() < K.gz(o.minZoom)) return;
+      /* opt206: below minZoom or too many regions → clear source (no zoom-history leftovers) */
+      if (!L.isOn(o.id)) { draw(map, []); return; }
+      if (!K.zoomGate(map, { minZoom: K.gz(o.minZoom) }).show) { draw(map, []); return; }
       packIndex().then((ix) => {
         var v = map.getBounds();
         var want = ix.regions.filter((r) => { return overlaps(r.bbox, v); }).map((r) => { return r.id; });
-        if (want.length > 4) return;
+        if (!K.zoomGate(map, { minZoom: K.gz(o.minZoom), tileCount: want.length, maxTiles: 4 }).show) {
+          draw(map, []);
+          return;
+        }
         draw(map, want);
         want.forEach((id) => {
           if (mem[id] || loading[id]) return;
@@ -77,7 +83,7 @@
       refresh(map);
     }
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: ids, apply: apply,
-      note: (map, on) => { return on && map && map.getZoom() < o.minZoom ? "zoom in" : ""; },
+      note: (map, on) => { return on ? K.zoomNote(map, K.gz(o.minZoom), "zoom in to see") : ""; },
       attach: (map, on) => {
         map.on("moveend", () => { refresh(map); });
         map.on("idle", () => { if (L.isOn(o.id) && !map.getLayer(ids[0])) apply(map, true); });

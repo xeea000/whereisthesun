@@ -3,6 +3,7 @@
  *   store    small localStorage cache with an expiry, so slow-changing data is fetched rarely
  *   tiles    viewport loader: splits the view into zoom-10 tiles, loads only missing tiles,
  *            waits for the map to stop moving, and only above a zoom threshold
+ *   zoomGate shared no-hysteresis rule (opt206): hide when below minZoom or view too wide
  *   popup    the same tap card the Craters layer uses */
 (() => {
   "use strict";
@@ -102,6 +103,9 @@
     return [x / n * 360 - 180, lat(y + 1), (x + 1) / n * 360 - 180, lat(y)];
   }
   /* opts: { key, minZoom, maxTiles, ttlMs, fetchTile(box) -> Promise<array>, onData(allItems) , isOn() } */
+  /* opt206: below minZoom or when the view is too wide, emit [] so visibility depends only on
+   * the current zoom/view — never on zoom history (no hysteresis).
+   * Tile mem + localStorage stay so zooming back in is instant. */
   function tiles(map, opts) {
     var Z = 10;
     var mem = {};
@@ -122,9 +126,11 @@
     }
     function run() {
       timer = null;
-      if (!opts.isOn() || map.getZoom() < opts.minZoom || busy) return;
+      if (busy) return;
+      if (!opts.isOn()) { opts.onData([]); return; }
+      var gate = zoomGate(map, { minZoom: opts.minZoom, tileCount: wanted().length, maxTiles: opts.maxTiles || 6 });
+      if (!gate.show) { opts.onData([]); return; }
       var list = wanted();
-      if (list.length > (opts.maxTiles || 6)) return;
       var missing = [];
       list.forEach((k) => {
         if (mem[k]) return;
@@ -140,7 +146,10 @@
       opts.fetchTile(tileBox(+p[0], +p[1], Z)).then((items) => {
         mem[k] = items;
         putStore("t-" + opts.key + "-" + k, items, opts.ttlMs);
-        emit(list);
+        /* Re-check gate: user may have zoomed out while the tile was in flight. */
+        var g2 = zoomGate(map, { minZoom: opts.minZoom, tileCount: wanted().length, maxTiles: opts.maxTiles || 6 });
+        if (!opts.isOn() || !g2.show) opts.onData([]);
+        else emit(list);
         busy = false;
         if (missing.length > 1) schedule(1500);
       }).catch(() => {
@@ -154,6 +163,33 @@
     }
     map.on("moveend", () => { schedule(); });
     return { refresh: schedule };
+  }
+  /* opt206 shared zoom gate: what is visible must depend only on the current view/zoom.
+   * Loaders that fetch above a threshold use this instead of early-return-and-keep-source.
+   * reason: "ok" | "off" | "zoom" | "wide"
+   * Also set layer minzoom (setMinZoom) when ALL of a layer's data is gated. */
+  function zoomGate(map, opts) {
+    opts = opts || {};
+    if (opts.isOn && !opts.isOn()) return { show: false, reason: "off" };
+    var zMin = opts.minZoom == null ? 0 : opts.minZoom;
+    if (map && map.getZoom() < zMin) return { show: false, reason: "zoom" };
+    if (opts.tileCount != null && opts.tileCount > (opts.maxTiles == null ? 6 : opts.maxTiles)) {
+      return { show: false, reason: "wide" };
+    }
+    return { show: true, reason: "ok" };
+  }
+  function setMinZoom(map, ids, z) {
+    var zMin = z == null ? 0 : z;
+    (ids || []).forEach((id) => {
+      if (!map.getLayer(id)) return;
+      try {
+        if (map.setLayerZoomRange) map.setLayerZoomRange(id, zMin, 24);
+      } catch (e) {}
+    });
+  }
+  function zoomNote(map, minZoom, label) {
+    if (!map || map.getZoom() >= (minZoom || 0)) return "";
+    return label || "zoom in to see";
   }
   /* main Overpass server first, then public mirrors when it is busy */
   var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
@@ -292,5 +328,6 @@
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
-    loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc };
+    loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,
+    zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote };
 })();

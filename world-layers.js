@@ -204,9 +204,16 @@
     return ["<b>" + (r.height !== "" ? Number(r.height).toLocaleString() + " m" : "Height unknown") + "</b> · " + K.esc(TN[String(k)[0]] || "Tower"),
       K.esc(cap(r.kind || "tower")), K.esc(r.country || ""), age("Built", r.year), r.name && r.operator ? "Owner " + K.esc(r.operator) : "", wikiLine(r)];
   };
+  /* opt206: 150 m+ ("big") at every zoom; shorter tiles only while zoom >= 6.
+   * Drop short tiles from the source when zooming out so visibility has no history. */
   var tSet = () => {
     if (!tMap || !tMap.getSource("w-towers")) return;
-    var all = []; Object.keys(tFeats).forEach((k) => { all = all.concat(tFeats[k]); });
+    var showShort = !!(K.zoomGate && K.zoomGate(tMap, { minZoom: K.gz(6) }).show);
+    var all = [];
+    Object.keys(tFeats).forEach((k) => {
+      if (k !== "big" && !showShort) return;
+      all = all.concat(tFeats[k] || []);
+    });
     tMap.getSource("w-towers").setData(K.fc(all));
   };
   var tLoad = (k) => {
@@ -216,12 +223,16 @@
   };
   var tView = () => {
     var m = tMap, man = meta.manifest;
-    if (!m || !L.isOn("towers") || m.getZoom() < K.gz(6) || !man || !man.towerTiles) return;
+    if (!m || !L.isOn("towers")) return;
+    /* Always refresh the visible set (clears short towers below z6). */
+    var showShort = !!(K.zoomGate && K.zoomGate(m, { minZoom: K.gz(6) }).show);
+    if (!showShort || !man || !man.towerTiles) { tSet(); return; }
     var b = m.getBounds();
     man.towerTiles.forEach((k) => {
       var p = k.split("_").map(Number);
       if (p[0] < b.getNorth() && p[0] + 10 > b.getSouth() && p[1] < b.getEast() && p[1] + 10 > b.getWest()) tLoad(k);
     });
+    tSet();
   };
   var TH = ["to-number", ["slice", ["get", "k"], 1]];
   var tApply = (map, on) => {
@@ -243,6 +254,7 @@
   };
   var tDetail = (f) => { var k = f.properties.t; return P.detail(tBase(k), tMeta[k], f.properties.i, V); };
   L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot", "fire-look-dot"], apply: tApply,
+    note: (map, on) => { return on && map ? K.zoomNote(map, K.gz(6), "zoom in for shorter towers") : ""; },
     tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ at every zoom, shorter towers (60 m+, United States and Canadian broadcast) from zoom 6. Types are guessed from the owner.",
     kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true },
       { id: "towers-fl", name: "Fire lookout towers", dflt: true }]),
@@ -336,6 +348,8 @@
       if (map.getSource(o.src)) map.getSource(o.src).setData(geo);
       else map.addSource(o.src, { type: "geojson", data: geo, attribution: 'OSM: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)' });
       o.add(map);
+      /* opt206: layer minzoom matches fetch threshold so MapLibre also hides on zoom-out */
+      K.setMinZoom(map, o.ids, K.gz(o.minZoom));
       K.vis(map, o.ids, L.isOn(o.id));
     }
     function apply(map, on) {
@@ -343,7 +357,7 @@
       if (on && loader) loader.refresh();
     }
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply, legend: o.legend,
-      note: (map) => { return map && map.getZoom() < o.minZoom ? "Zoom in to load" : ""; },
+      note: (map) => { return K.zoomNote(map, K.gz(o.minZoom), "zoom in to see"); },
       attach: (map, on) => {
         loader = K.tiles(map, { key: o.id, minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
@@ -415,9 +429,9 @@
       return g ? { t: t, g: g } : null;
     },
     add: (map) => {
-      if (!map.getLayer("osm-pipe")) map.addLayer({ id: "osm-pipe", type: "line", source: "w-osm-sea", filter: ["==", ["geometry-type"], "LineString"],
+      if (!map.getLayer("osm-pipe")) map.addLayer({ id: "osm-pipe", type: "line", source: "w-osm-sea", minzoom: K.gz(9), filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": "#d98c2b", "line-width": 1.6, "line-dasharray": [3, 1.5] } }, K.before(map));
-      if (!map.getLayer("osm-plat")) map.addLayer({ id: "osm-plat", type: "circle", source: "w-osm-sea", filter: ["==", ["geometry-type"], "Point"],
+      if (!map.getLayer("osm-plat")) map.addLayer({ id: "osm-plat", type: "circle", source: "w-osm-sea", minzoom: K.gz(9), filter: ["==", ["geometry-type"], "Point"],
         paint: { "circle-radius": K.markerScale.bind(map, "osm-plat", "circle-radius", 4),
           "circle-color": "#ffcc33", "circle-stroke-color": "#3a2a00", "circle-stroke-width": 1 } }, K.before(map));
     },
