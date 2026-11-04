@@ -188,9 +188,9 @@
               [6, ["+", 3, ["*", 1.8, ["get", "mag"]]]],
               [12, ["+", 4.5, ["*", 2.4, ["get", "mag"]]]]
             ] })),
-          "circle-opacity": 0.85,
+          "circle-opacity": 0.92,
           "circle-stroke-color": "rgba(20,10,40,0.55)",
-          "circle-stroke-width": 0.7
+          "circle-stroke-width": 1.1
         }
       }, K.before(map));
     } else {
@@ -200,15 +200,20 @@
   function card(map, e) {
     var p = e.features[0].properties;
     var rows = [];
-    if (p.date) rows.push(String(p.date));
     if (p.kind === "tunguska") {
+      rows.push("A huge airburst flattened forest here in 1908.");
+      if (p.date) rows.push(String(p.date));
       rows.push(p.note || "Approximate extent");
-      rows.push("Airburst (no crater)");
+      rows.push("It exploded in the air — no crater.");
+      rows.push('<span style="color:#9ca3af;font-size:11px">Ring is approximate published extent.</span>');
     } else {
-      if (+p.impact > 0) rows.push("Impact energy ~ " + p.impact + " Mt TNT");
-      if (+p.energy > 0) rows.push("Radiated ~ " + p.energy + " kt TNT");
-      if (+p.alt > 0) rows.push("Altitude ~ " + p.alt + " km");
-      if (+p.vel > 0) rows.push("Velocity ~ " + p.vel + " km/s");
+      rows.push("A bright fireball exploded in the air here.");
+      if (p.date) rows.push(String(p.date));
+      if (+p.impact > 0) rows.push("About as strong as " + p.impact + " million tons of TNT.");
+      else if (+p.energy > 0) rows.push("Flash energy ~ " + p.energy + " thousand tons of TNT.");
+      if (+p.alt > 0) rows.push("About " + p.alt + " km up.");
+      if (+p.vel > 0) rows.push("Speed ~ " + p.vel + " km/s.");
+      rows.push('<span style="color:#9ca3af;font-size:11px">Energy is estimated from the flash.</span>');
     }
     K.show(map, e.lngLat, p.name || "Airburst", rows,
       p.kind === "tunguska"

@@ -408,9 +408,138 @@
     CUT_TOWERS: [{ z: 6, id: "ov" }, { z: 24, id: "raw" }],
     CUT_UNDERSEA: [{ z: 9, id: "ov" }, { z: 24, id: "raw" }],
     CUT_SUN: [{ z: 13, id: "ov" }, { z: 24, id: "raw" }] };
+  /* opt223: Map brightness — basemap only (raster OSM/sat/dark + vector OpenFreeMap). */
+  var MB_KEY = "sunny-map-brightness", MB_MIN = 0.3, MB_MAX = 1.2, MB_DEF = 1;
+  var mbVal = MB_DEF, mbListen = [], mbOrig = {};
+  try {
+    var _mb = parseFloat(localStorage.getItem(MB_KEY));
+    if (isFinite(_mb) && _mb >= MB_MIN && _mb <= MB_MAX) mbVal = Math.round(_mb * 100) / 100;
+  } catch (e) {}
+  function mbGet() { return mbVal; }
+  function mbApplyRaster(map, id) {
+    if (!map.getLayer || !map.getLayer(id)) return;
+    var b = mbVal;
+    var rmax = b <= 1 ? (0.28 + 0.72 * b) : 1;
+    var rmin = b <= 1 ? 0 : Math.min(0.32, (b - 1) * 0.45);
+    var contrast = (b - 1) * 0.4;
+    var sat = (b - 1) * 0.28;
+    try {
+      map.setPaintProperty(id, "raster-brightness-max", rmax);
+      map.setPaintProperty(id, "raster-brightness-min", rmin);
+      map.setPaintProperty(id, "raster-contrast", contrast);
+      map.setPaintProperty(id, "raster-saturation", sat);
+    } catch (e) {}
+  }
+  function mbCacheOpacity(map, id, prop) {
+    var k = id + "|" + prop;
+    if (mbOrig[k] != null) return mbOrig[k];
+    var cur = 1;
+    try {
+      var v = map.getPaintProperty(id, prop);
+      if (typeof v === "number" && isFinite(v)) cur = v;
+    } catch (e) {}
+    mbOrig[k] = cur;
+    return cur;
+  }
+  function mbApplyVector(map) {
+    if (!map.getStyle) return;
+    var layers = (map.getStyle().layers) || [];
+    var b = mbVal;
+    var factor = b <= 1 ? (0.35 + 0.65 * b) : Math.min(1.15, 0.85 + 0.3 * (b - 1));
+    var props = ["fill-opacity", "line-opacity", "background-opacity", "fill-extrusion-opacity"];
+    layers.forEach((ly) => {
+      if (!ly.id || ly.id.indexOf("vb-") !== 0) return;
+      props.forEach((prop) => {
+        try {
+          var base = mbCacheOpacity(map, ly.id, prop);
+          map.setPaintProperty(ly.id, prop, Math.max(0, Math.min(1, base * factor)));
+        } catch (e) {}
+      });
+    });
+  }
+  function mbRefresh(map) {
+    map = map || window.map;
+    if (!map) return;
+    ["osm", "base-sat", "base-dark"].forEach((id) => { mbApplyRaster(map, id); });
+    mbApplyVector(map);
+  }
+  function mbSet(v) {
+    v = parseFloat(v);
+    if (!isFinite(v)) v = MB_DEF;
+    mbVal = Math.round(Math.max(MB_MIN, Math.min(MB_MAX, v)) * 100) / 100;
+    try { localStorage.setItem(MB_KEY, String(mbVal)); } catch (e) {}
+    mbRefresh();
+    mbListen.slice().forEach((fn) => { try { fn(mbVal); } catch (e) {} });
+    return mbVal;
+  }
+  function mbOnChange(fn) {
+    if (typeof fn === "function") mbListen.push(fn);
+    return fn;
+  }
+  var mapBrightness = { KEY: MB_KEY, MIN: MB_MIN, MAX: MB_MAX, DEF: MB_DEF,
+    get: mbGet, set: mbSet, onChange: mbOnChange, refresh: mbRefresh };
+  /* opt223: shared smooth field raster from a prebaked land/ocean-masked image (WebP/PNG).
+   * Input: image URL(s) + geographic bounds. Output: MapLibre image source + linear-resampled
+   * raster layer. LOD swaps ov→hi by zoom. Measured point samples stay as circles elsewhere. */
+  function field(opts) {
+    opts = opts || {};
+    var id = opts.id || "field";
+    var srcId = id + "-src";
+    var lyrId = id + "-raster";
+    var urls = opts.urls || {};
+    var bounds = opts.bounds || [-180, -90, 180, 90];
+    var cutZ = opts.cutZ != null ? opts.cutZ : 5;
+    var opacity = opts.opacity != null ? opts.opacity : 0.78;
+    var band = null;
+    function coords() {
+      var w = bounds[0], s = bounds[1], e = bounds[2], n = bounds[3];
+      return [[w, n], [e, n], [e, s], [w, s]];
+    }
+    function pickUrl(z) {
+      if (urls.hi && z >= cutZ) return urls.hi;
+      return urls.ov || urls.hi;
+    }
+    function ensure(map) {
+      if (!map) return;
+      var z = map.getZoom ? map.getZoom() : 0;
+      var url = pickUrl(z);
+      if (!url) return;
+      var want = (urls.hi && z >= cutZ) ? "hi" : "ov";
+      if (!map.getSource(srcId)) {
+        map.addSource(srcId, { type: "image", url: url, coordinates: coords() });
+        band = want;
+      } else if (band !== want) {
+        try { map.getSource(srcId).updateImage({ url: url, coordinates: coords() }); band = want; } catch (e) {}
+      }
+      if (!map.getLayer(lyrId)) {
+        map.addLayer({
+          id: lyrId, type: "raster", source: srcId,
+          paint: {
+            "raster-opacity": opacity,
+            "raster-resampling": "linear",
+            "raster-fade-duration": 0
+          }
+        }, opts.before || before(map));
+      } else {
+        try { map.setPaintProperty(lyrId, "raster-opacity", opacity); } catch (e) {}
+      }
+    }
+    function syncZoom(map) {
+      if (!map || !map.getSource(srcId)) return;
+      var z = map.getZoom();
+      var want = (urls.hi && z >= cutZ) ? "hi" : "ov";
+      if (want === band) return;
+      var url = pickUrl(z);
+      if (!url) return;
+      try { map.getSource(srcId).updateImage({ url: url, coordinates: coords() }); band = want; } catch (e) {}
+    }
+    return { id: lyrId, src: srcId, ensure: ensure, syncZoom: syncZoom,
+      vis: (map, on) => { vis(map, [lyrId], on); } };
+  }
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
+    mapBrightness: mapBrightness, field: field,
     size: size, overzoom: overzoom, uncapped: uncapped,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,

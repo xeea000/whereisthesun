@@ -147,11 +147,14 @@
   function card(map, e) {
     var p = e.features[0].properties;
     var rows = [];
+    rows.push("Oil spilled into the water here.");
     if (p.year) rows.push(String(p.year));
     if (p.loc) rows.push(p.loc);
     if (p.com) rows.push(p.com);
     rows.push(fmtGal(+p.gal));
-    K.show(map, e.lngLat, p.name || "Oil incident", rows,
+    rows.push("NOAA responded to this incident.");
+    rows.push('<span style="color:#9ca3af;font-size:11px">Reported amount; not every spill is here.</span>');
+    K.show(map, e.lngLat, p.name || "Oil spill", rows,
       ["NOAA IncidentNews #" + p.id, "https://incidentnews.noaa.gov/incident/" + p.id]);
   }
   function apply(map, on) {

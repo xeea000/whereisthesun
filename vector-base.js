@@ -48,6 +48,7 @@
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
       });
     });
+    if (window.SunnyKit && window.SunnyKit.mapBrightness) try { window.SunnyKit.mapBrightness.refresh(map); } catch (e) {}
   }
   function getJson(url) {
     return fetch(url).then((r) => r.json());

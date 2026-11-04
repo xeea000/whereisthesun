@@ -605,6 +605,10 @@ function sunnyStep01() {
   });
   if (window.SunnyDataSaver.on("visible") && map.setPrefetchZoomDelta) map.setPrefetchZoomDelta(0); /* opt88 */
   window.SunnyVectorBase.start(map);
+  if (window.SunnyKit && window.SunnyKit.mapBrightness) {
+    try { window.SunnyKit.mapBrightness.refresh(map); } catch (eMb) {}
+    map.on("load", () => { try { window.SunnyKit.mapBrightness.refresh(map); } catch (e2) {} });
+  }
     map.on("error", (e) => {
     try {
       var msg = (e && e.error && e.error.message) ? e.error.message : "";

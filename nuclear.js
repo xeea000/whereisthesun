@@ -197,9 +197,9 @@
               [6, ["+", 4.5, ["*", 1.0, ["get", "ines"]]]],
               [12, ["+", 6, ["*", 1.2, ["get", "ines"]]]]
             ] })),
-          "circle-opacity": 0.9,
-          "circle-stroke-color": "rgba(20,0,0,0.55)",
-          "circle-stroke-width": 0.8
+          "circle-opacity": 0.94,
+          "circle-stroke-color": "rgba(10,14,22,0.8)",
+          "circle-stroke-width": 1.15
         }
       }, K.before(map));
     } else {
@@ -208,10 +208,15 @@
   }
   function card(map, e) {
     var p = e.features[0].properties;
-    var rows = [String(p.year) + " · INES " + p.ines];
+    var ines = +p.ines;
+    var plain = ines >= 7 ? "A major nuclear accident happened here."
+      : ines >= 5 ? "A serious nuclear accident happened here."
+      : "A notable nuclear incident happened here.";
+    var rows = [plain, String(p.year) + " · INES level " + p.ines];
     if (p.place) rows.push(p.place);
     if (p.kind) rows.push(p.kind);
     if (p.note) rows.push(p.note);
+    rows.push('<span style="color:#9ca3af;font-size:11px">Ring is a published zone, not a modelled plume.</span>');
     K.show(map, e.lngLat, p.name, rows, ["IAEA INES", "https://www.iaea.org/resources/databases/ines"]);
   }
   function apply(map, on) {

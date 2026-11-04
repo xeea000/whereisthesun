@@ -341,6 +341,7 @@ var labelsIdleHealArmed, labelsHealBusy;
       map.setLayoutProperty(id, "visibility", id === active ? "visible" : "none");
     }
     window.SunnyVectorBase.apply(basemapMode);
+    if (window.SunnyKit && window.SunnyKit.mapBrightness) try { window.SunnyKit.mapBrightness.refresh(map); } catch (eBr) {}
     restackBasemap();
   }
   function setBasemapMode(mode) {

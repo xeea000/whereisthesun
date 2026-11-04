@@ -111,6 +111,8 @@
       if (bi && bi !== 1) st.bi = bi;
       var ms = window.SunnyKit && window.SunnyKit.markerScale && window.SunnyKit.markerScale.get();
       if (ms && ms !== 1) st.ms = ms;
+      var br = window.SunnyKit && window.SunnyKit.mapBrightness && window.SunnyKit.mapBrightness.get();
+      if (br && br !== 1) st.br = br;
     }
     var sel = captureSelection();
     if (sel) st.s = sel;
@@ -225,6 +227,9 @@
     }
     if (st.ms != null && window.SunnyKit && window.SunnyKit.markerScale) {
       try { window.SunnyKit.markerScale.set(st.ms); } catch (e) {}
+    }
+    if (st.br != null && window.SunnyKit && window.SunnyKit.mapBrightness) {
+      try { window.SunnyKit.mapBrightness.set(st.br); } catch (e) {}
     }
   }
   function matchFeat(f, key) {

@@ -184,7 +184,7 @@
           "circle-color": "#e2e8f0",
           "circle-radius": K.markerScale.bind(map, DOT, "circle-radius",
             K.size({ stops: [[2, 3.5], [8, 5.5], [14, 7]] })),
-          "circle-opacity": 0.9,
+          "circle-opacity": 0.94,
           "circle-stroke-color": "rgba(15,23,42,0.65)",
           "circle-stroke-width": 0.9
         }
@@ -195,10 +195,15 @@
   }
   function card(map, e) {
     var p = e.features[0].properties;
-    var rows = [String(p.year)];
+    var kind = (p.kind || "").toLowerCase();
+    var lead = kind.indexOf("reent") >= 0 ? "A spacecraft came down near here."
+      : kind.indexOf("break") >= 0 || kind.indexOf("debris") >= 0 ? "A spacecraft broke up near here."
+      : "A documented spacecraft event happened near here.";
+    var rows = [lead, String(p.year)];
     if (p.place) rows.push(p.place);
     if (p.kind) rows.push(p.kind);
     if (p.note) rows.push(p.note);
+    rows.push('<span style="color:#9ca3af;font-size:11px">Recovery area is approximate when shown.</span>');
     K.show(map, e.lngLat, p.name, rows, ["Documented spacecraft event", "https://www.nasa.gov/"]);
   }
   function apply(map, on) {

@@ -249,6 +249,24 @@
       MS.onChange(syncMs);
     }
     head.appendChild(msRow);
+    /* opt223: Map brightness sticky under Marker size — basemap only */
+    var brRow = el("div", "lp-msize lp-bright");
+    brRow.innerHTML = '<span class="lp-msize-h">Map brightness</span>' +
+      '<input type="range" min="0.3" max="1.2" step="0.05" aria-label="Map brightness">' +
+      '<span class="lp-msize-v">1.0</span>';
+    var brInp = brRow.querySelector("input");
+    var brLab = brRow.querySelector(".lp-msize-v");
+    var syncBr = (v) => {
+      brInp.value = String(v);
+      brLab.textContent = (Math.round(+v * 100) / 100).toFixed(2);
+    };
+    var BR = window.SunnyKit && window.SunnyKit.mapBrightness;
+    if (BR) {
+      syncBr(BR.get());
+      brInp.addEventListener("input", () => { syncBr(BR.set(brInp.value)); });
+      BR.onChange(syncBr);
+    }
+    head.appendChild(brRow);
     panel.appendChild(head);
     panel.appendChild(el("div", "lp-body"));
     var tab = el("button", "lp-tab", "›");
