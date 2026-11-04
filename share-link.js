@@ -291,11 +291,20 @@
     var n = 0;
     function tick() {
       n++;
-      if (mapOk() && window.SunnyLayers && window.SunnyLayers.defs().length) {
+      if (!mapOk() || !window.SunnyLayers) {
+        if (n < 200) setTimeout(tick, 100);
+        return;
+      }
+      /* opt204: wait for deferred layer scripts so share ids still restore */
+      if (window.SunnyLayerLazy && !window.SunnyLayerLazy.ready()) {
+        window.SunnyLayerLazy.load().then(() => { setTimeout(tick, 50); }).catch(() => { setTimeout(tick, 50); });
+        return;
+      }
+      if (window.SunnyLayers.defs().length) {
         applyState(pending);
         return;
       }
-      if (n < 150) setTimeout(tick, 100);
+      if (n < 200) setTimeout(tick, 100);
     }
     tick();
   }

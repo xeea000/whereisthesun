@@ -199,7 +199,12 @@
     tab.setAttribute("aria-expanded", open ? "true" : "false");
     tab.textContent = open ? "‹" : "›";
     try { localStorage.setItem("sunny-lp-open", open ? "1" : "0"); } catch (e) {}
-    if (open) refresh();
+    if (open) {
+      /* opt204: load deferred layer scripts the first time the blade opens */
+      if (window.SunnyLayerLazy) {
+        window.SunnyLayerLazy.load().then(() => { refresh(); }).catch(() => { refresh(); });
+      } else refresh();
+    }
   }
   function init() {
     panel = el("aside", "lp-panel");
