@@ -144,3 +144,17 @@
 .lp-msize-v{flex:0 0 2.6em;text-align:right;color:#9ec5ff;font-variant-numeric:tabular-nums}
 /* opt207: loading note while a LOD overview fetches */
 .lp-note:not(:empty){transition:opacity .2s}
+/* opt211: forest loss year range (ordinal, not checkboxes) */
+.forest-year-range{margin:8px 0 4px;padding:8px 8px 6px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.forest-year-range-lab{font:700 11.5px system-ui,sans-serif;color:#e8edf3;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+.forest-year-range-val{font-weight:600;opacity:.85;color:#7cf29a}
+.forest-year-range-track{position:relative;height:6px;margin:10px 4px 0;border-radius:999px;background:rgba(255,255,255,.12)}
+.forest-year-range-fill{position:absolute;top:0;height:100%;border-radius:999px;background:linear-gradient(90deg,#d96bb8,#e07070,#f0a030,#ffe66a);opacity:.9;pointer-events:none}
+.forest-year-range-inputs{position:relative;height:28px;margin-top:-16px}
+.forest-year-range-inputs input[type=range]{position:absolute;left:0;width:100%;margin:0;pointer-events:none;appearance:none;background:transparent;height:28px}
+.forest-year-range-inputs input[type=range]::-webkit-slider-thumb{pointer-events:auto;appearance:none;width:16px;height:16px;border-radius:50%;background:#7cf29a;border:2px solid #101418;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.forest-year-range-inputs input[type=range]::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;border-radius:50%;background:#7cf29a;border:2px solid #101418;cursor:pointer}
+.forest-year-range-inputs input[type=range]::-webkit-slider-runnable-track{background:transparent;height:6px}
+.forest-year-range-inputs input[type=range]::-moz-range-track{background:transparent;height:6px}
+.forest-year-range-ticks{display:flex;justify-content:space-between;font:700 10px system-ui,sans-serif;margin:2px 2px 0;opacity:.9}
+.forest-year-hint,.forest-cred{font:500 10px system-ui,sans-serif;opacity:.65;margin-top:4px;line-height:1.35}

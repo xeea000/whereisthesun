@@ -5,7 +5,7 @@
  * switches map layers. Open/closed and each layer's state are saved. */
 (() => {
   "use strict";
-  var GROUPS = ["Weather", "Sky & Space", "Earth", "Ocean", "Science", "Transmission", "Travel", "Outdoors", "History", "Fun & Games"];
+  var GROUPS = ["Weather", "Sky & Space", "Earth", "Human impact", "Ocean", "Science", "Transmission", "Travel", "Outdoors", "History", "Fun & Games"];
   var defs = [];
   var map = null;
   var panel = null;
@@ -157,7 +157,8 @@
     nightscore: "Sky & Space", goldenhour: "Sky & Space", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
     craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", rockage: "Earth/Geology", cratons: "Earth/Geology",
     plates: "Earth/Geology", platemotion: "Earth/Geology", quakes: "Earth/Geology", quakeslive: "Earth/Geology",
-    volcanoes: "Earth/Geology", volcdue: "Earth/Geology", stations: "Science" };
+    volcanoes: "Earth/Geology", volcdue: "Earth/Geology", stations: "Science",
+    forest: "Human impact" };
   var SUBS = { "Sky & Space": ["", "Artificial"], Earth: ["", "Geology"] };
   function fold(parent, path, label, lvl) {
     var key = "sunny-lp-g2-" + path; /* opt104: new key, folded by default */
