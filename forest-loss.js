@@ -1,9 +1,10 @@
 // workspace/whereisthesun/forest-loss.js
-/* SUNNY opt229: worldwide tree cover loss / logging impact (Human impact).
- * LOD: z < LIVE_Z = year-encoded local overview (~160 KB) recoloured by the year
- * slider; z ≥ LIVE_Z = live GFW tiles at native 256 px up to LIVE_MAXZOOM (overzoom
- * only past that). Kids: loss-by-year, drivers (on real loss pixels), intact forests.
- * Off by default; lazy. */
+/* SUNNY opt232: Forests & logging — phone gets OUR compact tiles, not raw GFW.
+ * z < LIVE_Z: year-encoded local overview (~160 KB), slider recolours (0 network).
+ * z ≥ LIVE_Z: prebuilt WebP-LA pack (year|drv<<5) from data/human/forest-pack/;
+ * slider recolours from decoded cache (0 network). Outside pack coverage, parent-fill
+ * from z6 world pack. Above packMaxZoom: live GFW loss-only (no 256 KB driver/IFL).
+ * Kids: loss-by-year, drivers, intact. Off by default; lazy. Hansen/Curtis/IFL · CC BY. */
 (() => {
   "use strict";
   var K = window.SunnyKit;
@@ -14,14 +15,16 @@
   var OPAC = 0.78;
   var LIVE_Z = 6;
   var LIVE_MAXZOOM = 12;
+  var PACK_FALLBACK_Z = 6;
   var TILE_SIZE = 256;
   var CONCUR = 4;
   var pMap = null;
-  var PROTO_COMP = "gfwcomp";
+  var PROTO_PACK = "fpack";
   var PROTO_LOSS = "gfwloss";
-  var PROTO_IFL = "gfwifl";
   var OV_RAW_URL = "data/human/forest-ov/ov-raw.png?v=6848514b";
   var OV_IFL_URL = "data/human/forest-ov/ov-ifl.png?v=61c99620";
+  var PACK_BASE = "data/human/forest-pack";
+  var PACK_MANIFEST_URL = PACK_BASE + "/manifest.json";
   var OV_LOSS_SRC = "forest-ov-loss-src", OV_LOSS_LYR = "forest-ov-loss-lyr";
   var OV_DRV_SRC = "forest-ov-drv-src", OV_DRV_LYR = "forest-ov-drv-lyr";
   var OV_IFL_SRC = "forest-ov-ifl-src", OV_IFL_LYR = "forest-ov-ifl-lyr";
@@ -55,11 +58,13 @@
   var inflight = 0;
   var waitQ = [];
   var memCache = new Map();
-  var MEM_MAX = 96;
-  var CACHE_NAME = "sunny-gfw-v2";
+  var MEM_MAX = 160;
+  var packManifest = null;
+  var packMaxZoom = 9;
   var ovRaw = null;
   var ovRawW = 0, ovRawH = 0;
   var ovReady = null;
+  var emptyTileP = null;
   function memGet(key) {
     if (!memCache.has(key)) return null;
     var v = memCache.get(key);
@@ -85,62 +90,6 @@
     inflight--;
     if (waitQ.length) waitQ.shift()();
   }
-  function fetchBuf(url, signal) {
-    var key = url;
-    var hit = memGet(key);
-    if (hit) return Promise.resolve(hit.slice(0));
-    return gate().then(() => {
-      var done = (buf) => { memSet(key, buf); release(); return buf.slice(0); };
-      var fail = (e) => { release(); throw e; };
-      var fromNet = () => {
-        return fetch(url, { signal: signal, mode: "cors" }).then((r) => {
-          if (!r.ok) throw new Error("gfw " + r.status);
-          return r.arrayBuffer();
-        }).then((buf) => {
-          if (typeof caches !== "undefined") {
-            try {
-              caches.open(CACHE_NAME).then((c) => {
-                c.put(url, new Response(buf.slice(0), { headers: { "Content-Type": "image/png" } }));
-              }).catch(() => {});
-            } catch (eC) {}
-          }
-          return done(buf);
-        }).catch(fail);
-      };
-      if (typeof caches === "undefined") return fromNet();
-      return caches.open(CACHE_NAME).then((c) => {
-        return c.match(url).then((resp) => {
-          if (!resp) return fromNet();
-          return resp.arrayBuffer().then(done).catch(fromNet);
-        });
-      }).catch(fromNet);
-    });
-  }
-  function fetchBmp(url, signal) {
-    return fetchBuf(url, signal).then((buf) => {
-      return createImageBitmap(new Blob([buf], { type: "image/png" }));
-    });
-  }
-  function canvasFromBitmap(bmp) {
-    var c = typeof OffscreenCanvas !== "undefined"
-      ? new OffscreenCanvas(bmp.width, bmp.height)
-      : Object.assign(document.createElement("canvas"), { width: bmp.width, height: bmp.height });
-    var ctx = c.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(bmp, 0, 0);
-    return { c: c, ctx: ctx, img: ctx.getImageData(0, 0, c.width, c.height) };
-  }
-  function blobToBuffer(c) {
-    var done = (c.convertToBlob)
-      ? c.convertToBlob({ type: "image/png" })
-      : new Promise((res) => { c.toBlob((b) => { res(b); }, "image/png"); });
-    return done.then((blob) => { return blob.arrayBuffer(); }).then((out) => { return { data: out }; });
-  }
-  function rawLossUrl(z, x, y) {
-    return "https://tiles.globalforestwatch.org/umd_tree_cover_loss/v1.11/tcd_30/" + z + "/" + x + "/" + y + ".png";
-  }
-  function rawDrvUrl(z, x, y) {
-    return "https://tiles.globalforestwatch.org/tsc_tree_cover_loss_drivers/v2023/tcd_30/" + z + "/" + x + "/" + y + ".png";
-  }
   function yearColor(year) {
     var t = (year - Y0) / (Y1 - Y0 || 1);
     if (t < 0.33) {
@@ -154,8 +103,7 @@
     var u3 = (t - 0.66) / 0.34;
     return [240 + ((255 - 240) * u3) | 0, 160 + ((230 - 160) * u3) | 0, 48 + ((106 - 48) * u3) | 0];
   }
-  function lossYear(r, b, z) {
-    /* GFW umd_tree_cover_loss PNG: year−2000 in R at z≤8, in B at z≥9. */
+  function lossYearRaw(r, b, z) {
     if (z >= 9) {
       if (b >= 1 && b <= 24) return 2000 + b;
       if (r >= 1 && r <= 24) return 2000 + r;
@@ -165,6 +113,237 @@
     if (b >= 1 && b <= 24) return 2000 + b;
     return 0;
   }
+  function emptyTile() {
+    if (emptyTileP) return emptyTileP;
+    emptyTileP = (async () => {
+      var c = typeof OffscreenCanvas !== "undefined"
+        ? new OffscreenCanvas(TILE_SIZE, TILE_SIZE)
+        : Object.assign(document.createElement("canvas"), { width: TILE_SIZE, height: TILE_SIZE });
+      var ctx = c.getContext("2d");
+      ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+      var blob = c.convertToBlob
+        ? await c.convertToBlob({ type: "image/png" })
+        : await new Promise((res) => { c.toBlob(res, "image/png"); });
+      return await blob.arrayBuffer();
+    })();
+    return emptyTileP;
+  }
+  function blobToBuffer(c) {
+    var done = (c.convertToBlob)
+      ? c.convertToBlob({ type: "image/png" })
+      : new Promise((res) => { c.toBlob((b) => { res(b); }, "image/png"); });
+    return done.then((blob) => { return blob.arrayBuffer(); }).then((out) => { return { data: out }; });
+  }
+  function loadManifest() {
+    if (packManifest) return Promise.resolve(packManifest);
+    return fetch(PACK_MANIFEST_URL, { cache: "force-cache" }).then((r) => {
+      if (!r.ok) throw new Error("manifest");
+      return r.json();
+    }).then((m) => {
+      packManifest = m;
+      if (m && m.packMaxZoom) packMaxZoom = m.packMaxZoom | 0;
+      return m;
+    }).catch(() => {
+      packManifest = { regions: [], packMaxZoom: PACK_FALLBACK_Z };
+      packMaxZoom = PACK_FALLBACK_Z;
+      return packManifest;
+    });
+  }
+  function lonX(lon, z) { return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
+  function latY(lat, z) {
+    var s = Math.sin(lat * Math.PI / 180);
+    return Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * Math.pow(2, z));
+  }
+  function tileCovered(z, x, y) {
+    var regs = (packManifest && packManifest.regions) || [];
+    for (var i = 0; i < regs.length; i++) {
+      var r = regs[i];
+      if (z < r.z0 || z > r.z1) continue;
+      var b = r.bbox;
+      var x0 = lonX(b[0], z), x1 = lonX(b[2], z);
+      var y0 = latY(b[3], z), y1 = latY(b[1], z);
+      if (y0 > y1) { var t = y0; y0 = y1; y1 = t; }
+      if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return true;
+    }
+    return false;
+  }
+  function resolvePack(z, x, y) {
+    var tz = z, tx = x, ty = y;
+    while (tz > PACK_FALLBACK_Z && !tileCovered(tz, tx, ty)) {
+      tz--; tx >>= 1; ty >>= 1;
+    }
+    return { z: tz, x: tx, y: ty, dz: z - tz, ox: x - (tx << (z - tz)), oy: y - (ty << (z - tz)) };
+  }
+  function fetchBuf(url, signal) {
+    return gate().then(() => {
+      return fetch(url, { signal: signal, mode: "cors", cache: "force-cache" }).then((r) => {
+        if (r.status === 404) { release(); return null; }
+        if (!r.ok) { release(); throw new Error("pack " + r.status); }
+        return r.arrayBuffer().then((buf) => { release(); return buf; });
+      }).catch((e) => { release(); throw e; });
+    });
+  }
+  /* Decoded packed tile: { w, h, L: Uint8Array length w*h, A: Uint8Array } */
+  function decodePackBuf(buf) {
+    return createImageBitmap(new Blob([buf], { type: "image/webp" })).then((bmp) => {
+      var c = typeof OffscreenCanvas !== "undefined"
+        ? new OffscreenCanvas(bmp.width, bmp.height)
+        : Object.assign(document.createElement("canvas"), { width: bmp.width, height: bmp.height });
+      var ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(bmp, 0, 0);
+      var img = ctx.getImageData(0, 0, c.width, c.height);
+      var n = c.width * c.height;
+      var L = new Uint8Array(n), A = new Uint8Array(n);
+      var d = img.data;
+      for (var i = 0, p = 0; i < d.length; i += 4, p++) {
+        L[p] = d[i];
+        A[p] = d[i + 3];
+      }
+      bmp.close && bmp.close();
+      return { w: c.width, h: c.height, L: L, A: A };
+    });
+  }
+  function getPackedRaw(z, x, y, kind, signal) {
+    var key = "raw:" + kind + ":" + z + "/" + x + "/" + y;
+    var hit = memGet(key);
+    if (hit) return Promise.resolve(hit);
+    var url = (kind === "ifl")
+      ? (PACK_BASE + "/ifl/" + z + "/" + x + "/" + y + ".webp")
+      : (PACK_BASE + "/" + z + "/" + x + "/" + y + ".webp");
+    return fetchBuf(url, signal).then((buf) => {
+      if (!buf) {
+        var empty = { w: TILE_SIZE, h: TILE_SIZE, L: new Uint8Array(TILE_SIZE * TILE_SIZE), A: new Uint8Array(TILE_SIZE * TILE_SIZE) };
+        memSet(key, empty);
+        return empty;
+      }
+      return decodePackBuf(buf).then((dec) => { memSet(key, dec); return dec; });
+    });
+  }
+  function samplePacked(dec, zReq, xReq, yReq, resolved) {
+    var dz = resolved.dz;
+    if (!dz) return dec;
+    var scale = 1 << dz;
+    var w = TILE_SIZE, h = TILE_SIZE;
+    var L = new Uint8Array(w * h), A = new Uint8Array(w * h);
+    var ox = (xReq - (resolved.x << dz)) * (dec.w / scale);
+    var oy = (yReq - (resolved.y << dz)) * (dec.h / scale);
+    var sw = dec.w / scale, sh = dec.h / scale;
+    for (var yy = 0; yy < h; yy++) {
+      var sy = Math.min(dec.h - 1, (oy + yy * sh / h) | 0);
+      for (var xx = 0; xx < w; xx++) {
+        var sx = Math.min(dec.w - 1, (ox + xx * sw / w) | 0);
+        var si = sy * dec.w + sx;
+        var di = yy * w + xx;
+        L[di] = dec.L[si];
+        A[di] = dec.A[si];
+      }
+    }
+    return { w: w, h: h, L: L, A: A };
+  }
+  function paintPacked(dec, mode, y0, y1) {
+    var c = typeof OffscreenCanvas !== "undefined"
+      ? new OffscreenCanvas(dec.w, dec.h)
+      : Object.assign(document.createElement("canvas"), { width: dec.w, height: dec.h });
+    var ctx = c.getContext("2d");
+    var out = ctx.createImageData(dec.w, dec.h);
+    var o = out.data;
+    var lo = y0 - 2000, hi = y1 - 2000;
+    if (mode === "ifl") {
+      var w = dec.w, h = dec.h;
+      var mask = dec.A;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var idx = y * w + x;
+          if (!mask[idx] || !dec.L[idx]) continue;
+          var edge = (x === 0 || !mask[idx - 1] || x === w - 1 || !mask[idx + 1] || y === 0 || !mask[idx - w] || y === h - 1 || !mask[idx + w]);
+          var hatch = ((x + y) % 5 === 0);
+          if (!edge && !hatch) continue;
+          var j = idx * 4;
+          o[j] = 70; o[j + 1] = 110; o[j + 2] = 80;
+          o[j + 3] = edge ? 200 : 100;
+        }
+      }
+    } else {
+      for (var p = 0, i = 0; p < dec.L.length; p++, i += 4) {
+        if (!dec.A[p]) continue;
+        var v = dec.L[p];
+        var off = v & 31;
+        if (!off || off < lo || off > hi) continue;
+        var rgb;
+        if (mode === "drv") {
+          var cls = (v >> 5) & 7;
+          rgb = (cls >= 1 && DRV_RGB[cls]) ? DRV_RGB[cls] : DRV_UNK;
+          o[i + 3] = 210;
+        } else {
+          rgb = yearColor(2000 + off);
+          o[i + 3] = 200;
+        }
+        o[i] = rgb[0]; o[i + 1] = rgb[1]; o[i + 2] = rgb[2];
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+    return blobToBuffer(c);
+  }
+  function packTile(mode, z, x, y, y0, y1, signal) {
+    return loadManifest().then(() => {
+      /* Loss past pack max → live GFW loss-only for sharpness. Drv/IFL always from pack (overzoom). */
+      if (z > packMaxZoom && mode === "loss") return null;
+      var useZ = Math.min(z, packMaxZoom);
+      var shift = z - useZ;
+      var ux = x >> shift, uy = y >> shift;
+      var res = resolvePack(useZ, ux, uy);
+      var kind = (mode === "ifl") ? "ifl" : "loss";
+      var ckey = "out:" + mode + ":" + z + "/" + x + "/" + y + ":" + y0 + "-" + y1;
+      var hit = memGet(ckey);
+      if (hit) return Promise.resolve({ data: hit.slice(0) });
+      return getPackedRaw(res.z, res.x, res.y, kind, signal).then((dec) => {
+        var sampled = samplePacked(dec, z, x, y, res);
+        return paintPacked(sampled, mode, y0, y1).then((out) => {
+          memSet(ckey, out.data);
+          return out;
+        });
+      });
+    });
+  }
+  function rawLossUrl(z, x, y) {
+    return "https://tiles.globalforestwatch.org/umd_tree_cover_loss/v1.11/tcd_30/" + z + "/" + x + "/" + y + ".png";
+  }
+  function fetchBmp(url, signal) {
+    return gate().then(() => {
+      return fetch(url, { signal: signal, mode: "cors" }).then((r) => {
+        if (!r.ok) { release(); throw new Error("gfw " + r.status); }
+        return r.arrayBuffer().then((buf) => {
+          release();
+          return createImageBitmap(new Blob([buf], { type: "image/png" }));
+        });
+      }).catch((e) => { release(); throw e; });
+    });
+  }
+  function liveLossOnly(z, x, y, y0, y1, signal) {
+    var ckey = "live-loss:" + z + "/" + x + "/" + y + ":" + y0 + "-" + y1;
+    var hit = memGet(ckey);
+    if (hit) return Promise.resolve({ data: hit.slice(0) });
+    return fetchBmp(rawLossUrl(z, x, y), signal).then((bmp) => {
+      var c = typeof OffscreenCanvas !== "undefined"
+        ? new OffscreenCanvas(bmp.width, bmp.height)
+        : Object.assign(document.createElement("canvas"), { width: bmp.width, height: bmp.height });
+      var ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(bmp, 0, 0);
+      var img = ctx.getImageData(0, 0, c.width, c.height);
+      var d = img.data;
+      var out = ctx.createImageData(c.width, c.height);
+      var o = out.data;
+      for (var i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 20) continue;
+        var year = lossYearRaw(d[i], d[i + 2], z);
+        if (!year || year < y0 || year > y1) continue;
+        var rgb = yearColor(year);
+        o[i] = rgb[0]; o[i + 1] = rgb[1]; o[i + 2] = rgb[2]; o[i + 3] = 200;
+      }
+      ctx.putImageData(out, 0, 0);
+      return blobToBuffer(c).then((res) => { memSet(ckey, res.data); return res; });
+    });
+  }
   function parseZxy(url, proto) {
     var u = url.replace(proto + "://", "https://dummy/");
     var m = u.match(/\/(\d+)\/(\d+)\/(\d+)/);
@@ -172,125 +351,32 @@
     u.replace(/[?&]([^=]+)=([^&]+)/g, (_, k, v) => { q[k] = v; });
     return {
       z: m ? +m[1] : 0, x: m ? +m[2] : 0, y: m ? +m[3] : 0,
-      y0: +(q.y0 || yearMin), y1: +(q.y1 || yearMax)
+      y0: +(q.y0 || yearMin), y1: +(q.y1 || yearMax), mode: q.mode || "loss"
     };
   }
-  function lossLiveUrl() {
+  function packUrl(mode) {
+    return PROTO_PACK + "://v/{z}/{x}/{y}?mode=" + mode + "&y0=" + yearMin + "&y1=" + yearMax;
+  }
+  function liveUrl() {
     return PROTO_LOSS + "://v/{z}/{x}/{y}?y0=" + yearMin + "&y1=" + yearMax;
-  }
-  function drvCompUrl() {
-    return PROTO_COMP + "://v/{z}/{x}/{y}?y0=" + yearMin + "&y1=" + yearMax;
-  }
-  function iflLiveUrl() {
-    return PROTO_IFL + "://tiles.globalforestwatch.org/ifl_intact_forest_landscapes/v2025/default/{z}/{x}/{y}.png";
   }
   var protoReady = false;
   function ensureProtocol() {
     if (protoReady || !maplibregl.addProtocol) return;
+    maplibregl.addProtocol(PROTO_PACK, (req, abort) => {
+      var p = parseZxy(req.url, PROTO_PACK);
+      var signal = abort && abort.signal;
+      return packTile(p.mode, p.z, p.x, p.y, p.y0, p.y1, signal).then((res) => {
+        if (res) return res;
+        /* above pack: loss live only; drv/ifl → empty (overzoom handles lower) */
+        if (p.mode === "loss") return liveLossOnly(p.z, p.x, p.y, p.y0, p.y1, signal);
+        return emptyTile().then((data) => { return { data: data }; });
+      }).catch(() => emptyTile().then((data) => { return { data: data }; }));
+    });
     maplibregl.addProtocol(PROTO_LOSS, (req, abort) => {
       var p = parseZxy(req.url, PROTO_LOSS);
-      var signal = abort && abort.signal;
-      var ckey = "loss-out:" + p.z + "/" + p.x + "/" + p.y + ":" + p.y0 + "-" + p.y1;
-      var hit = memGet(ckey);
-      if (hit) return Promise.resolve({ data: hit.slice(0) });
-      return fetchBmp(rawLossUrl(p.z, p.x, p.y), signal).then((bmp) => {
-        var pack = canvasFromBitmap(bmp);
-        var d = pack.img.data;
-        var out = pack.ctx.createImageData(pack.c.width, pack.c.height);
-        var o = out.data;
-        for (var i = 0; i < d.length; i += 4) {
-          if (d[i + 3] < 20) continue;
-          var year = lossYear(d[i], d[i + 2], p.z);
-          if (!year || year < p.y0 || year > p.y1) continue;
-          var rgb = yearColor(year);
-          o[i] = rgb[0]; o[i + 1] = rgb[1]; o[i + 2] = rgb[2]; o[i + 3] = 200;
-        }
-        pack.ctx.putImageData(out, 0, 0);
-        return blobToBuffer(pack.c).then((res) => {
-          memSet(ckey, res.data);
-          return res;
-        });
-      });
-    });
-    maplibregl.addProtocol(PROTO_COMP, (req, abort) => {
-      var p = parseZxy(req.url, PROTO_COMP);
-      var signal = abort && abort.signal;
-      var ckey = "drv-out:" + p.z + "/" + p.x + "/" + p.y + ":" + p.y0 + "-" + p.y1;
-      var hit = memGet(ckey);
-      if (hit) return Promise.resolve({ data: hit.slice(0) });
-      return fetchBmp(rawLossUrl(p.z, p.x, p.y), signal).then((lossBmp) => {
-        var loss = canvasFromBitmap(lossBmp);
-        var ld = loss.img.data;
-        var hits = 0;
-        for (var i0 = 0; i0 < ld.length; i0 += 4) {
-          if (ld[i0 + 3] < 20) continue;
-          var y0 = lossYear(ld[i0], ld[i0 + 2], p.z);
-          if (y0 && y0 >= p.y0 && y0 <= p.y1) hits++;
-        }
-        if (!hits) {
-          var empty = loss.ctx.createImageData(loss.c.width, loss.c.height);
-          loss.ctx.putImageData(empty, 0, 0);
-          return blobToBuffer(loss.c).then((res) => { memSet(ckey, res.data); return res; });
-        }
-        return fetchBmp(rawDrvUrl(p.z, p.x, p.y), signal).then((drvBmp) => {
-          var drv = canvasFromBitmap(drvBmp);
-          var dd = drv.img.data;
-          var out = loss.ctx.createImageData(loss.c.width, loss.c.height);
-          var o = out.data;
-          for (var i = 0; i < ld.length; i += 4) {
-            if (ld[i + 3] < 20) continue;
-            var year = lossYear(ld[i], ld[i + 2], p.z);
-            if (!year || year < p.y0 || year > p.y1) continue;
-            var cls = dd[i + 1];
-            var rgb = (dd[i + 3] >= 20 && DRV_RGB[cls]) ? DRV_RGB[cls] : DRV_UNK;
-            o[i] = rgb[0]; o[i + 1] = rgb[1]; o[i + 2] = rgb[2]; o[i + 3] = 210;
-          }
-          loss.ctx.putImageData(out, 0, 0);
-          return blobToBuffer(loss.c).then((res) => {
-            memSet(ckey, res.data);
-            return res;
-          });
-        });
-      });
-    });
-    maplibregl.addProtocol(PROTO_IFL, (req, abort) => {
-      var href = req.url.replace(PROTO_IFL + "://", "https://");
-      var signal = abort && abort.signal;
-      var ckey = "ifl-out:" + href;
-      var hit = memGet(ckey);
-      if (hit) return Promise.resolve({ data: hit.slice(0) });
-      return fetchBmp(href, signal).then((bmp) => {
-        var pack = canvasFromBitmap(bmp);
-        var d = pack.img.data;
-        var w = pack.c.width, h = pack.c.height;
-        var mask = new Uint8Array(w * h);
-        var i, x, y, idx;
-        for (i = 0, idx = 0; i < d.length; i += 4, idx++) {
-          mask[idx] = d[i + 3] > 40 ? 1 : 0;
-          d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0;
-        }
-        for (y = 0; y < h; y++) {
-          for (x = 0; x < w; x++) {
-            idx = y * w + x;
-            if (!mask[idx]) continue;
-            var edge = false;
-            if (x === 0 || !mask[idx - 1]) edge = true;
-            else if (x === w - 1 || !mask[idx + 1]) edge = true;
-            else if (y === 0 || !mask[idx - w]) edge = true;
-            else if (y === h - 1 || !mask[idx + w]) edge = true;
-            var hatch = ((x + y) % 5 === 0);
-            if (!edge && !hatch) continue;
-            i = idx * 4;
-            d[i] = 70; d[i + 1] = 110; d[i + 2] = 80;
-            d[i + 3] = edge ? 200 : 100;
-          }
-        }
-        pack.ctx.putImageData(pack.img, 0, 0);
-        return blobToBuffer(pack.c).then((res) => {
-          memSet(ckey, res.data);
-          return res;
-        });
-      });
+      return liveLossOnly(p.z, p.x, p.y, p.y0, p.y1, abort && abort.signal)
+        .catch(() => emptyTile().then((data) => { return { data: data }; }));
     });
     protoReady = true;
   }
@@ -424,8 +510,8 @@
     var hint = box.querySelector(".forest-year-hint");
     if (hint) {
       hint.textContent = (pMap && pMap.getZoom() < LIVE_Z)
-        ? ("Overview below z" + LIVE_Z + " (~160 KB). Year filter recolours it. Live detail from z" + LIVE_Z + " to z" + LIVE_MAXZOOM + ".")
-        : "Year filter on live tiles (native to z" + LIVE_MAXZOOM + "). Drivers on real loss pixels only.";
+        ? ("Overview below z" + LIVE_Z + " (~160 KB). Year filter recolours it. Compact tiles from z" + LIVE_Z + ".")
+        : ("Compact local tiles (year+driver packed). Slider recolours from cache. Live loss-only past z" + packMaxZoom + ".");
     }
   }
   function mountYearUi() {
@@ -466,51 +552,19 @@
   function isLive(map) {
     return map.getZoom() >= LIVE_Z;
   }
-  function ensureLiveLoss(map) {
+  function ensurePackSrc(map, srcId, lyrId, mode, opac) {
     ensureProtocol();
-    if (!map.getSource(LOSS_SRC)) {
-      map.addSource(LOSS_SRC, {
-        type: "raster", tiles: [lossLiveUrl()], tileSize: TILE_SIZE,
+    if (!map.getSource(srcId)) {
+      map.addSource(srcId, {
+        type: "raster", tiles: [packUrl(mode)], tileSize: TILE_SIZE,
         minzoom: LIVE_Z, maxzoom: LIVE_MAXZOOM,
-        attribution: 'Tree cover loss: <a href="https://www.globalforestwatch.org/" target="_blank" rel="noopener">Hansen/UMD/GFW</a> (CC BY 4.0)'
+        attribution: 'Tree cover: <a href="https://www.globalforestwatch.org/" target="_blank" rel="noopener">Hansen/UMD/GFW</a> (CC BY 4.0), SUNNY compact tiles'
       });
     }
-    if (!map.getLayer(LOSS_LYR)) {
+    if (!map.getLayer(lyrId)) {
       map.addLayer({
-        id: LOSS_LYR, type: "raster", source: LOSS_SRC, minzoom: LIVE_Z,
-        paint: { "raster-opacity": OPAC, "raster-fade-duration": 0 }
-      }, K.before(map));
-    }
-  }
-  function ensureLiveDrv(map) {
-    ensureProtocol();
-    if (!map.getSource(DRV_SRC)) {
-      map.addSource(DRV_SRC, {
-        type: "raster", tiles: [drvCompUrl()], tileSize: TILE_SIZE,
-        minzoom: LIVE_Z, maxzoom: LIVE_MAXZOOM,
-        attribution: 'Loss drivers: Curtis et al. 2018 / GFW (CC BY 4.0), on Hansen loss pixels only'
-      });
-    }
-    if (!map.getLayer(DRV_LYR)) {
-      map.addLayer({
-        id: DRV_LYR, type: "raster", source: DRV_SRC, minzoom: LIVE_Z,
-        paint: { "raster-opacity": OPAC, "raster-fade-duration": 0 }
-      }, K.before(map));
-    }
-  }
-  function ensureLiveIfl(map) {
-    ensureProtocol();
-    if (!map.getSource(IFL_SRC)) {
-      map.addSource(IFL_SRC, {
-        type: "raster", tiles: [iflLiveUrl()], tileSize: TILE_SIZE,
-        minzoom: LIVE_Z, maxzoom: LIVE_MAXZOOM,
-        attribution: 'Intact Forest Landscapes: Potapov / IFL via GFW (CC BY 4.0)'
-      });
-    }
-    if (!map.getLayer(IFL_LYR)) {
-      map.addLayer({
-        id: IFL_LYR, type: "raster", source: IFL_SRC, minzoom: LIVE_Z,
-        paint: { "raster-opacity": 0.85, "raster-fade-duration": 0 }
+        id: lyrId, type: "raster", source: srcId, minzoom: LIVE_Z,
+        paint: { "raster-opacity": opac, "raster-fade-duration": 0 }
       }, K.before(map));
     }
   }
@@ -522,8 +576,9 @@
   }
   function refreshLiveTiles(map) {
     if (!isLive(map)) { syncYearUi(); return; }
-    setTiles(map, LOSS_SRC, lossLiveUrl());
-    setTiles(map, DRV_SRC, drvCompUrl());
+    setTiles(map, LOSS_SRC, packUrl("loss"));
+    setTiles(map, DRV_SRC, packUrl("drv"));
+    setTiles(map, IFL_SRC, packUrl("ifl"));
     syncYearUi();
   }
   function kidVis(map, parentOn) {
@@ -537,14 +592,14 @@
       return;
     }
     if (live) {
-      if (showLossOnly) ensureLiveLoss(map);
-      if (showDrv) ensureLiveDrv(map);
-      if (showIfl) ensureLiveIfl(map);
+      if (showLossOnly) ensurePackSrc(map, LOSS_SRC, LOSS_LYR, "loss", OPAC);
+      if (showDrv) ensurePackSrc(map, DRV_SRC, DRV_LYR, "drv", OPAC);
+      if (showIfl) ensurePackSrc(map, IFL_SRC, IFL_LYR, "ifl", 0.85);
       K.vis(map, [OV_LOSS_LYR, OV_DRV_LYR, OV_IFL_LYR], false);
       K.vis(map, [LOSS_LYR], showLossOnly);
       K.vis(map, [DRV_LYR], showDrv);
       K.vis(map, [IFL_LYR], showIfl);
-      syncYearUi();
+      refreshLiveTiles(map);
     } else {
       K.vis(map, [LOSS_LYR, DRV_LYR, IFL_LYR], false);
       if (showIfl) ensureOvIfl(map);
@@ -576,8 +631,9 @@
       ["#c45a8c", "area", "Loss, driver unknown"],
       ["#466e50", "area", "Intact forest (outline/hatch)"]
     ]) +
-    '<div class="forest-cred">Overview &lt; z' + LIVE_Z + ' from local year-encoded CC-BY stitch (~160 KB), recoloured by the year slider. Live GFW from z' + LIVE_Z + '–' + LIVE_MAXZOOM + ' (256 px native). Hansen · Curtis · Potapov/IFL · GFW/WRI · CC BY 4.0. Drivers on real loss pixels only.</div>';
+    '<div class="forest-cred">Overview &lt; z' + LIVE_Z + ' local (~160 KB). Live band uses SUNNY compact WebP tiles (year+driver packed, CC BY rebuild of Hansen/Curtis/IFL) — heavy GFW PNGs never hit the phone. Slider recolours from cache. Past pack max, loss-only live fallback. CC BY 4.0.</div>';
   loadYearRange();
+  loadManifest();
   window.__sunnyForestTest = {
     overviewCount: (y0, y1, mode) => {
       return loadOvRaw().then(() => {
@@ -586,31 +642,36 @@
     },
     liveCount: (z, x, y, y0, y1) => {
       ensureProtocol();
-      return fetchBmp(rawLossUrl(z, x, y), null).then((bmp) => {
-        var pack = canvasFromBitmap(bmp);
-        var d = pack.img.data, n = 0;
-        for (var i = 0; i < d.length; i += 4) {
-          if (d[i + 3] < 20) continue;
-          var year = lossYear(d[i], d[i + 2], z);
-          if (!year || year < y0 || year > y1) continue;
-          n++;
-        }
-        return n;
+      return packTile("loss", z, x, y, y0, y1, null).then(() => {
+        return getPackedRaw(resolvePack(Math.min(z, packMaxZoom), x, y).z,
+          resolvePack(Math.min(z, packMaxZoom), x, y).x,
+          resolvePack(Math.min(z, packMaxZoom), x, y).y, "loss", null).then((dec) => {
+          var res = resolvePack(Math.min(z, packMaxZoom), x, y);
+          var s = samplePacked(dec, z, x, y, res);
+          var n = 0, lo = y0 - 2000, hi = y1 - 2000;
+          for (var p = 0; p < s.L.length; p++) {
+            if (!s.A[p]) continue;
+            var off = s.L[p] & 31;
+            if (off >= lo && off <= hi) n++;
+          }
+          return n;
+        });
       });
     },
     years: () => { return { min: yearMin, max: yearMax }; },
-    setYears: (lo, hi) => { setYearRange(lo, hi); }
+    setYears: (lo, hi) => { setYearRange(lo, hi); },
+    packMaxZoom: () => packMaxZoom
   };
   L.add({
     id: "forest", name: "Forests & logging", icon: "🌲", group: "Human impact",
     dflt: false, kids: KIDS,
-    tip: "Tree cover loss and logging drivers worldwide. Light overview far out; sharp live detail when you zoom in",
+    tip: "Tree cover loss and logging drivers. Compact local tiles — light far out, sharp when you zoom, no raw GFW on your phone",
     legend: legend,
     note: () => {
       if (!L.isOn("forest")) return "";
       var bits = [];
       var live = pMap && isLive(pMap);
-      bits.push(live ? "live z≥" + LIVE_Z : "overview");
+      bits.push(live ? "pack z≥" + LIVE_Z : "overview");
       if (K.kids.isOn("forest-drv", true)) bits.push("drivers " + yearLabel());
       else if (K.kids.isOn("forest-loss", true)) bits.push("loss " + yearLabel());
       if (K.kids.isOn("forest-ifl", true)) bits.push("intact");
@@ -622,6 +683,7 @@
       pMap = map;
       ensureProtocol();
       loadOvRaw();
+      loadManifest();
       map.on("zoomend", () => {
         if (!L.isOn("forest")) return;
         kidVis(map, true);

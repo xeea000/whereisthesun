@@ -1,0 +1,98 @@
+{
+  "v": 1,
+  "format": "webp-la",
+  "encode": "L = (year-2000) | (driver<<5); A=255 on loss. driver 0=unk 1-5=Curtis classes",
+  "ifl": "ifl/{z}/{x}/{y}.webp L=1 A=255 on intact",
+  "attribution": "Hansen/UMD/Google/USGS/NASA \u00b7 Curtis et al. 2018 \u00b7 Potapov/IFL via GFW \u00b7 CC BY 4.0",
+  "regions": [
+    {
+      "name": "world",
+      "z0": 6,
+      "z1": 6,
+      "bbox": [
+        -180,
+        -85,
+        180,
+        85
+      ]
+    },
+    {
+      "name": "canada",
+      "z0": 7,
+      "z1": 8,
+      "bbox": [
+        -141,
+        41,
+        -52,
+        84
+      ]
+    },
+    {
+      "name": "amazon",
+      "z0": 7,
+      "z1": 8,
+      "bbox": [
+        -75,
+        -20,
+        -45,
+        5
+      ]
+    },
+    {
+      "name": "congo",
+      "z0": 7,
+      "z1": 8,
+      "bbox": [
+        8,
+        -10,
+        32,
+        5
+      ]
+    },
+    {
+      "name": "indonesia",
+      "z0": 7,
+      "z1": 8,
+      "bbox": [
+        95,
+        -11,
+        141,
+        8
+      ]
+    },
+    {
+      "name": "siberia",
+      "z0": 7,
+      "z1": 8,
+      "bbox": [
+        60,
+        50,
+        140,
+        72
+      ]
+    },
+    {
+      "name": "canada9",
+      "z0": 9,
+      "z1": 9,
+      "bbox": [
+        -130,
+        48,
+        -60,
+        60
+      ]
+    }
+  ],
+  "packMaxZoom": 9,
+  "stats": {
+    "ok": 8906,
+    "empty": 9447,
+    "skip": 0,
+    "err": 0,
+    "bytes": 68957620,
+    "ifl_ok": 4877,
+    "ifl_bytes": 2865364
+  },
+  "bytesOnDisk": 71824554,
+  "builtAt": "2026-11-04T11:44:01Z"
+}
