@@ -71,7 +71,9 @@
     if (!map.getLayer("craters-dot")) {
       map.addLayer({ id: "craters-dot", type: "circle", source: SRC, filter: ["==", ["geometry-type"], "Point"],
         paint: { "circle-radius": (window.SunnyKit && window.SunnyKit.markerScale)
-          ? window.SunnyKit.markerScale.bind(map, "craters-dot", "circle-radius", 3) : 3,
+          ? window.SunnyKit.markerScale.bind(map, "craters-dot", "circle-radius",
+            window.SunnyKit.size({ stops: [[2, 2.5], [8, 4], [14, 6]] }))
+          : window.SunnyKit.size({ stops: [[2, 2.5], [8, 4], [14, 6]] }),
           "circle-color": "#ff9a3c", "circle-stroke-color": "rgba(40,20,0,0.6)", "circle-stroke-width": 0.8 } }, before);
     }
   }

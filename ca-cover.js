@@ -63,33 +63,33 @@
     return K.fc(out);
   };
   var PX = 1 / 100600; /* pixels per metre at zoom 0 near 50°N (156,543 m/px x cos 50°) */
-  var RAD_RAW = ["interpolate", ["exponential", 2], ["zoom"],
-    8, ["min", 180, ["*", ["get", "r"], 256 * PX]], 15, ["min", 180, ["*", ["get", "r"], 32768 * PX]]];
-  /* Far-out: radius from local site count at a real site (opt208). Big n => city blob; lone sites stay small so the map is not a polka grid. */
-  var RAD_OV = ["interpolate", ["linear"], ["zoom"],
-    0, ["case", ["<", ["get", "n"], 3], 3, ["min", 40, ["*", 2.4, ["sqrt", ["get", "n"]]]]],
-    4, ["case", ["<", ["get", "n"], 3], 5, ["min", 72, ["*", 3.6, ["sqrt", ["get", "n"]]]]],
-    7.9, ["case", ["<", ["get", "n"], 3], 8, ["min", 110, ["*", 5, ["sqrt", ["get", "n"]]]]]];
-  var paintBand = (id) => {
-    if (!map || !map.getLayer("ca-cov-heat")) return;
-    try {
-      map.setPaintProperty("ca-cov-heat", "heatmap-radius", id === "ov" ? RAD_OV : RAD_RAW);
-      map.setPaintProperty("ca-cov-heat", "heatmap-intensity", id === "ov" ? 0.95 : 0.8);
-      map.setPaintProperty("ca-cov-heat", "heatmap-opacity", id === "ov" ? 0.55 : 0.6);
-    } catch (e) {}
-  };
+  /* opt210: one continuous radius curve across the z8 LOD cut — density floor far out, metre reach closer.
+   * Both ov and raw features carry r and n, so the same expression works on either band. */
+  /* Soft continuous radius: density far out, mild reach closer; <~25% per half-zoom, seamless at z8 cut. */
+  var RAD_ALL = ["interpolate", ["linear"], ["zoom"],
+    0, ["min", 18, ["+", 2.5, ["*", 1.4, ["sqrt", ["coalesce", ["get", "n"], 1]]]]],
+    3, ["min", 24, ["+", 3.2, ["*", 1.7, ["sqrt", ["coalesce", ["get", "n"], 1]]]]],
+    6, ["min", 32, ["+", 4.5, ["*", 2.0, ["sqrt", ["coalesce", ["get", "n"], 1]]],
+      ["min", 8, ["*", ["coalesce", ["get", "r"], 8000], 80 * PX]]]],
+    8, ["min", 40, ["+", 5.5, ["*", 2.2, ["sqrt", ["coalesce", ["get", "n"], 1]]],
+      ["min", 14, ["*", ["coalesce", ["get", "r"], 8000], 140 * PX]]]],
+    10, ["min", 52, ["+", 7, ["*", 2.4, ["sqrt", ["coalesce", ["get", "n"], 1]]],
+      ["min", 22, ["*", ["coalesce", ["get", "r"], 8000], 220 * PX]]]],
+    12, ["min", 64, ["+", 9, ["*", 2.6, ["sqrt", ["coalesce", ["get", "n"], 1]]],
+      ["min", 32, ["*", ["coalesce", ["get", "r"], 8000], 320 * PX]]]],
+    15, ["min", 80, ["+", 12, ["*", 2.8, ["sqrt", ["coalesce", ["get", "n"], 1]]],
+      ["min", 48, ["*", ["coalesce", ["get", "r"], 8000], 480 * PX]]]]];
   var redraw = () => {
     if (!map || !on() || !map.getSource("ca-cov")) return;
     var id = K.lod.band(map.getZoom(), K.lod.CUT_CELL);
-    paintBand(id);
     map.getSource("ca-cov").setData(id === "ov" ? buildOv() : buildRaw());
   };
   var add = () => {
     if (map.getSource("ca-cov")) return;
     map.addSource("ca-cov", { type: "geojson", data: K.fc([]), buffer: 512, attribution: "Cell coverage estimate from ISED site data" });
     map.addLayer({ id: "ca-cov-heat", type: "heatmap", source: "ca-cov", paint: {
-      "heatmap-radius": RAD_OV,
-      "heatmap-weight": ["min", 3, ["+", 0.15, ["*", 0.55, ["sqrt", ["get", "n"]]]]], "heatmap-intensity": 0.95, "heatmap-opacity": 0.55,
+      "heatmap-radius": RAD_ALL,
+      "heatmap-weight": ["min", 3, ["+", 0.15, ["*", 0.55, ["sqrt", ["coalesce", ["get", "n"], 1]]]]], "heatmap-intensity": 0.85, "heatmap-opacity": 0.58,
       "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.03, "rgba(215,48,39,0.4)", 0.15, "rgba(254,224,139,0.6)",
         0.4, "rgba(26,152,80,0.7)", 1, "rgba(0,104,55,0.85)"] } }, K.before(map));
   };

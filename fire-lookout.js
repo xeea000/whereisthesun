@@ -24,7 +24,7 @@
       properties: { n: r[2], s: r[3], r: r[4], h: r[5], e: r[6], o: r[7], c: r[8] } }; })), attribution: "Fire lookouts: OpenStreetMap, Wikidata" });
     map.addLayer({ id: "fire-look-dot", type: "circle", source: "fire-look", paint: {
       "circle-radius": K.markerScale.bind(map, "fire-look-dot", "circle-radius",
-        ["interpolate", ["linear"], ["zoom"], 2, 2.4, 8, 4.5, 14, 7]), "circle-color": color,
+        K.size({ stops: [[2, 2.4], [8, 4.5], [14, 7]] })), "circle-color": color,
       "circle-stroke-color": "#b71c1c", "circle-stroke-width": 1.6 } }, K.before(map));
   };
   var apply = () => {

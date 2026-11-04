@@ -76,7 +76,7 @@
       if (!map.getLayer("fire-dot")) {
         map.addLayer({ id: "fire-dot", type: "circle", source: "fires", paint: {
           "circle-radius": K.markerScale.bind(map, "fire-dot", "circle-radius",
-            ["interpolate", ["linear"], ["zoom"], 2, 2.5, 8, 6]),
+            K.size({ stops: [[2, 2.5], [8, 6], [14, 7]] })),
           "circle-color": ["interpolate", ["linear"], ["coalesce", ["get", "frp"], 0], 0, "#ffb000", 50, "#ff5a00", 300, "#d0001a"],
           "circle-stroke-color": "#3a0a00", "circle-stroke-width": 0.6 } }, K.before(map));
       }
@@ -114,7 +114,7 @@
       if (!map.getLayer("meteor-dot")) {
         map.addLayer({ id: "meteor-dot", type: "circle", source: "meteorites", paint: {
           "circle-radius": K.markerScale.bind(map, "meteor-dot", "circle-radius",
-            ["interpolate", ["linear"], ["zoom"], 1, 1.8, 8, 5]),
+            K.size({ stops: [[1, 1.8], [8, 5], [14, 6]] })),
           "circle-color": ["match", ["get", "k"], "found", "#8a7bd0", "#b9a2ff"], "circle-stroke-color": "#2a1f4d", "circle-stroke-width": 0.7 } }, K.before(map));
       }
       K.vis(map, ["meteor-dot"], L.isOn("meteorites"));

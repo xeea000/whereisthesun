@@ -53,7 +53,7 @@
         if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: K.fc(P.toFeatures(d)), attribution: o.attrib });
         o.layers.forEach((l) => {
           if (map.getLayer(l.id)) return;
-          var radBase = o.radius || ["interpolate", ["linear"], ["zoom"], 1, l.r || 2.5, 8, (l.r || 2.5) * 2.2];
+          var radBase = o.radius || K.size({ stops: [[1, l.r || 2.5], [8, (l.r || 2.5) * 2.2], [14, (l.r || 2.5) * 2.8]] });
           var spec = { id: l.id, type: "circle", source: sid, filter: l.filter || ["in", ["get", "k"], ["literal", l.codes]], paint: {
             "circle-radius": K.markerScale.bind(map, l.id, "circle-radius", radBase),
             "circle-color": l.color, "circle-stroke-color": "#101418", "circle-stroke-width": 0.8 } };
@@ -264,7 +264,8 @@
       map.addSource("w-towers", { type: "geojson", data: K.fc([]), attribution: "Towers: Wikidata, FCC ASR, ISED" });
       map.addLayer({ id: "tower-dot", type: "circle", source: "w-towers", filter: tFilter(), paint: {
         "circle-radius": K.markerScale.bind(map, "tower-dot", "circle-radius",
-          ["interpolate", ["linear"], ["zoom"], 1, ["+", 1, ["/", TH, 170]], 6, ["+", 1.6, ["/", TH, 90]], 12, ["+", 3, ["/", TH, 40]]]),
+          K.size({ stops: [[1, ["+", 1.2, ["/", TH, 200]]], [6, ["+", 1.8, ["/", TH, 110]]], [12, ["+", 3, ["/", TH, 50]]]],
+            cluster: { prop: "sites", max: 1.6, coef: 0.12 } })),
         "circle-color": tColor, "circle-stroke-color": "#101418", "circle-stroke-width": 0.6 } }, K.before(map));
       map.on("moveend", tView);
     }
@@ -444,7 +445,8 @@
       if (!map.getLayer("osm-pipe")) map.addLayer({ id: "osm-pipe", type: "line", source: SRC, filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": "#d98c2b", "line-width": 1.6, "line-dasharray": [3, 1.5] } }, K.before(map));
       if (!map.getLayer("osm-plat")) map.addLayer({ id: "osm-plat", type: "circle", source: SRC, filter: ["==", ["geometry-type"], "Point"],
-        paint: { "circle-radius": K.markerScale.bind(map, "osm-plat", "circle-radius", 4),
+        paint: { "circle-radius": K.markerScale.bind(map, "osm-plat", "circle-radius",
+          K.size({ stops: [[2, 2.5], [9, 4], [14, 6]] })),
           "circle-color": "#ffcc33", "circle-stroke-color": "#3a2a00", "circle-stroke-width": 1 } }, K.before(map));
     };
     var setOv = (map) => {

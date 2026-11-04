@@ -43,7 +43,7 @@
     map.addLayer({ id: "parks-edge", type: "line", source: "parks-b", paint: { "line-color": color, "line-width": ["match", ["get", "s"], "n", 1.8, 1],
       "line-dasharray": ["literal", [2, 1]] } }, K.before(map));
     map.addLayer({ id: "parks-dot", type: "circle", source: "parks-pt", paint: { "circle-radius": K.markerScale.bind(map, "parks-dot", "circle-radius",
-      ["interpolate", ["linear"], ["zoom"], 2, 2, 8, 4, 14, 6]),
+      K.size({ stops: [[2, 2], [8, 4], [14, 6]] })),
       "circle-color": color, "circle-stroke-color": "#fff", "circle-stroke-width": ["match", ["get", "s"], "n", 1.6, 0.8] } }, K.before(map));
   };
   var loadB = () => {

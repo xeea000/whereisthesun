@@ -5,6 +5,7 @@
  *            waits for the map to stop moving, and only above a zoom threshold
  *   zoomGate shared no-hysteresis rule (opt206): hide when below minZoom or view too wide
  *   lod      opt207 level-of-detail band picker (overview → detail by zoom, no hysteresis)
+ *   size     opt210 shared circle/icon size curve (smooth zoom + capped cluster boost)
  *   popup    the same tap card the Craters layer uses */
 (() => {
   "use strict";
@@ -325,6 +326,35 @@
     msTrack.push({ map: map, id: layerId, prop: prop, base: base, kind: kind, extra: opts.extra });
     return msSize(base, typeof opts.extra === "function" ? opts.extra() : opts.extra);
   }
+  /* opt210: one shared marker size curve for every point/circle/symbol layer and every LOD band.
+   * Always returns an interpolate(zoom) (never ["*", k, interpolate] — MapLibre 4.7.1 drops those).
+   * Optional soft cluster boost inside each stop (sqrt of sites/n/point_count), capped (default 1.6x)
+   * so overview centroids stay near single-dot size at the band cut — no giant circles on zoom-out.
+   * opts: { lo, mid, hi } | { stops: [[z,r],...] } | { cluster: true|{ prop, max, coef } } | { exp: true }
+   * Stop values are numbers or expressions (e.g. height). Pass through markerScale.bind for the slider. */
+  function size(opts) {
+    opts = opts || {};
+    var lo = opts.lo != null ? opts.lo : 2.2;
+    var mid = opts.mid != null ? opts.mid : 4;
+    var hi = opts.hi != null ? opts.hi : 6.5;
+    var stops = opts.stops;
+    if (!stops) stops = [[2, lo], [8, mid], [14, hi]];
+    var cl = opts.cluster;
+    var prop = null, cmax = 1.6, ccoef = 0.15;
+    if (cl) {
+      if (cl === true) prop = "sites";
+      else { prop = cl.prop || "sites"; cmax = cl.max != null ? cl.max : 1.6; ccoef = cl.coef != null ? cl.coef : 0.15; }
+    }
+    var kind = opts.exp ? ["exponential", 1.4] : ["linear"];
+    var boost = prop ? ["min", cmax, ["+", 1, ["*", ccoef, ["sqrt", ["max", 0, ["-", ["coalesce", ["get", prop], 1], 1]]]]]] : null;
+    var out = ["interpolate", kind, ["zoom"]];
+    for (var i = 0; i < stops.length; i++) {
+      var z = stops[i][0], r = stops[i][1];
+      out.push(z);
+      out.push(boost ? ["*", r, boost] : r);
+    }
+    return out;
+  }
   /* opt207: level-of-detail band picker (Windy-style). cuts = [{ z: 8, id: "ov" }, { z: 24, id: "raw" }]
    * returns the id of the first cut whose z is above the current zoom (stateless; no hysteresis). */
   function lodBand(zoom, cuts) {
@@ -346,6 +376,7 @@
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
+    size: size,
     esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,
     zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote, lod: lod };
