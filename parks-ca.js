@@ -65,12 +65,13 @@
     if (want && !data) { data = { r: [], b: {} }; K.loadJson("data/parks-ca.json?v=298ab790").then((d) => { data = d; apply(); }).catch(() => { data = null; }); return; }
     if (want && data.r.length) { try { add(); } catch (e) { setTimeout(apply, 2000); return; } loadB(); }
     ["parks-fill", "parks-edge", "parks-dot"].forEach((id) => { if (map.getLayer(id)) map.setFilter(id, filt()); });
-    K.vis(map, ["parks-fill", "parks-edge", "parks-dot"], want);
+    /* opt220: parent on with every status kid off → hide shared layers (no undisableable dots) */
+    K.vis(map, ["parks-fill", "parks-edge", "parks-dot"], K.kids.parentShow(want, PARK_KIDS));
   };
   var card = (e) => { var r = props(e.features[0]); if (r) K.show(map, e.lngLat, title(r), lines(r), r[7] === "ab" ? SRC_AB : r[7] === "osm" ? SRC_OSM : SRC); };
   L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
-    kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
-    legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
+    kids: PARK_KIDS.map((k) => { return { id: k.id, name: SS[k.code][0], dflt: true, code: k.code }; }), kidSet: () => apply(),
+    legend: () => { return K.kids.legKeys(PARK_KIDS, (k) => { return [SS[k.code][1], "dot", SS[k.code][0]]; }); },
     tip: "1,764 provincial and territorial parks (CPCAD; Alberta recreation areas from Alberta Parks; 224 more from OpenStreetMap). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines load for the view; tap for details",
     attach: (m) => {
       map = m;

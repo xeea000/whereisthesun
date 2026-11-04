@@ -166,7 +166,8 @@
         map.getSource("sat-pts").setData(K.fc(pts));
         if (full) map.getSource("sat-trk").setData(K.fc(lines));
       }
-      K.vis(map, ["sat-trk", "sat-dot", "sat-star"], true);
+      /* opt220: no subset group on → hide shared layers */
+      K.vis(map, ["sat-trk", "sat-dot", "sat-star"], GROUPS.some((g) => { return gOn(g); }));
     } catch (e) {}
   }
   /* a white star drawn once as an SDF icon, so its colour follows the brightness ramp */
@@ -222,11 +223,17 @@
     if (!isOn) { K.vis(map, ["sat-trk", "sat-dot", "sat-star"], false); return; }
     draw(true);
   }
-  var LEGEND = '<div class="sat-leg"><div class="sat-ramp"></div><div class="sat-rl"><span>faint +6</span><span>mag</span><span>-4 bright</span></div>' +
-    '<div>Grey = magnitude unknown · dim = in Earth\'s shadow</div><div>★ = crewed or major object; bigger star = more crew (crewed) or bigger craft</div></div>';
+  var SAT_KIDS = GROUPS.map((g) => { return { id: "sats-" + g[0], name: g[1], dflt: g[2], gid: g[0], color: g[3] }; });
+  function satLegend() {
+    if (!K.kids.anyOn(SAT_KIDS)) return "";
+    var groups = K.kids.legKeys(SAT_KIDS, (k) => { return [k.color, "dot", k.name]; });
+    return '<div class="sat-leg"><div class="sat-ramp"></div><div class="sat-rl"><span>faint +6</span><span>mag</span><span>-4 bright</span></div>' +
+      '<div>Grey = magnitude unknown · dim = in Earth\'s shadow</div><div>★ = crewed or major object; bigger star = more crew (crewed) or bigger craft</div>' +
+      (groups || "") + '</div>';
+  }
   L.add({ id: "sats", name: "Satellites", icon: "🛰️", group: "Sky & Space", taps: ["sat-dot", "sat-star"], apply: apply,
     tip: "Live satellites with projected ground tracks, by type (CelesTrak orbits, kept a day)",
-    kids: GROUPS.map((g) => { return { id: "sats-" + g[0], name: g[1], dflt: g[2] }; }), legend: LEGEND,
+    kids: SAT_KIDS, legend: satLegend,
     kidSet: () => { if (map) { if (on()) draw(true); } },
     attach: (m, isOn) => {
       map = m;

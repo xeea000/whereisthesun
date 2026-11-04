@@ -467,18 +467,29 @@
     kidVis(map, true);
     mountYearUi();
   }
-  var legend =
-    K.legRamp("linear-gradient(90deg,#d96bb8,#e07070,#f0a030,#ffe66a)", String(Y0), "loss year", String(Y1)) +
-    K.legKeys([
-      ["#dc2828", "area", DRV_LABEL[1]],
-      ["#f2c828", "area", DRV_LABEL[2]],
-      ["#e87814", "area", DRV_LABEL[3]],
-      ["#963cc8", "area", DRV_LABEL[4]],
-      ["#787882", "area", DRV_LABEL[5]],
-      ["#c45a8c", "area", "Loss, driver unknown"],
-      ["#466e50", "area", "Intact forest (outline/hatch)"]
-    ]) +
-    '<div class="forest-cred">Overview &lt; z' + LIVE_Z + ' from local CC-BY stitch (~150 KB). Live GFW detail from z' + LIVE_Z + ' (tileSize ' + TILE_SIZE + ', maxzoom ' + LIVE_MAXZOOM + '). Hansen · Curtis · Potapov/IFL · GFW/WRI · CC BY 4.0. Drivers on real loss pixels only.</div>';
+  /* opt222: legend rows only for enabled forest kids (cred text from opt221 overview) */
+  function legend() {
+    if (!K.kids.anyOn(KIDS)) return "";
+    var bits = [];
+    if (K.kids.isOn("forest-loss", true) || K.kids.isOn("forest-drv", true)) {
+      bits.push(K.legRamp("linear-gradient(90deg,#d96bb8,#e07070,#f0a030,#ffe66a)", String(Y0), "loss year", String(Y1)));
+    }
+    if (K.kids.isOn("forest-drv", true)) {
+      bits.push(K.legKeys([
+        ["#dc2828", "area", DRV_LABEL[1]],
+        ["#f2c828", "area", DRV_LABEL[2]],
+        ["#e87814", "area", DRV_LABEL[3]],
+        ["#963cc8", "area", DRV_LABEL[4]],
+        ["#787882", "area", DRV_LABEL[5]],
+        ["#c45a8c", "area", "Loss, driver unknown"]
+      ]));
+    }
+    if (K.kids.isOn("forest-ifl", true)) {
+      bits.push(K.legKeys([["#466e50", "area", "Intact forest (outline/hatch)"]]));
+    }
+    bits.push('<div class="forest-cred">Overview &lt; z' + LIVE_Z + ' from local CC-BY stitch (~150 KB). Live GFW detail from z' + LIVE_Z + ' (tileSize ' + TILE_SIZE + ', maxzoom ' + LIVE_MAXZOOM + '). Hansen · Curtis · Potapov/IFL · GFW/WRI · CC BY 4.0. Drivers on real loss pixels only.</div>');
+    return bits.join("");
+  }
   loadYearRange();
   L.add({
     id: "forest", name: "Forests & logging", icon: "🌲", group: "Human impact",

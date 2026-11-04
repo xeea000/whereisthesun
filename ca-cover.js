@@ -12,6 +12,8 @@
   var REACH = [[1, 8000], [2, 3000], [4, 1200], [8, 300]];
   var TG = [["5g", "5G", [3, 4]], ["lte", "LTE / 4G", [2]], ["3g", "3G (HSPA, CDMA)", [1, 8]], ["2g", "2G and other (GSM, Wi-Fi, WiMax, other)", [0, 5, 6, 7]]];
   /* opt199: tech + carrier kids via SunnyKit.kids */
+  var CELL_KIDS = TG.map((g) => { return { id: "cellcover-" + g[0], dflt: true }; })
+    .concat(C.brands.map((b, i) => { return { id: "cellcover-c" + i, dflt: true }; }));
   var kOn = (id) => { return K.kids.isOn("cellcover-" + id, true); };
   var on = () => { return L.isOn("cellcover"); };
   var reachOf = (bands, h) => {
@@ -81,6 +83,8 @@
       ["min", 48, ["*", ["coalesce", ["get", "r"], 8000], 480 * PX]]]]];
   var redraw = () => {
     if (!map || !on() || !map.getSource("ca-cov")) return;
+    K.vis(map, ["ca-cov-heat"], K.kids.parentShow(true, CELL_KIDS));
+    if (!K.kids.anyOn(CELL_KIDS)) { map.getSource("ca-cov").setData(K.fc([])); return; }
     var id = K.lod.band(map.getZoom(), K.lod.CUT_CELL);
     map.getSource("ca-cov").setData(id === "ov" ? buildOv() : buildRaw());
   };
@@ -96,7 +100,8 @@
   var apply = (m, want) => {
     map = m;
     if (want) { try { add(); } catch (e) { setTimeout(() => { if (on()) apply(m, true); }, 2000); return; } }
-    K.vis(m, ["ca-cov-heat"], want);
+    /* opt220: every tech/carrier kid off → hide heatmap */
+    K.vis(m, ["ca-cov-heat"], K.kids.parentShow(want, CELL_KIDS));
     C.apply();
     if (want) redraw();
   };
@@ -111,8 +116,11 @@
     kids: TG.map((g) => { return { id: "cellcover-" + g[0], name: g[1], dflt: true }; })
       .concat(C.brands.map((b, i) => { return { id: "cellcover-c" + i, name: b[0], dflt: true }; })),
     kidSet: redraw,
-    legend: K.legKeys([["rgba(26,152,80,0.8)", "area", "strong"], ["rgba(254,224,139,0.8)", "area", "fair"], ["rgba(215,48,39,0.6)", "area", "weak"]]) +
-      "<div class=\"lp-note\">Estimate, not official coverage. Reach: under 1 GHz 8 km, 1-2.7 GHz 3 km, 3.5 GHz 1.2 km, mmWave 0.3 km, capped by the radio horizon.</div>",
+    legend: () => {
+      if (!K.kids.anyOn(CELL_KIDS)) return "";
+      return K.legKeys([["rgba(26,152,80,0.8)", "area", "strong"], ["rgba(254,224,139,0.8)", "area", "fair"], ["rgba(215,48,39,0.6)", "area", "weak"]]) +
+        "<div class=\"lp-note\">Estimate, not official coverage. Reach: under 1 GHz 8 km, 1-2.7 GHz 3 km, 3.5 GHz 1.2 km, mmWave 0.3 km, capped by the radio horizon.</div>";
+    },
     attach: (m, want) => {
       map = m;
       m.on("idle", () => { if (on() && !m.getLayer("ca-cov-heat")) apply(m, true); });

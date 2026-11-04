@@ -6,7 +6,7 @@
  *   zoomGate shared no-hysteresis rule (opt206): hide when below minZoom or view too wide
  *   lod      opt207 level-of-detail band picker (overview → detail by zoom, no hysteresis)
  *   size     opt210 shared circle/icon size curve (smooth zoom + capped cluster boost)
- *   overzoom opt219 source maxzoom = provider native max (MapLibre upscales past it);
+ *   overzoom opt219/opt220 source maxzoom = provider native max (MapLibre upscales past it);
  *            uncapped drops layer maxzoom caps so overlays stay to map maxZoom
  *   popup    the same tap card the Craters layer uses */
 (() => {
@@ -253,18 +253,29 @@
       .filter((c) => { return c != null && c !== ""; });
   }
   /* MapLibre filter: empty codes → never matches.
-   * opt219: return `false` (or ["literal", false]). MapLibre 4.7 ignores ["==", 1, 0] as a
-   * filter expression, so an empty kid set must use a real false filter or dots stay on. */
+   * Shared helper for every kid filter. MapLibre 4.7 ignores ["==", 1, 0], so empty must be
+   * real `false` (also kids.noneFilter) or dots stay on after unticking every kid. */
+  function kidsNoneFilter() { return false; }
   function kidsInFilter(getExpr, codes) {
-    if (!codes || !codes.length) return false;
+    if (!codes || !codes.length) return kidsNoneFilter();
     return ["in", getExpr, ["literal", codes]];
   }
   /* Per-sublayer visibility: parent on AND that kid on */
   function kidsLayerOn(parentOn, kidId, dflt) {
     return !!parentOn && kidsIsOn(kidId, dflt == null ? true : !!dflt);
   }
+  /* Parent on AND at least one subset kid on — use for shared layer visibility. */
+  function kidsParentShow(parentOn, list) {
+    return !!parentOn && kidsAnyOn(list);
+  }
+  /* Legend rows for active subset kids only. rowOf(kid) → [colour, "dot"|"line"|"area", label] or null. */
+  function kidsLegKeys(list, rowOf) {
+    var rows = kidsActive(list).map(rowOf).filter(Boolean);
+    return rows.length ? legKeys(rows) : "";
+  }
   var kids = { isOn: kidsIsOn, subset: kidsSubset, active: kidsActive, anyOn: kidsAnyOn,
-    matchAny: kidsMatchAny, activeCodes: kidsActiveCodes, inFilter: kidsInFilter, layerOn: kidsLayerOn };
+    matchAny: kidsMatchAny, activeCodes: kidsActiveCodes, inFilter: kidsInFilter,
+    noneFilter: kidsNoneFilter, layerOn: kidsLayerOn, parentShow: kidsParentShow, legKeys: kidsLegKeys };
   /* opt200: global Marker size (0.5x–3x, default 1x). Bake into interpolate stops —
    * MapLibre 4.7.1 drops layers with ["*", k, interpolate(zoom)]. Per-layer scales
    * (e.g. beach icon size) pass as extra and multiply on top. Not for raster/heatmap/line. */

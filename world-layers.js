@@ -67,8 +67,14 @@
     }
     var taps = o.layers.map((l) => { return l.id; });
     var pMap = null;
-    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply, legend: o.legend,
-      kids: o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: true }; }) : undefined,
+    /* opt220: with kids, legend lists only enabled kids (function); empty when all off */
+    var kidList = o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: true, color: l.color }; }) : undefined;
+    var leg = o.legend;
+    if (o.kids && typeof o.legend !== "function") {
+      leg = () => { return K.kids.legKeys(kidList, (k) => { return k.name ? [k.color, "dot", k.name] : null; }); };
+    }
+    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply, legend: leg,
+      kids: kidList,
       kidSet: o.kids ? () => { if (pMap) kidVis(pMap, L.isOn(o.id)); } : undefined,
       attach: (map, on) => {
         pMap = map;

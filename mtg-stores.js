@@ -83,6 +83,7 @@
   function redraw(map) {
     if (!map.getSource(SRC) || !meta) return;
     map.getSource(SRC).setData(K.fc(toFeats(meta.stores || [])));
+    K.vis(map, [DOT, STAR], K.kids.parentShow(L.isOn("mtg"), KIDS));
     syncFilterChip();
   }
   function ensure(map) {
@@ -126,10 +127,12 @@
     ]);
   }
   function apply(map, on) {
-    K.vis(map, [DOT, STAR], on);
+    /* opt220: parent on with every subset kid off → hide shared layers */
+    var show = K.kids.parentShow(on, KIDS);
+    K.vis(map, [DOT, STAR], show);
     if (!on) { filterSet = ""; closeSchedule(); return; }
     ensure(map);
-    K.vis(map, [DOT, STAR], L.isOn("mtg"));
+    K.vis(map, [DOT, STAR], K.kids.parentShow(L.isOn("mtg"), KIDS));
     loadAll().then(() => { redraw(map); mountScheduleBtn(); }).catch(() => {});
   }
   function chip(text, cls) {
@@ -446,14 +449,17 @@
     id: "mtg", name: "Magic: The Gathering stores", icon: "🃏", group: "Fun & Games",
     tip: "Wizards Play Network stores in Canada. Prereleases (upcoming + past history), FNM, and a Quiet→Busy estimate (StatsCan + nearby WPN density — not attendance).",
     taps: [DOT, STAR], dflt: false, kids: KIDS,
-    legend: K.legKeys([
-      ["#3d9b6e", "dot", "Quiet"],
-      ["#4a9bb8", "dot", "Steady"],
-      ["#c9a227", "dot", "Lively"],
-      ["#d4782e", "dot", "Busy"],
-      ["#d44545", "dot", "Packed"],
-      ["#ffd45a", "dot", "★ Legendary"]
-    ]),
+    legend: () => {
+      if (!K.kids.anyOn(KIDS)) return "";
+      return K.legKeys([
+        ["#3d9b6e", "dot", "Quiet"],
+        ["#4a9bb8", "dot", "Steady"],
+        ["#c9a227", "dot", "Lively"],
+        ["#d4782e", "dot", "Busy"],
+        ["#d44545", "dot", "Packed"],
+        ["#ffd45a", "dot", "★ Legendary"]
+      ]);
+    },
     kidSet: () => { if (pMap) redraw(pMap); },
     apply: apply,
     note: (map, on) => {

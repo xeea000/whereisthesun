@@ -23,8 +23,19 @@
   var LEG = { /* opt110 legends */
     wind: K.legKeys([["#ebf5ff", "line", "moving lines follow the wind; brighter, longer = stronger"]]),
     skyglow: K.legRamp("#000,#1b2a55,#c9a64a,#fff6c8", "dark sky", "night lights", "bright"),
-    observatories: K.legKeys([["#7b5cff", "dot", "telescope, optical or radio (3,737)"], ["#11a3a3", "dot", "detector: neutrino, gravitational wave, cosmic ray (46)"],
-      ["#1c2b6b", "dot", "Dark Sky Reserve or Park (38)"], ["#ffd34d", "dot", "stargazing site or planetarium (137)"], ["rgba(123,92,255,0.55)", "dot", "group (number inside)"]]),
+    /* opt220: enabled observatory kids only (+ cluster swatch when any on) */
+    observatories: () => {
+      var rows = [
+        ["observatories-scope", "#7b5cff", "telescope, optical or radio (3,737)"],
+        ["observatories-detector", "#11a3a3", "detector: neutrino, gravitational wave, cosmic ray (46)"],
+        ["observatories-darksky", "#1c2b6b", "Dark Sky Reserve or Park (38)"],
+        ["observatories-stargaze", "#ffd34d", "stargazing site or planetarium (137)"]
+      ];
+      var list = rows.map((r) => { return { id: r[0], dflt: true, color: r[1], name: r[2] }; });
+      var html = K.kids.legKeys(list, (k) => { return [k.color, "dot", k.name]; });
+      if (!html) return "";
+      return html + K.legKeys([["rgba(123,92,255,0.55)", "dot", "group (number inside)"]]);
+    },
     craters: K.legKeys([["#ff9a3c", "area", "crater rim at true size"], ["#ff9a3c", "dot", "centre"]]),
     crown: K.legKeys([["rgb(30,170,60)", "area", "Crown land policy area"]])
   };

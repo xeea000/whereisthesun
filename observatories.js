@@ -67,11 +67,16 @@
   function pointFilter() {
     var KK = window.SunnyKit && window.SunnyKit.kids;
     var codes = KK ? KK.activeCodes(OBS_KIDS, (k) => { return k.code; }) : CLS.map((c) => { return c[0]; });
-    var cat = KK ? KK.inFilter(["get", "cat"], codes) : ["in", ["get", "cat"], ["literal", codes]];
+    /* opt220: empty codes → kids.noneFilter / false (never ["==",1,0]) */
+    var cat = KK ? KK.inFilter(["get", "cat"], codes)
+      : (codes.length ? ["in", ["get", "cat"], ["literal", codes]] : false);
     return ["all", ["!", ["has", "point_count"]], cat];
   }
   function refresh() {
-    if (map && map.getLayer("obs-point")) map.setFilter("obs-point", pointFilter());
+    if (!map) return;
+    if (map.getLayer("obs-point")) map.setFilter("obs-point", pointFilter());
+    var KK = window.SunnyKit && window.SunnyKit.kids;
+    if (isOn()) setVisible(KK ? KK.parentShow(true, OBS_KIDS) : true);
   }
   function keepOrder() {
     var before = beforeId();
@@ -108,7 +113,10 @@
   function applyLoaded() {
     if (!isOn()) return;
     try { addLayers(); } catch (eA) { return; }
-    setVisible(true);
+    /* opt220: parent on with every class kid off → hide shared layers */
+    var KK = window.SunnyKit && window.SunnyKit.kids;
+    setVisible(KK ? KK.parentShow(true, OBS_KIDS) : true);
+    refresh();
   }
   function noop() {}
   function esc(s) {
