@@ -14,7 +14,7 @@
   if (!K || !L || !P) return;
   var NOW = new Date().getFullYear();
   var BASE = "data/world/";
-  var V = "opt188"; /* bump when tools/build-world.js or build-cables.js output changes */
+  var V = "opt212"; /* bump when tools/build-world.js or build-cables.js output changes */
   var meta = {};
   var cap = (s) => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
   var age = (verb, y) => {
@@ -313,7 +313,9 @@
     tip: "Radio telescopes and arrays (Wikidata)", attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
     layers: [{ id: "tx-scope", codes: ["scope"], color: "#c08bff", r: 3.2 }], lines: txLines("Opened") });
   pointLayer({ id: "radars", file: "transmission", name: "Radar sites", icon: "🛰️", group: "Transmission",
-    tip: "Radar stations (Wikidata)", attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
+    tip: "Weather radars (Environment Canada CanRAD), North Warning System sites, ATC surveillance radars where mapped, and other radar stations (Wikidata, OpenStreetMap). Only places a real source lists as radar — CFB airfields are not assumed.",
+    attrib: 'Radar: <a href="https://en.wikipedia.org/wiki/Canadian_weather_radar_network" target="_blank" rel="noopener">CanRAD</a>, <a href="https://en.wikipedia.org/wiki/North_Warning_System" target="_blank" rel="noopener">NWS</a>, <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, <a href="https://www.openstreetmap.org/" target="_blank" rel="noopener">OSM</a>',
+    src: ["Canadian weather radar network (Wikipedia / ECCC)", "https://en.wikipedia.org/wiki/Canadian_weather_radar_network"],
     kids: true, legend: K.legKeys([["#5ad1ff", "dot", "civil and weather radar"], ["#ff7a59", "dot", "military radar"]]),
     layers: [{ id: "tx-radar", codes: ["radar"], color: "#5ad1ff", r: 3, name: "Civil & weather" }, { id: "tx-radarm", codes: ["radarm"], color: "#ff7a59", r: 3, name: "Military" }],
     lines: txLines("Opened") });

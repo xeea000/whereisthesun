@@ -77,9 +77,17 @@ const main = async () => {
   /* Transmission: tall masts and towers, radio telescopes, radar */
   const masts = await wd(["Q11166728", "Q5622819", "Q1798641", "Q17143375"]);
   const scopes = await wd(["Q184356"]);
-  const radar = await wd(["Q89578131", "Q1094622"]);
+  /* opt212: Q89578131 radar station, Q133288241 military radar station, Q863343 weather radar.
+   * (Q1094622 was a mistaken Scottish settlement id.) Full CanRAD/NWS/OSM merge: tools/build-radars.js */
+  const radar = await wd(["Q89578131", "Q133288241", "Q863343"], true);
+  const radCode = (s) => {
+    const t = (s.kind || "") + " " + (s.name || "") + " " + (s.operator || "");
+    if (/weather|meteorolog/i.test(t)) return "radar";
+    if (/military|Texas Tower|North Warning|\bNWS\b|Air Station|\bCFS\b|\bCFB\b|NORAD|DEW Line|Pinetree/i.test(t)) return "radarm";
+    return "radar";
+  };
   const tx = masts.map((s) => { s.t = s.height >= 300 ? "mast300" : s.height >= 150 ? "mast150" : "mast"; return s; })
-    .concat(scopes.map((s) => { s.t = "scope"; return s; }), radar.map((s) => { s.t = /military|Texas Tower/i.test(s.kind) ? "radarm" : "radar"; return s; }));
+    .concat(scopes.map((s) => { s.t = "scope"; return s; }), radar.map((s) => { s.t = radCode(s); return s; }));
   man.files.transmission = write("transmission", tx, (s) => { return s.t; });
   /* BOEM offshore structures still in place (Gulf of Mexico and Pacific OCS) */
   const f = process.argv[2];
