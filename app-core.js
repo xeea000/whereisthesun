@@ -535,7 +535,7 @@ function sunnyStep01() {
   DEFAULT_WARM_LAT = 43.65;
   DEFAULT_WARM_LON = -79.38;
   WX_BATCH = 40; /* opt14: batches of 40 keep requests from hanging */
-  WX_PARALLEL = 1; /* one Open-Meteo batch at a time */
+  WX_PARALLEL = 2; /* opt203: two Open-Meteo batches in flight */
   WX_FETCH_TIMEOUT_MS = 12000;
   wxFetchAbort = null; /* aborted when search gen bumps / cancel */
   sheetSunnyMode = true;

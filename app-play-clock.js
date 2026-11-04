@@ -542,7 +542,7 @@
   }
   function showGoesBootTip(iso) {
     applyGoesLatestToTimeline(iso);
-    if (!playMode && !tabHidden && !radarOn()) {
+    if (!playMode && !tabHidden && !radarOn() && !overlayNone) {
       var urlNow = gibsTiles(iso || goesLatestIsoSync(), sunnyApp_origin ? sunnyApp_origin.lon : -79);
       presentStaticGibs(urlNow);
       setCloudFrame(cloudIndex);
@@ -550,7 +550,7 @@
   }
   function showGoesFallbackTip() {
     /* probe failed — fall back to conservative wall tip once */
-    if (!playMode && !tabHidden && !radarOn()) {
+    if (!playMode && !tabHidden && !radarOn() && !overlayNone) {
       var fb = goesLatestIsoSync();
       applyGoesLatestToTimeline(fb);
       presentStaticGibs(gibsTiles(fb, sunnyApp_origin ? sunnyApp_origin.lon : -79));

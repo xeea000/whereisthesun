@@ -249,23 +249,33 @@
     /* Cap per-request size so one hung Open-Meteo call can't freeze Find */
     var CAP = WX_BATCH;
     if (missing.length > CAP) {
+      var slices = [];
       var start = 0;
-      var chain = Promise.resolve();
       while (start < missing.length) {
-        ((slicePts, sliceIdx) => {
-          chain = chain.then(() => {
-            if (signal && signal.aborted) return;
-            return fetchCurrentWeather(slicePts, signal).then((rows) => {
-              var r;
-              for (r = 0; r < rows.length; r++) {
-                if (rows[r]) out[sliceIdx[r]] = rows[r];
-              }
-            }).catch(() => { /* partial OK */ });
-          });
-        })(missing.slice(start, start + CAP), missingIdx.slice(start, start + CAP));
+        slices.push({
+          pts: missing.slice(start, start + CAP),
+          idx: missingIdx.slice(start, start + CAP)
+        });
         start += CAP;
       }
-      return chain.then(() => {
+      /* opt203: run up to WX_PARALLEL Open-Meteo batches at once */
+      var parallel = Math.max(1, Number(WX_PARALLEL) || 1);
+      var cursor = 0;
+      function runOne() {
+        if (signal && signal.aborted) return Promise.resolve();
+        if (cursor >= slices.length) return Promise.resolve();
+        var slot = slices[cursor++];
+        return fetchCurrentWeather(slot.pts, signal).then((rows) => {
+          var r;
+          for (r = 0; r < rows.length; r++) {
+            if (rows[r]) out[slot.idx[r]] = rows[r];
+          }
+        }).catch(() => { /* partial OK */ }).then(runOne);
+      }
+      var workers = [];
+      var w;
+      for (w = 0; w < Math.min(parallel, slices.length); w++) workers.push(runOne());
+      return Promise.all(workers).then(() => {
         var filled = [];
         var fi;
         for (fi = 0; fi < out.length; fi++) {

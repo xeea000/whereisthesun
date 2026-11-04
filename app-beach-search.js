@@ -137,35 +137,40 @@
         found.push(b);
       });
     }
-    function step() {
-      if (stale()) return Promise.resolve(found.slice(0, want));
-      if (found.length >= want || i >= list.length) {
-        found.sort(sunnySortCmp);
-        return Promise.resolve(found.slice(0, want));
-      }
-      /* opt38: don't start a new sunny weather batch mid pan/zoom */
-      if (mapGesturing) {
-        return new Promise((resolve) => {
-          setTimeout(resolve, 180);
-        }).then(step);
-      }
+    function nextChunk() {
+      if (stale() || found.length >= want || i >= list.length) return null;
+      if (mapGesturing) return "wait";
       var chunk = list.slice(i, i + WX_BATCH);
       i += chunk.length;
       setStatus("Checking the sun… " + Math.min(i, list.length) + "/" + list.length);
-      /* opt14: one batch at a time + timeout; always settle so UI never sticks at N/400 */
+      return chunk;
+    }
+    function runWorker() {
+      if (stale()) return Promise.resolve();
+      if (found.length >= want || i >= list.length) return Promise.resolve();
+      var chunk = nextChunk();
+      if (chunk === "wait") {
+        return new Promise((resolve) => { setTimeout(resolve, 180); }).then(runWorker);
+      }
+      if (!chunk) return Promise.resolve();
       return fetchCurrentWeather(chunk, signal).catch((err) => {
         if (err && err.name === "AbortError") return [];
         console.error(err);
         return [];
       }).then((wx) => {
-        if (stale()) return found.slice(0, want);
+        if (stale()) return;
         if (wx && wx.length) absorb(wx);
-        /* keep going even if this batch was empty/timed out */
-        return step();
+        return runWorker();
       });
     }
-    return step().then((rows) => {
-      return rows || found.slice(0, want);
+    /* opt203: up to WX_PARALLEL sunny-search batches in flight */
+    var parallel = Math.max(1, Number(WX_PARALLEL) || 1);
+    var starters = [];
+    var w;
+    for (w = 0; w < parallel; w++) starters.push(runWorker());
+    return Promise.all(starters).then(() => {
+      found.sort(sunnySortCmp);
+      return found.slice(0, want);
     }).catch((err) => {
       console.error(err);
       found.sort(sunnySortCmp);

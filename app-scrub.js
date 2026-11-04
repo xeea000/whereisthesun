@@ -95,7 +95,8 @@ function sunnyStep14() {
     ensureCloudMap(); /* hide unused #cloud-map; mount play layer on map container */
     restorePersistedSettingsAfterMapReady();
     /* opt19: if Radar overlay restored, skip cloud tile boot (mutex) */
-    if (!radarOn()) {
+    /* opt203: Clouds+Radar both off — no GOES probe or tile boot */
+    if (!radarOn() && !overlayNone) {
       /* opt40: do NOT paint WMTS for optimistic tip — wait for probe (avoids first-paint 404 storm) */
       try {
         if (timeLabel && cloudTimes.length) {
@@ -124,6 +125,8 @@ function sunnyStep14() {
     /* Heavy work after first paint + idle; independent tasks fire in parallel */
     afterMapBasicsReady(() => {
       /* opt78: beach pieces load only when beaches are searched or shown */
+      /* opt203: warm the tiny beach manifest so locate→results skips a round trip */
+      try { loadBeachManifest(); } catch (eMan) {}
       scheduleIdleGoesWarm();
       setTimeout(() => {
         if (!tabHidden) prefetchFlowWorkerScript();

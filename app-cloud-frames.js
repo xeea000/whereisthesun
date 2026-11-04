@@ -158,6 +158,11 @@ var labelsIdleHealArmed, labelsHealBusy;
       setMapLibreCloudsHidden(true);
       return Promise.resolve();
     }
+    /* opt203: both overlays off — no GIBS/IEM tile fetch or warm */
+    if (overlayNone) {
+      try { setMapLibreCloudsHidden(true); } catch (eNone) {}
+      return Promise.resolve();
+    }
     var p;
     var livePlay = playMode && !scrubbing;
     if (livePlay) {

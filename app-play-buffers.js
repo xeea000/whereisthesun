@@ -332,6 +332,11 @@ var swGateOpen, swGateUrl, cloudTweenSource;
   function presentStaticGibsNow(url) {
     var m = cloudTargetMap();
     if (!m || tabHidden) return Promise.resolve(false);
+    /* opt203: Clouds off — keep prior source if any, but do not fetch GIBS tiles */
+    if (overlayNone) {
+      try { setMapLibreCloudsHidden(true); } catch (eHide) {}
+      return Promise.resolve(true);
+    }
     if (!cloudSourcesReady || !m.getSource(GIBS_SRC)) {
       addGibsStatic(url);
       return Promise.resolve(true);

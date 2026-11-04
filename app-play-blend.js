@@ -410,7 +410,7 @@ var steerState, STEER_TTL_MS, STEER_FAIL_TTL_MS, omPlayGrid, omPlayPromise;
   }
   function scheduleIdleGoesWarm() {
     cancelIdleGoesWarm();
-    if (tabHidden || playMode || mapGesturing || scrubbing || radarOn()) return;
+    if (tabHidden || playMode || mapGesturing || scrubbing || radarOn() || overlayNone) return;
     if (!cloudTimes.length || playUseOpenMeteo) return;
     idleGoesWarmTimer = setTimeout(() => {
       idleGoesWarmTimer = null;
@@ -425,7 +425,7 @@ var steerState, STEER_TTL_MS, STEER_FAIL_TTL_MS, omPlayGrid, omPlayPromise;
   }
   function warmIdleGoesCache() {
     /* opt38: quiet 2–4 nearby GOES WMS into playImgCache while idle */
-    if (tabHidden || playMode || mapGesturing || scrubbing || radarOn()) return;
+    if (tabHidden || playMode || mapGesturing || scrubbing || radarOn() || overlayNone) return;
     if (!cloudTimes.length || playUseOpenMeteo || lowDataLink()) return;
     try {
       if (map && (map.isMoving() || map.isZooming())) return;

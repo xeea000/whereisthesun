@@ -21,11 +21,10 @@ var windCellCounts;
     setStatus("Finding clouds and beaches…");
     ensureBeachLayers();
     setCloudFrame(cloudTimes.length ? cloudTimes.length - 1 : 0);
-    ensureHomeCountry().then(() => {
+    /* opt203: country lookup and region shards in parallel (country only needed for beach filter) */
+    Promise.all([ensureHomeCountry(), ensureRegionsFor(lat, lon, 150)]).then(() => {
       var only = homeOnlyCode();
-      return ensureRegionsFor(lat, lon, 150).then(() => {
-        return fetchBeaches(lat, lon, null, null, null, null, null, null, only);
-      });
+      return fetchBeaches(lat, lon, null, null, null, null, null, null, only);
     }).then((list) => {
         var home = homeOnlyCode();
         if (home && list) {

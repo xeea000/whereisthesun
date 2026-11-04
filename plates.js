@@ -117,5 +117,5 @@
   L.add({ id: "platemotion", name: "Plate motion", icon: "➡️", group: "Earth", dflt: true, apply: motion,
     tip: "Streaks show where each plate is heading (NNR-MORVEL56), sped up hugely: real plates move 0 to 170 mm a year",
     legend: K.legKeys([["#ffffff", "line", "streak: direction of plate motion, faster = longer"]]),
-    attach: (map, on) => { load().then((g) => { if (!rows) index(g); }).catch(() => {}); motion(map, on); } });
+    attach: (map, on) => { if (on) load().then((g) => { if (!rows) index(g); }).catch(() => {}); motion(map, on); } });
 })();
