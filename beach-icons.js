@@ -290,12 +290,16 @@
     sliders.push({ input: inp, lab: lab });
   };
   var buildSwitch = () => {
-    var row = [].slice.call(document.querySelectorAll("#layers-panel .lp-row")).filter((r) => { return /Beaches/.test(r.textContent); })[0];
+    var host = (window.SunnyLayers && SunnyLayers.ctrlHost) ? SunnyLayers.ctrlHost("beaches") : null;
+    if (!host) {
+      var row = [].slice.call(document.querySelectorAll("#layers-panel .lp-row")).filter((r) => { return /Beaches/.test(r.textContent); })[0];
+      host = row && row.closest(".lp-fold") && row.closest(".lp-fold").querySelector(".lp-ctrls");
+    }
     var sun = document.getElementById("toggle-sunny");
-    if (!row || !sun) { setTimeout(buildSwitch, 800); return; }
+    if (!host || !sun) { setTimeout(buildSwitch, 800); return; }
     if (boxes.length) return;
-    addBox(row.parentNode, row.nextSibling, "lp-bicon");
-    addScale(row.parentNode, row.nextSibling ? row.nextSibling.nextSibling : null, "lp-bscale");
+    addBox(host, null, "lp-bicon");
+    addScale(host, null, "lp-bscale");
     addBox(sun.closest(".set-row"), null, "sun-opt");
     addScale(sun.closest(".set-row"), null, "lp-bscale sun-opt");
   };

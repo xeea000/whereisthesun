@@ -298,9 +298,13 @@
     }
   }
   function mountScheduleBtn() {
-    var input = document.querySelector('.lp-input[data-id="mtg"]');
-    if (!input) return;
-    var wrap = input.closest(".lp-fold");
+    var wrap = (L && L.ctrlHost) ? L.ctrlHost("mtg") : null;
+    if (!wrap) {
+      var input = document.querySelector('.lp-input[data-id="mtg"]');
+      if (!input) return;
+      var fold = input.closest(".lp-fold");
+      wrap = fold && (fold.querySelector(".lp-ctrls") || fold);
+    }
     if (!wrap) return;
     if (!wrap.querySelector(".mtg-sched-btn")) {
       var b = document.createElement("button");

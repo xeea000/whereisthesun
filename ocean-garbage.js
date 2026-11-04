@@ -91,7 +91,11 @@
     }
   }
   function mountClassUi() {
-    var host = document.querySelector('.lp-row[data-id="oceangarbage"] .lp-kids');
+    var host = (L && L.ctrlHost) ? L.ctrlHost("oceangarbage") : null;
+    if (!host) {
+      var fold = document.querySelector('.lp-fold[data-layer="oceangarbage"]');
+      host = fold && fold.querySelector(".lp-ctrls");
+    }
     if (!host || host.querySelector(".og-class-range")) return;
     var box = document.createElement("div");
     box.className = "hi-year-range og-class-range";

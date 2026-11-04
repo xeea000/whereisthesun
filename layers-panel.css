@@ -44,20 +44,20 @@
 .sky-lbl { background: rgba(10, 14, 30, 0.75); color: #fff; font: 600 10.5px/1.25 system-ui, sans-serif; padding: 2px 5px; border-radius: 5px; white-space: nowrap; pointer-events: none; }
 .sky-pass { color: #ffd34d; }
 .sky-met { color: #ff8fd0; }
-.lp-bicon{display:block;padding:4px 12px 8px 40px;font-size:13px}.set-credits{margin:6px 0 0;font-size:10px;opacity:.7}
+.lp-bicon{display:block;padding:4px 12px 8px 40px;font-size:13px}.lp-ctrls .lp-bicon,.lp-ctrls .lp-bscale{padding-left:0}.set-credits{margin:6px 0 0;font-size:10px;opacity:.7}
 .lp-title{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(18,22,30,.97);border-radius:0 12px 0 0;padding-bottom:6px}.lp-title-txt{font:700 14px system-ui,sans-serif}.lp-actions{display:flex;gap:6px;flex-shrink:0}.lp-clear,.lp-foldall{border:0;border-radius:8px;padding:5px 10px;color:#fff;font:700 12px system-ui,sans-serif;cursor:pointer}.lp-clear{background:#5a2b2b}.lp-clear:hover{background:#7a3535}.lp-foldall{background:#2b3a5a}.lp-foldall:hover{background:#3a4d75}
-.lp-twisty{border:0;background:transparent;color:#ffd34d;font:700 14px system-ui,sans-serif;width:18px;padding:0;margin-right:-6px;cursor:pointer}.lp-kids{padding:0 8px 6px 46px;display:flex;flex-direction:column;gap:2px}.lp-kids[hidden]{display:none}.lp-kid{display:flex;align-items:center;gap:6px;min-height:30px;font-size:12.5px;cursor:pointer}.lp-kid input{width:18px;height:18px;accent-color:#f5b301}
+.lp-twisty{border:0;background:transparent;color:#ffd34d;font:700 14px system-ui,sans-serif;width:18px;padding:0;margin-right:-6px;cursor:pointer}.lp-ctrls,.lp-kids{padding:0 8px 6px 46px;display:flex;flex-direction:column;gap:2px}.lp-ctrls[hidden],.lp-kids[hidden]{display:none}.lp-kid{display:flex;align-items:center;gap:6px;min-height:30px;font-size:12.5px;cursor:pointer}.lp-kid input{width:18px;height:18px;accent-color:#f5b301}
 .lp-fold-h{display:block;width:100%;text-align:left;border:0;background:transparent;color:#fff;cursor:pointer;padding:6px 8px;margin:6px 0 0}.lp-fold-h.lp-l1{font-size:10px;opacity:.75;padding-left:22px;margin-top:2px}.lp-grp[hidden]{display:none}
 /* opt104: compact panel. Tight rows on desktop, about 32px rows on touch. */
 .lp-title{padding:6px 10px 3px;font-size:14px}.lp-body{padding:0 4px 6px}.lp-head{margin:6px 6px 1px;font-size:9.5px}
 .lp-row{gap:7px;padding:2px 6px;min-height:26px;border-radius:6px;font-size:12.5px}.lp-ico{width:18px;font-size:14px}
 .lp-row.is-on .lp-sw::after{transform:translateX(12px)}.lp-sw{width:28px;height:16px}.lp-sw::after{width:12px;height:12px}.lp-bicon{padding:2px 8px 4px 30px;font-size:12px}
-.lp-fold-h{padding:3px 6px;margin:2px 0 0;font-size:12px}.lp-fold-h.lp-l1{font-size:10px;padding-left:14px;margin-top:0}.lp-kids{padding:0 6px 3px 30px;gap:0}.lp-kid{min-height:24px}
+.lp-fold-h{padding:3px 6px;margin:2px 0 0;font-size:12px}.lp-fold-h.lp-l1{font-size:10px;padding-left:14px;margin-top:0}.lp-ctrls,.lp-kids{padding:0 6px 3px 30px;gap:0}.lp-kid{min-height:24px}
 @media (pointer:coarse){.lp-row{min-height:32px;padding:3px 6px}.lp-fold-h{min-height:30px}.lp-kid{min-height:30px}}
 .lp-swhit{display:flex;align-items:center;align-self:stretch;padding:0 2px 0 10px;cursor:pointer}.lp-par .lp-name{cursor:pointer}
 .sat-leg{font-size:10px;opacity:.85;margin:4px 0 2px;line-height:1.35}.sat-ramp{height:7px;border-radius:4px;background:linear-gradient(90deg,#6a5acd,#d0587a,#ff9a3c,#ffd34d,#fff3a0,#fff)}.sat-rl{display:flex;justify-content:space-between;opacity:.8}
-.lp-leg{padding:0 8px 4px 32px}
-.lp-fold:has(> .lp-row:not(.is-on)) > .lp-leg{display:none}
+.lp-leg{padding:2px 0 4px 0}
+.lp-fold:has(> .lp-row:not(.is-on)) > .lp-ctrls > .lp-leg{display:none}
 .legend-stack{position:fixed;left:30px;bottom:230px;z-index:5;max-width:210px;max-height:30vh;overflow:auto;background:rgba(16,20,24,.82);color:#e8edf3;
   border-radius:8px;font:11px/1.3 system-ui,sans-serif;padding:2px 6px 4px;pointer-events:auto}
 .legend-stack .ls-head{background:none;border:0;color:inherit;font:600 11px system-ui,sans-serif;padding:3px 0;cursor:pointer;width:100%;text-align:left}

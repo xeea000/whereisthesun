@@ -54,10 +54,14 @@
     }
   }
   function mountYearUi() {
-    var input = document.querySelector('.lp-input[data-id="spacecraft"]');
-    if (!input) return;
-    var wrap = input.closest(".lp-fold");
-    if (!wrap || wrap.querySelector(".sc-year-range")) return;
+    var host = (L && L.ctrlHost) ? L.ctrlHost("spacecraft") : null;
+    if (!host) {
+      var input = document.querySelector('.lp-input[data-id="spacecraft"]');
+      if (!input) return;
+      var wrap = input.closest(".lp-fold");
+      host = wrap && (wrap.querySelector(".lp-ctrls") || wrap);
+    }
+    if (!host || host.querySelector(".sc-year-range")) return;
     var box = document.createElement("div");
     box.className = "hi-year-range sc-year-range";
     box.innerHTML =
@@ -69,7 +73,7 @@
       "</div>" +
       '<div class="hi-year-range-ticks" aria-hidden="true"><span>' + Y0 + "</span><span>" + Y1 + "</span></div>" +
       '<div class="hi-year-hint">Documented reentries &amp; breakups. Rings = approximate published debris/recovery scales.</div>';
-    wrap.appendChild(box);
+    host.appendChild(box);
     var onSlide = () => {
       var loEl = box.querySelector(".hi-year-lo");
       var hiEl = box.querySelector(".hi-year-hi");

@@ -1,5 +1,5 @@
 // workspace/whereisthesun/layers-panel.js
-/* SUNNY layers sidebar (opt94/opt192). An arrow tab on the left edge folds a Windy-style panel in
+/* SUNNY layers sidebar (opt94/opt192/opt231). An arrow tab on the left edge folds a Windy-style panel in
  * and out. Every layer is one row: icon, name, on/off switch, grouped by type. Older layers
  * keep a hidden input as their saved state (the row flips it). This panel is the only place that
  * switches map layers. Open/closed and each layer's state are saved. */
@@ -79,7 +79,10 @@
     return r;
   }
   function row(d) {
-    var r = el(d.kids ? "div" : "label", "lp-row" + (d.kids ? " lp-par" : "")); /* opt106: a parent row is not a label, so its text only folds */
+    /* opt231: every layer gets a twisty + .lp-ctrls body. Per-layer controls (year ranges,
+     * legends, kids, beach size, MTG busy) mount inside and stay hidden while collapsed. */
+    var r = el("div", "lp-row" + (d.kids ? " lp-par" : ""));
+    r.dataset.id = d.id;
     r.title = d.tip || "";
     r.appendChild(el("span", "lp-ico", d.icon));
     var n = el("span", "lp-name", d.name);
@@ -92,53 +95,50 @@
     i.dataset.id = d.id;
     i.addEventListener("change", () => { setOn(d, i.checked); });
     var sw = el("span", "lp-sw");
-    if (d.kids) { /* opt106: own hit area for the switch; it only toggles the layer */
-      var sl = el("label", "lp-swhit");
-      sl.addEventListener("click", (ev) => { ev.stopPropagation(); });
-      sl.appendChild(i); sl.appendChild(sw); r.appendChild(sl);
-    } else { r.appendChild(i); r.appendChild(sw); }
+    var sl = el("label", "lp-swhit"); /* switch-only hit; row click folds */
+    sl.addEventListener("click", (ev) => { ev.stopPropagation(); });
+    sl.appendChild(i); sl.appendChild(sw); r.appendChild(sl);
     rows[d.id] = { row: r, input: i, note: note };
-    if (!d.kids && d.legend) { /* opt107: a plain row can carry a small legend under it */
-      var lw = el("div", "lp-fold"), lg = el("div", "lp-leg");
-      lg.innerHTML = typeof d.legend === "function" ? d.legend() : d.legend; lw.appendChild(r); lw.appendChild(lg);
-      return lw;
-    }
-    if (!d.kids) return r;
-    /* opt102: twisty sub-section (e.g. Satellites groups), each child saved as sunny-L-<kid id> */
     var w = el("div", "lp-fold");
+    w.dataset.layer = d.id;
     var tw = el("button", "lp-twisty", "▸");
     tw.type = "button";
-    tw.setAttribute("aria-label", "Show " + d.name + " groups");
-    var box = el("div", "lp-kids");
+    tw.setAttribute("aria-label", "Show " + d.name + " options");
+    var box = el("div", d.kids ? "lp-ctrls lp-kids" : "lp-ctrls");
     var open = saved(d.id + "-open", false);
     var show = (o) => { box.hidden = !o; tw.textContent = o ? "▾" : "▸"; tw.setAttribute("aria-expanded", o ? "true" : "false"); };
     show(open);
     var flip = (ev) => { ev.preventDefault(); ev.stopPropagation(); open = !open; show(open);
       try { localStorage.setItem("sunny-L-" + d.id + "-open", open ? "1" : "0"); } catch (e) {} };
     tw.addEventListener("click", flip);
-    r.addEventListener("click", flip); /* opt106: icon, name and twisty fold; only the switch toggles */
+    r.addEventListener("click", flip);
     r.insertBefore(tw, r.firstChild);
-    d.kids.forEach((k) => {
-      var kl = el("label", "lp-kid");
-      var ki = el("input");
-      ki.type = "checkbox";
-      ki.dataset.kid = k.id;
-      ki.checked = saved(k.id, k.dflt);
-      ki.addEventListener("change", () => {
-        try { localStorage.setItem("sunny-L-" + k.id, ki.checked ? "1" : "0"); } catch (e) {}
-        if (ki.checked && !isOn(d)) setOn(d, true);
-        if (d.kidSet) d.kidSet();
-        if (d._legEl && typeof d.legend === "function") d._legEl.innerHTML = d.legend() || "";
+    if (d.kids) {
+      d.kids.forEach((k) => {
+        var kl = el("label", "lp-kid");
+        var ki = el("input");
+        ki.type = "checkbox";
+        ki.dataset.kid = k.id;
+        ki.checked = saved(k.id, k.dflt);
+        ki.addEventListener("change", () => {
+          try { localStorage.setItem("sunny-L-" + k.id, ki.checked ? "1" : "0"); } catch (e) {}
+          if (ki.checked && !isOn(d)) setOn(d, true);
+          if (d.kidSet) d.kidSet();
+          if (d._legEl && typeof d.legend === "function") d._legEl.innerHTML = d.legend() || "";
+        });
+        kl.appendChild(ki);
+        kl.appendChild(document.createTextNode(" " + k.name));
+        box.appendChild(kl);
       });
-      kl.appendChild(ki);
-      kl.appendChild(document.createTextNode(" " + k.name));
-      box.appendChild(kl);
-    });
-    if (d.legend) { /* opt107 / opt219: legend under kids; function → only enabled kids */
+    }
+    if (d.legend) {
       var lg = el("div", "lp-leg");
       lg.innerHTML = typeof d.legend === "function" ? (d.legend() || "") : d.legend;
       box.appendChild(lg);
       d._legEl = lg;
+    }
+    if (typeof d.controls === "function") {
+      try { d.controls(box); } catch (e) {}
     }
     w.appendChild(r);
     w.appendChild(box);
@@ -151,7 +151,7 @@
     if (b) b.click();
     setTimeout(refresh, 80);
   }
-  /* opt192: Fold all collapses every group and kid twisty in the blade */
+  /* opt192/opt231: Fold all collapses every group and every layer twisty (hides .lp-ctrls) */
   function foldAll() {
     if (!panel) return;
     panel.querySelectorAll(".lp-head[aria-expanded='true']").forEach((h) => { h.click(); });
@@ -198,6 +198,7 @@
       });
     });
     refresh();
+    try { document.dispatchEvent(new CustomEvent("sunny-layers-ready")); } catch (e) {}
   }
   function setOpen(open) {
     panel.classList.toggle("is-open", open);
@@ -348,5 +349,11 @@
       if (d._legEl && typeof d.legend === "function") d._legEl.innerHTML = d.legend() || "";
     });
     refresh();
+  }, ctrlHost: (id) => {
+    /* opt231: mount per-layer controls into the layer's collapsible .lp-ctrls */
+    var inp = document.querySelector('.lp-input[data-id="' + id + '"]');
+    if (!inp) return null;
+    var fold = inp.closest(".lp-fold");
+    return fold ? fold.querySelector(".lp-ctrls") : null;
   } };
 })();
