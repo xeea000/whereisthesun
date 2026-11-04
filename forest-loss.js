@@ -1,5 +1,5 @@
 // workspace/whereisthesun/forest-loss.js
-/* SUNNY opt232: Forests & logging — phone gets OUR compact tiles, not raw GFW.
+/* SUNNY opt232: Forests & logging — phone gets compact tiles, not raw GFW.
  * z < LIVE_Z: year-encoded local overview (~160 KB), slider recolours (0 network).
  * z ≥ LIVE_Z: prebuilt WebP-LA pack (year|drv<<5) from data/human/forest-pack/;
  * slider recolours from decoded cache (0 network). Outside pack coverage, parent-fill

@@ -14,7 +14,7 @@
   /* opt199: tech + carrier kids via SunnyKit.kids */
   var CELL_KIDS = TG.map((g) => { return { id: "cellcover-" + g[0], dflt: true }; })
     .concat(C.brands.map((b, i) => { return { id: "cellcover-c" + i, dflt: true }; }));
-  var kOn = (id) => { return K.kids.isOn("cellcover-" + id, true); };
+  var kOn = (id) => { return K.kids.isOn(["cellcover", id].join("-"), true); };
   var on = () => { return L.isOn("cellcover"); };
   var reachOf = (bands, h) => {
     var r = 0; REACH.forEach((x) => { if (bands & x[0]) r = Math.max(r, x[1]); });
