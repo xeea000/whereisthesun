@@ -1,8 +1,8 @@
 // workspace/whereisthesun/ca-cell.js
 /* SUNNY Canadian cell sites for the Towers layer: every site in ISED Canada's Terrestrial Spectrum Licence Site Data Extract
  * (Open Government Licence - Canada), merged per location and coloured by carrier. Zoom 8+: loads 1° tiles for the viewport
- * (cached for good). Zoom under 8: a 0.5° overview built from those same tiles (opt207 LOD — something at every zoom).
- * Own switch under Towers: "Canada cell sites (ISED)". */
+ * (cached for good). Zoom under 8: a cluster centroids of real sites (opt208 LOD, ~22 km town/corridor clusters;
+ * no grid). Own switch under Towers: "Canada cell sites (ISED)". */
 (() => {
   "use strict";
   var K = window.SunnyKit, BASE = "data/ca-cell/", man = null, feats = {}, asked = {}, map = null, hooked = false;
@@ -35,7 +35,11 @@
   };
   var ovFeats = () => {
     if (!ov) return [];
-    return ov.cells.map((r) => {
+    var rows = ov.pts || ov.cells || [];
+    /* Dots: only notable clusters (dense or tall) so low zoom is not a polka field.
+     * Coverage heatmap still uses every thinned pt via overview(). */
+    return rows.filter((r) => { return r[2] >= 5 || r[3] >= 80; }).map((r) => {
+      /* pts: [lat, lon, n, h, b, t, bd, r] real site coords (opt208); cells kept as a fallback key. */
       return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] },
         properties: { c: first(r[4]), n: r[2], b: r[4], t: r[5], h: r[3], s: "", l: "", o: "",
           bd: r[6], ov: 1, sites: r[2] }, rad: [] };
@@ -49,7 +53,7 @@
   var loadOv = () => {
     if (ov) return Promise.resolve(ov);
     if (ovLoading) return ovLoading;
-    ovLoading = K.loadJson(BASE + "overview.json?v=opt207").then((d) => {
+    ovLoading = K.loadJson(BASE + "overview.json?v=opt208").then((d) => {
       ov = d; ovLoading = false; bump(); return d;
     }).catch(() => { ovLoading = false; bump(); });
     bump();
@@ -72,7 +76,7 @@
     man.tiles.forEach((k) => { var p = k.split("_").map(Number); /* margin: coverage reaches past the edge */
       if (p[0] < b.getNorth() + 0.1 && p[0] + 1.1 > b.getSouth() && p[1] < b.getEast() + 0.15 && p[1] + 1.15 > b.getWest()) tile(k); });
   };
-  /* opt207: pick overview vs raw from current zoom only (no zoom-history leftovers). */
+  /* opt208: pick overview vs raw from current zoom only (no zoom-history leftovers). */
   var sync = () => {
     if (!map || !need()) return;
     var next = curBand();
@@ -105,10 +109,9 @@
   };
   var lines = (p) => {
     if (p.ov) {
-      return ["About " + (p.sites || p.n) + " ISED sites in this area",
+      return ["About " + (p.sites || p.n) + " ISED sites near here",
         p.h ? "Tallest about <b>" + p.h + " m</b>" : "",
-        K.esc(names(p.b).filter((x) => x !== "Other").slice(0, 4).join(" · ")),
-        "Zoom in for each site"];
+        K.esc(names(p.b).filter((x) => x !== "Other").slice(0, 4).join(" · "))];
     }
     return [(p.h ? "<b>" + p.h + " m</b> · " : "") + K.esc(ST[p.s] || "Structure not given"), K.esc(techs(p.t).join(" · ")),
       p.l ? K.esc(p.l) : "", p.n > 1 ? "Shared by " + p.n + " licensees" : "",

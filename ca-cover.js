@@ -1,7 +1,7 @@
 // workspace/whereisthesun/ca-cover.js
 /* SUNNY estimated cell coverage for Canada, drawn in the browser from the ISED site tiles that ca-cell.js loads (no extra download
- * at high zoom). At low zoom (under 8) it uses the same 0.5° overview file (opt207 LOD) so the map shows coverage from world view
- * without pulling every tile. Estimate, not official coverage. Formula per site, using only the carriers and technologies switched on:
+ * at high zoom). At low zoom (under 8) it uses the same cluster-centroid real-site overview (opt208 LOD) so coverage reads as organic
+ * blobs along towns and corridors, not a grid. Estimate, not official coverage. Formula per site, using only the carriers and technologies switched on:
  *   reach = largest band reach among its transmit frequencies: under 1 GHz (600/700/850 MHz) 8 km, 1-2.7 GHz (PCS/AWS/2100) 3 km,
  *   3-6 GHz (3500 MHz) 1.2 km, 20 GHz+ (mmWave) 0.3 km; then capped by the radio horizon 4.12 km x (sqrt(structure height m) + sqrt(1.5 m handset)),
  *   using 30 m when the height is not given. Drawn as a heatmap whose radius is that reach (detail) or a density overview (far out);
@@ -44,19 +44,19 @@
     });
     return K.fc(out);
   };
-  /* Overview: filter aggregated cells by brand/tech kids; weight by site count. */
+  /* Overview: thinned real sites (opt208); filter by brand/tech kids; weight by local site count. */
   var buildOv = () => {
     var ov = C.overview && C.overview();
     if (!ov) return K.fc([]);
-    var techOk = techOkBits(), out = [];
-    ov.cells.forEach((row) => {
+    var techOk = techOkBits(), out = [], rows = ov.pts || ov.cells || [];
+    rows.forEach((row) => {
       var lat = row[0], lon = row[1], n = row[2], h = row[3], b = row[4], t = row[5], bd = row[6], r0 = row[7];
       var brandOk = false, techHit = false;
       C.brands.forEach((br, i) => { if ((b >> i) & 1 && kOn("c" + i)) brandOk = true; });
       Object.keys(techOk).forEach((ti) => { if ((t >> (+ti)) & 1) techHit = true; });
       if (!brandOk || !techHit) return;
       var r = r0 || reachOf(bd, h);
-      if (!r) return;
+      if (!r || n < 2) return; /* lone thinned sites: skip (polka); keep corridor/town weight */
       out.push({ type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] },
         properties: { r: Math.round(r), n: n, ov: 1 } });
     });
@@ -65,11 +65,11 @@
   var PX = 1 / 100600; /* pixels per metre at zoom 0 near 50°N (156,543 m/px x cos 50°) */
   var RAD_RAW = ["interpolate", ["exponential", 2], ["zoom"],
     8, ["min", 180, ["*", ["get", "r"], 256 * PX]], 15, ["min", 180, ["*", ["get", "r"], 32768 * PX]]];
-  /* Far-out: density blob by site count (meter radius is invisible at z0–7). */
+  /* Far-out: radius from local site count at a real site (opt208). Big n => city blob; lone sites stay small so the map is not a polka grid. */
   var RAD_OV = ["interpolate", ["linear"], ["zoom"],
-    0, ["min", 28, ["+", 4, ["*", 2.2, ["sqrt", ["get", "n"]]]]],
-    4, ["min", 48, ["+", 8, ["*", 3.5, ["sqrt", ["get", "n"]]]]],
-    7.9, ["min", 80, ["+", 14, ["*", 5, ["sqrt", ["get", "n"]]]]]];
+    0, ["case", ["<", ["get", "n"], 3], 3, ["min", 40, ["*", 2.4, ["sqrt", ["get", "n"]]]]],
+    4, ["case", ["<", ["get", "n"], 3], 5, ["min", 72, ["*", 3.6, ["sqrt", ["get", "n"]]]]],
+    7.9, ["case", ["<", ["get", "n"], 3], 8, ["min", 110, ["*", 5, ["sqrt", ["get", "n"]]]]]];
   var paintBand = (id) => {
     if (!map || !map.getLayer("ca-cov-heat")) return;
     try {
@@ -89,7 +89,7 @@
     map.addSource("ca-cov", { type: "geojson", data: K.fc([]), buffer: 512, attribution: "Cell coverage estimate from ISED site data" });
     map.addLayer({ id: "ca-cov-heat", type: "heatmap", source: "ca-cov", paint: {
       "heatmap-radius": RAD_OV,
-      "heatmap-weight": ["min", 2, ["*", 0.7, ["sqrt", ["get", "n"]]]], "heatmap-intensity": 0.95, "heatmap-opacity": 0.55,
+      "heatmap-weight": ["min", 3, ["+", 0.15, ["*", 0.55, ["sqrt", ["get", "n"]]]]], "heatmap-intensity": 0.95, "heatmap-opacity": 0.55,
       "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(0,0,0,0)", 0.03, "rgba(215,48,39,0.4)", 0.15, "rgba(254,224,139,0.6)",
         0.4, "rgba(26,152,80,0.7)", 1, "rgba(0,104,55,0.85)"] } }, K.before(map));
   };
