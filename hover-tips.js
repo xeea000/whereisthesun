@@ -28,7 +28,7 @@
     "eclipse-centre": (p) => [(p.kind || "") + " solar eclipse " + (p.date || ""), "Centre line" + (p.dur ? " · " + p.dur : "")],
     "eclipse-fill": (p) => [(p.kind || "") + " solar eclipse " + (p.date || ""), "Eclipse path" + (p.dur ? " · up to " + p.dur : "")],
     "eclipse-line": (p) => [(p.kind || "") + " solar eclipse " + (p.date || ""), "Eclipse path" + (p.dur ? " · up to " + p.dur : "")],
-    "obs-cluster": (p) => [p.point_count + " places", "Observatories · zoom in"],
+    "obs-cluster": (p) => [p.point_count + " places", "Observatories · tap cluster"],
     "storm-track": (p) => [(p.n || "Storm") + (p.y ? " " + p.y : ""), "Storm track"]
   };
   var show = (x, y, html) => {
@@ -49,7 +49,7 @@
       Promise.resolve(src.getClusterLeaves(cp.cluster_id, 4, 0)).then((lv) => Promise.all((lv || []).map((x) => {
         var q = x.properties || {}; return q.name || q.n || (lf ? lf(q).catch(() => "") : ""); }))).then((ns) => {
         ns = ns.filter(Boolean);
-        if (ns.length && cur === ck) show(lx, ly, "<b>" + ns.map(esc).join("<br>") + "</b><br><small>" + esc(cp.point_count + " places · zoom in") + "</small>");
+        if (ns.length && cur === ck) show(lx, ly, "<b>" + ns.map(esc).join("<br>") + "</b><br><small>" + esc(cp.point_count + " places · tap cluster") + "</small>");
       }).catch(() => {});
     }
     var reg = window.SunnyHoverName && window.SunnyHoverName[f.layer.id], key = f.layer.id + ":" + (f.properties || {}).i;
@@ -67,7 +67,7 @@
     if (hb) return name ? "<b>" + esc(name) + "</b><br><small>" + esc(hb) + "</small>" : "<b>" + esc(hb) + "</b>";
     if (f.layer.id === "famous-star") return "<b>" + esc(name) + "</b><br><small>Famous</small>";
     var type = (window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id) || nice(f.source); /* opt105 */
-    if (p.point_count) return "<b>" + p.point_count + " places</b><br><small>" + esc(type) + " · zoom in</small>";
+    if (p.point_count) return "<b>" + p.point_count + " places</b><br><small>" + esc(type) + " · tap cluster</small>";
     var kind = p.k || p.cat || p.type || ""; if (String(kind).length < 3) kind = "";
     if (!name) kind = ""; /* a bare code ("found", "div") is not a name */
     return "<b>" + esc(name || type) + "</b>" + (name ? "<br><small>" + esc(type + (kind && kind !== name ? " · " + nice(kind) : "")) + "</small>" : "");

@@ -190,7 +190,7 @@
   }
   function zoomNote(map, minZoom, label) {
     if (!map || map.getZoom() >= (minZoom || 0)) return "";
-    return label || "zoom in to see";
+    return label || "";
   }
   /* main Overpass server first, then public mirrors when it is busy */
   var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
@@ -336,7 +336,13 @@
   function lodNote(loading, label) {
     return loading ? (label || "loading…") : "";
   }
-  var lod = { band: lodBand, note: lodNote, CUT_CELL: [{ z: 8, id: "ov" }, { z: 24, id: "raw" }] };
+  var lod = { band: lodBand, note: lodNote,
+    CUT_CELL: [{ z: 8, id: "ov" }, { z: 24, id: "raw" }],
+    CUT_PACK: [{ z: 7, id: "ov" }, { z: 24, id: "raw" }],
+    CUT_PLAQUES: [{ z: 9, id: "ov" }, { z: 24, id: "raw" }],
+    CUT_TOWERS: [{ z: 6, id: "ov" }, { z: 24, id: "raw" }],
+    CUT_UNDERSEA: [{ z: 9, id: "ov" }, { z: 24, id: "raw" }],
+    CUT_SUN: [{ z: 13, id: "ov" }, { z: 24, id: "raw" }] };
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,

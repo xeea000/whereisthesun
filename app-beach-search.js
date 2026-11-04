@@ -453,7 +453,7 @@
   function viewStatus() {
     var n = inViewList(beaches).length;
     var msg = n === 1 ? "1 beach in view." : n + " beaches in view.";
-    if (!n) msg = "Zoom in a bit to load beaches in this view.";
+    if (!n) msg = "Pan the map to load beaches in this view.";
     setStatus(msg);
   }
   function syncAllBtn() {
@@ -476,7 +476,7 @@
         if (gen !== viewGen) return;
         var n = inViewList(beaches).length;
         if (n) setStatus(n === 1 ? "1 beach in view." : n + " beaches in view.");
-        else setStatus("Zoom in a bit to load beaches in this view.");
+        else setStatus("Pan the map to load beaches in this view.");
         return;
       }
       var qb = viewBbox();

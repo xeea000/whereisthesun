@@ -2,7 +2,7 @@
 /* SUNNY opt164 provincial and territorial parks of Canada, all 13 provinces and territories.
  * Source: Canadian Protected and Conserved Areas Database 2025 (ECCC, Open Government Licence - Canada), provincial and
  * territorial park types only, zones merged by name. Ontario operating status joined from LIO "Provincial Park Regulated".
- * Dots at every zoom (data/parks-ca.json); simplified boundaries (about 250 m) load per province from data/parks-b/ at zoom 6+.
+ * Dots at every zoom (data/parks-ca.json); simplified boundaries (about 250 m) load per province from data/parks-b/ for the current view.
  * Non-operating parks (no facilities, open to low-impact use) are their own sub-type and switch. */
 (() => {
   "use strict";
@@ -39,15 +39,15 @@
     if (map.getSource("parks-pt")) return;
     map.addSource("parks-b", { type: "geojson", data: bfc(), attribution: "Parks: CPCAD (ECCC), LIO Ontario, BC Parks API, Alberta Parks" });
     map.addSource("parks-pt", { type: "geojson", data: fc() });
-    map.addLayer({ id: "parks-fill", type: "fill", source: "parks-b", minzoom: 6, paint: { "fill-color": color, "fill-opacity": 0.28 } }, K.before(map));
-    map.addLayer({ id: "parks-edge", type: "line", source: "parks-b", minzoom: 6, paint: { "line-color": color, "line-width": ["match", ["get", "s"], "n", 1.8, 1],
+    map.addLayer({ id: "parks-fill", type: "fill", source: "parks-b", paint: { "fill-color": color, "fill-opacity": 0.28 } }, K.before(map));
+    map.addLayer({ id: "parks-edge", type: "line", source: "parks-b", paint: { "line-color": color, "line-width": ["match", ["get", "s"], "n", 1.8, 1],
       "line-dasharray": ["literal", [2, 1]] } }, K.before(map));
     map.addLayer({ id: "parks-dot", type: "circle", source: "parks-pt", paint: { "circle-radius": K.markerScale.bind(map, "parks-dot", "circle-radius",
       ["interpolate", ["linear"], ["zoom"], 2, 2, 8, 4, 14, 6]),
       "circle-color": color, "circle-stroke-color": "#fff", "circle-stroke-width": ["match", ["get", "s"], "n", 1.6, 0.8] } }, K.before(map));
   };
   var loadB = () => {
-    if (!data || map.getZoom() < 6) return;
+    if (!data) return;
     var v = map.getBounds();
     Object.keys(data.b).forEach((k) => {
       var b = data.b[k];
@@ -71,7 +71,7 @@
   L.add({ id: "parks", name: "Provincial & territorial parks (Canada)", icon: "🏞️", group: "Outdoors", taps: ["parks-dot", "parks-fill"], apply: () => apply(),
     kids: Object.keys(SS).map((k) => { return { id: "parks-" + k, name: SS[k][0], dflt: true }; }), kidSet: () => apply(),
     legend: K.legKeys(Object.keys(SS).map((k) => [SS[k][1], "dot", SS[k][0]])),
-    tip: "1,764 provincial and territorial parks (CPCAD; Alberta recreation areas from Alberta Parks; 224 more from OpenStreetMap). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines from zoom 6; tap for details",
+    tip: "1,764 provincial and territorial parks (CPCAD; Alberta recreation areas from Alberta Parks; 224 more from OpenStreetMap). Orange = non-operating (Ontario LIO; BC Parks API; Alberta facility points; Québec park type). Outlines load for the view; tap for details",
     attach: (m) => {
       map = m;
       if (hooked) return; hooked = true;

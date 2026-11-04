@@ -105,7 +105,7 @@
       var ids = map.getStyle().layers.filter((l) => l.type === "circle" && l.id !== "famous-star").map((l) => l.id);
       var under = map.queryRenderedFeatures([[q.x - R, q.y - R], [q.x + R, q.y + R]], { layers: ids });
       if (under.length) { busy = true; try { map.fire("click", { point: q, lngLat: map.unproject(q), originalEvent: {} }); } finally { busy = false; } return; }
-      K.show(map, f.geometry.coordinates, f.properties.name, ["Famous place; zoom in for its own card"], ["SUNNY famous places list", ""]);
+      K.show(map, f.geometry.coordinates, f.properties.name, ["Famous place; open its own card when closer"], ["SUNNY famous places list", ""]);
     });
     row(); setTimeout(row, 1500);
     soon();

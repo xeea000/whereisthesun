@@ -152,10 +152,10 @@
     if (!on) return;
     try {
       if (!map.getSource("geology")) {
-        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 5, maxzoom: 12,
+        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 0, maxzoom: 12,
           attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' });
       }
-      if (!map.getLayer("geo-fill")) map.addLayer({ id: "geo-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 5, paint: { "fill-color": ["coalesce", ["get", "color"], "#999"], "fill-opacity": 0.45 } }, K.before(map));
+      if (!map.getLayer("geo-fill")) map.addLayer({ id: "geo-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 0, paint: { "fill-color": ["coalesce", ["get", "color"], "#999"], "fill-opacity": 0.45 } }, K.before(map));
       if (!map.getLayer("geo-line")) map.addLayer({ id: "geo-line", type: "line", source: "geology", "source-layer": "lines", minzoom: 7, paint: { "line-color": "#3b1d0a", "line-width": 0.6, "line-opacity": 0.6 } }, K.before(map));
     } catch (e) {}
     K.vis(map, GEO_IDS, L.isOn("geology"));
@@ -165,8 +165,8 @@
     return "Age " + Math.round(p.best_age_top) + "–" + Math.round(p.best_age_bottom) + " million years";
   }
   L.add({ id: "geology", name: "Rock geology", icon: "🗻", group: "Earth", taps: ["geo-fill"], dflt: false,
-    tip: "Bedrock geology worldwide (Macrostrat). Zoom in to see it; tap for the rock type",
-    note: (map, on) => { return on && map && map.getZoom() < 5 ? "zoom in" : ""; }, apply: geoApply,
+    tip: "Bedrock geology worldwide (Macrostrat). Tap for the rock type",
+    note: () => { return ""; }, apply: geoApply,
     attach: (map, on) => {
       idleAdd(map, "geology", "geo-fill", geoApply);
       map.on("click", "geo-fill", (e) => {
@@ -195,17 +195,17 @@
     if (!on) return;
     try {
       if (!map.getSource("geology")) {
-        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 5, maxzoom: 12,
+        map.addSource("geology", { type: "vector", tiles: ["https://tiles.macrostrat.org/carto-slim/{z}/{x}/{y}.mvt"], minzoom: 0, maxzoom: 12,
           attribution: 'Geology: <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC BY 4.0)' });
       }
-      if (!map.getLayer("age-fill")) map.addLayer({ id: "age-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 5, paint: { "fill-color": icsStep, "fill-opacity": 0.5 } }, K.before(map));
+      if (!map.getLayer("age-fill")) map.addLayer({ id: "age-fill", type: "fill", source: "geology", "source-layer": "units", minzoom: 0, paint: { "fill-color": icsStep, "fill-opacity": 0.5 } }, K.before(map));
     } catch (e) {}
     K.vis(map, ["age-fill"], L.isOn("rockage"));
   }
   L.add({ id: "rockage", name: "Rock age", icon: "⏳", group: "Earth", taps: ["age-fill"], dflt: false,
-    tip: "Age of the bedrock in ICS colours (Macrostrat). Zoom in to see it; tap for the period",
+    tip: "Age of the bedrock in ICS colours (Macrostrat). Tap for the period",
     legend: K.legKeys(ICS.slice().reverse().map((c) => { return [c[2], "area", c[0] + (c[1] ? ", from " + c[1].toLocaleString() + " Ma" : "")]; })),
-    note: (map, on) => { return on && map && map.getZoom() < 5 ? "zoom in" : ""; }, apply: ageApply,
+    note: () => { return ""; }, apply: ageApply,
     attach: (map, on) => {
       idleAdd(map, "rockage", "age-fill", ageApply);
       map.on("click", "age-fill", (e) => {

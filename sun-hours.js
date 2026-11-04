@@ -1,9 +1,8 @@
 // workspace/whereisthesun/sun-hours.js
-/* SUNNY Sun hours: an estimate of direct sun over the current calendar day on a clear day, with shade from hills, buildings and woods.
- * Worked out in the browser for the current view from zoom 13: terrain from the keyless AWS Terrarium tiles,
- * building heights and wooded areas from OpenFreeMap vector tiles (OSM). Sun sampled every 15 minutes.
- * Each cell marches toward the sun over a height grid three times the view, so hills just outside it still cast shade.
- * Trees are 12 m and always in leaf; buildings without a height are 8 m. ShadeMap needs a key, so this is its own small model. */
+/* SUNNY Sun hours: an estimate of direct sun over the current calendar day on a clear day.
+ * Far zoom (under 13): clear-sky daylight hours only (sun geometry, no hills) on a coarse grid so something shows worldwide.
+ * Closer (13+): shade from hills, buildings and woods — terrain from AWS Terrarium, buildings/woods from OpenFreeMap (OSM).
+ * Sun sampled every 15 minutes. Trees 12 m in leaf; buildings without height 8 m. */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
@@ -126,12 +125,32 @@
       return new Promise((ok) => { wq[id] = ok; worker.postMessage({ id: id, h: h, n: n, M: M, cm: cm, sun: sun, hmax: hmax }, [h.buffer]); });
     } catch (e) { return Promise.resolve(marchCode(h, n, M, cm, sun, hmax)); }
   };
+  var daylightGrid = (map, n) => {
+    var b = map.getBounds(), x0 = mx(b.getWest()), x1 = mx(b.getEast()), y0 = my(b.getNorth()), y1 = my(b.getSouth());
+    var c = Math.max(x1 - x0, y1 - y0) / n;
+    var day = new Date(); day.setHours(0, 0, 0, 0);
+    var hrs = new Float32Array(n * n), litMax = 0;
+    for (var j = 0; j < n; j++) for (var i = 0; i < n; i++) {
+      var lon = (x0 + (i + 0.5) * c) * 360 - 180, lat = inv(y0 + (j + 0.5) * c), lit = 0;
+      for (var t = 0; t < 96; t++) { var s = sunAt(day.getTime() + t * 9e5 + 4.5e5, lat, lon); if (s.alt > 0.005) lit++; }
+      hrs[j * n + i] = lit / 4;
+      if (hrs[j * n + i] > litMax) litMax = hrs[j * n + i];
+    }
+    return { x0: x0, y0: y0, c: c, n: n, hrs: hrs, day: litMax, nb: 0, nt: 0, ne: 0, lc: false, ov: 1 };
+  };
   var compute = (map) => {
     var b0 = map.getBounds(), vk = b0.toArray().join(",") + map.getZoom().toFixed(2);
     if (vk === viewKey) return; /* the map also fires moveend without moving; keep the run in flight */
     viewKey = vk;
     var my0 = ++run, b = b0, z = map.getZoom();
-    if (z < MINZ - 0.01) { clear(map); return; }
+    if (z < MINZ - 0.01) {
+      var nOv = z < 5 ? 48 : 72;
+      var grid = daylightGrid(map, nOv);
+      if (my0 !== run) return;
+      last = grid;
+      draw(map, grid.x0, grid.y0, grid.c, grid.hrs, z);
+      return;
+    }
     var x0 = mx(b.getWest()), x1 = mx(b.getEast()), y0 = my(b.getNorth()), y1 = my(b.getSouth());
     var c = Math.max(x1 - x0, y1 - y0) / N, ox = x0 - N * c, oy = y0 - N * c, lat = map.getCenter().lat, lon = map.getCenter().lng;
     var cm = c * 40075016.7 * Math.cos(lat * R), dz = Math.max(8, Math.min(12, Math.floor(z) - 3)), fz = Math.min(14, Math.floor(z) - 1);
@@ -192,8 +211,11 @@
       paint: { "fill-opacity": 0 } }); });
   };
   var later = (map) => { clearTimeout(timer); var tries = 0;
-    var go = () => { var ok = false; try { ok = map.isSourceLoaded(ID + "-omt"); } catch (e) {} if (ok || ++tries > 12) compute(map); else timer = setTimeout(go, 500); };
-    timer = setTimeout(go, 900); };
+    var go = () => {
+      if (map.getZoom() < MINZ - 0.01) { compute(map); return; }
+      var ok = false; try { ok = map.isSourceLoaded(ID + "-omt"); } catch (e) {} if (ok || ++tries > 12) compute(map); else timer = setTimeout(go, 500);
+    };
+    timer = setTimeout(go, map.getZoom() < MINZ - 0.01 ? 200 : 900); };
   var apply = (map, on) => {
     if (!on) { run++; viewKey = ""; clearTimeout(timer); if (map.getLayer(ID)) K.vis(map, [ID, ID + "-hit", ID + "-q-building", ID + "-q-landcover"], false); return; }
     try { ensure(map); } catch (e) { setTimeout(() => { if (L.isOn("sunhours")) apply(map, true); }, 2000); return; }
@@ -209,16 +231,18 @@
   window.SunnySunHours = { at: at, fmt: fmt, last: () => { return last; }, worker: () => { return !!worker; } };
   L.add({ id: "sunhours", name: "Sun hours (estimate)", icon: "⏱️", group: "Sky & Space", taps: [ID + "-hit"], dflt: true, apply: apply,
     legend: K.legRamp(RAMP.map((r) => { return r[1]; }).join(","), "0 h", "6 h", "12+ h"),
-    tip: "Estimated hours of direct sun today on a clear day: shade from hills, buildings, woods; satellite tree cover fills gaps in OSM (estimate). Zoom 13+; tap for the value",
+    tip: "Estimated hours of direct sun today on a clear day. Far out: daylight only (no hills). Closer: shade from hills, buildings, woods; satellite trees fill OSM gaps. Tap for the value",
     attach: (map, on) => {
       map.on("moveend", () => { if (L.isOn("sunhours")) later(map); });
       map.on("click", ID + "-hit", (e) => {
         var v = at(e.lngLat);
         if (v == null) return;
-        K.show(map, e.lngLat, "About " + fmt(v) + " of direct sun today", ["Open sky here would give " + fmt(last.day),
+        K.show(map, e.lngLat, "About " + fmt(v) + " of direct sun today", last.ov
+          ? ["Clear-sky daylight today (no hills or buildings in this far view)", "Open sky about " + fmt(last.day)]
+          : ["Open sky here would give " + fmt(last.day),
           "Estimate: clear sky, terrain, " + last.nb + " building shapes" + (last.nt ? ", " + last.nt + " single trees" : "") + "; woods 12 m, in leaf",
           last.lc ? last.ne + " cells of trees from satellite land cover (no OSM wood there) set to 15 m: estimate" : "Satellite land cover unavailable",
-          "Zoom 13 or closer; redrawn when the map moves"],
+          "With hills and buildings; redrawn when the map moves"],
           ["Sentinel-2 land cover (Esri/IO, CC BY), AWS terrain, OSM",
           "https://registry.opendata.aws/terrain-tiles/"]);
       });

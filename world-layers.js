@@ -168,9 +168,9 @@
     tip: "Large airports and medium airports with scheduled flights; in Canada also every small airfield and water aerodrome (OurAirports, public domain)",
     attrib: 'Airports: <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a>', src: ["OurAirports", "https://ourairports.com/data/"],
     legend: K.legKeys([["#e8eef7", "dot", "large airport"], ["#9aa7bd", "dot", "medium airport, scheduled flights"],
-      ["#7fa8d6", "dot", "Canada: other airport or airfield (zoom 5+)"], ["#4dd0e1", "dot", "Canada: water aerodrome (zoom 5+)"]]),
+      ["#7fa8d6", "dot", "Canada: other airport or airfield"], ["#4dd0e1", "dot", "Canada: water aerodrome"]]),
     layers: [{ id: "ap-large", codes: ["large"], color: "#e8eef7", r: 3.6 }, { id: "ap-med", codes: ["medium"], color: "#9aa7bd", r: 2.4 },
-      { id: "ap-ca", codes: ["camed", "casmall"], color: "#7fa8d6", r: 1.8, minzoom: 5 }, { id: "ap-casea", codes: ["casea"], color: "#4dd0e1", r: 1.8, minzoom: 5 }],
+      { id: "ap-ca", codes: ["camed", "casmall"], color: "#7fa8d6", r: 1.8 }, { id: "ap-casea", codes: ["casea"], color: "#4dd0e1", r: 1.8 }],
     lines: (r) => {
       return [[r.iata, r.icao].filter(Boolean).map(K.esc).join(" · "), [r.city, r.country].filter(Boolean).map(K.esc).join(", "),
         r.elev !== "" ? "Elevation " + Number(r.elev).toLocaleString() + " ft" : "", wikiLine(r)];
@@ -204,17 +204,37 @@
     return ["<b>" + (r.height !== "" ? Number(r.height).toLocaleString() + " m" : "Height unknown") + "</b> · " + K.esc(TN[String(k)[0]] || "Tower"),
       K.esc(cap(r.kind || "tower")), K.esc(r.country || ""), age("Built", r.year), r.name && r.operator ? "Owner " + K.esc(r.operator) : "", wikiLine(r)];
   };
-  /* opt206: 150 m+ ("big") at every zoom; shorter tiles only while zoom >= 6.
-   * Drop short tiles from the source when zooming out so visibility has no history. */
+  /* opt209: 150 m+ ("big") at every zoom; shorter towers use cluster-centroid overview under z6
+   * (real locations, no grid), then 10° tiles at z6+. */
+  var tOv = null, tOvLoading = false;
+  var tBand = () => { return K.lod.band(tMap ? tMap.getZoom() : 0, K.lod.CUT_TOWERS); };
+  var tOvFeats = () => {
+    if (!tOv) return [];
+    return (tOv.pts || []).map((r) => {
+      /* [lat, lon, n, h, k] */
+      return { type: "Feature", geometry: { type: "Point", coordinates: [r[1], r[0]] },
+        properties: { k: r[4] + String(r[3] || 0), t: "ov", i: -1, ov: 1, sites: r[2], n: r[2] } };
+    });
+  };
   var tSet = () => {
     if (!tMap || !tMap.getSource("w-towers")) return;
-    var showShort = !!(K.zoomGate && K.zoomGate(tMap, { minZoom: K.gz(6) }).show);
+    var band = tBand();
+    if (band === "ov") {
+      var all = (tFeats.big || []).concat(tOvFeats());
+      tMap.getSource("w-towers").setData(K.fc(all));
+      return;
+    }
     var all = [];
-    Object.keys(tFeats).forEach((k) => {
-      if (k !== "big" && !showShort) return;
-      all = all.concat(tFeats[k] || []);
-    });
+    Object.keys(tFeats).forEach((k) => { all = all.concat(tFeats[k] || []); });
     tMap.getSource("w-towers").setData(K.fc(all));
+  };
+  var tLoadOv = () => {
+    if (tOv) return Promise.resolve(tOv);
+    if (tOvLoading) return tOvLoading;
+    tOvLoading = K.loadJson(BASE + "towers-ov.json?v=opt209").then((d) => {
+      tOv = d; tOvLoading = false; tSet(); return d;
+    }).catch(() => { tOvLoading = false; });
+    return tOvLoading;
   };
   var tLoad = (k) => {
     if (tMeta[k]) return;
@@ -224,9 +244,8 @@
   var tView = () => {
     var m = tMap, man = meta.manifest;
     if (!m || !L.isOn("towers")) return;
-    /* Always refresh the visible set (clears short towers below z6). */
-    var showShort = !!(K.zoomGate && K.zoomGate(m, { minZoom: K.gz(6) }).show);
-    if (!showShort || !man || !man.towerTiles) { tSet(); return; }
+    if (tBand() === "ov") { tLoadOv().then(() => { if (tBand() === "ov") tSet(); }); tLoad("big"); return; }
+    if (!man || !man.towerTiles) { tSet(); return; }
     var b = m.getBounds();
     man.towerTiles.forEach((k) => {
       var p = k.split("_").map(Number);
@@ -254,8 +273,8 @@
   };
   var tDetail = (f) => { var k = f.properties.t; return P.detail(tBase(k), tMeta[k], f.properties.i, V); };
   L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot", "fire-look-dot"], apply: tApply,
-    note: (map, on) => { return on && map ? K.zoomNote(map, K.gz(6), "zoom in for shorter towers") : ""; },
-    tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ at every zoom, shorter towers (60 m+, United States and Canadian broadcast) from zoom 6. Types are guessed from the owner.",
+    note: (map, on) => { return on && tOvLoading ? K.lod.note(true) : ""; },
+    tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ always; shorter towers as corridor clusters far out, each tower when closer. Types are guessed from the owner.",
     kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true },
       { id: "towers-fl", name: "Fire lookout towers", dflt: true }]),
     kidSet: () => { if (tMap && tMap.getLayer("tower-dot")) tMap.setFilter("tower-dot", tFilter()); if (window.SunnyCaCell) window.SunnyCaCell.apply();
@@ -357,7 +376,7 @@
       if (on && loader) loader.refresh();
     }
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply, legend: o.legend,
-      note: (map) => { return K.zoomNote(map, K.gz(o.minZoom), "zoom in to see"); },
+      note: (map) => { return ""; },
       attach: (map, on) => {
         loader = K.tiles(map, { key: o.id, minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
@@ -415,26 +434,83 @@
       });
       pipeApply(map, on);
     } });
-  osmLayer({ id: "osm-undersea", src: "w-osm-sea", ids: ["osm-pipe", "osm-plat"], name: "Undersea pipelines (OSM)", icon: "🛢️", group: "Ocean", minZoom: 9, maxTiles: 15,
-    legend: K.legKeys([["#d98c2b", "line", "pipeline"], ["#ffcc33", "dot", "platform"]]),
-    tip: "Underwater pipelines and offshore platforms mapped in OpenStreetMap, loads at zoom 9 and closer",
-    q: 'way["man_made"="pipeline"]["location"="underwater"]BB;nwr["man_made"="offshore_platform"]BB;',
-    item: (el) => {
-      var t = tg(el);
-      if (el.type === "way" && el.geometry && (el.tags || {}).man_made === "pipeline") {
-        const r5 = (v) => Math.round(v * 1e5) / 1e5;
-        return { t: t, g: { type: "LineString", coordinates: el.geometry.map((c) => [r5(c.lon), r5(c.lat)]) } };
-      }
-      var g = ptOf(el);
-      return g ? { t: t, g: g } : null;
-    },
-    add: (map) => {
-      if (!map.getLayer("osm-pipe")) map.addLayer({ id: "osm-pipe", type: "line", source: "w-osm-sea", minzoom: K.gz(9), filter: ["==", ["geometry-type"], "LineString"],
+  /* opt209: undersea OSM — static Geofabrik pipelines as overview (real geometry), Overpass detail + platforms at z9+ */
+  (function () {
+    var IDS = ["osm-pipe", "osm-plat"], SRC = "w-osm-sea", ov = null, ovLoading = false, loader = null, mapRef = null;
+    var band = () => { return K.lod.band(mapRef ? mapRef.getZoom() : 0, K.lod.CUT_UNDERSEA); };
+    var ensure = (map) => {
+      if (!map.getSource(SRC)) map.addSource(SRC, { type: "geojson", data: K.fc(),
+        attribution: 'OSM: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> (ODbL)' });
+      if (!map.getLayer("osm-pipe")) map.addLayer({ id: "osm-pipe", type: "line", source: SRC, filter: ["==", ["geometry-type"], "LineString"],
         paint: { "line-color": "#d98c2b", "line-width": 1.6, "line-dasharray": [3, 1.5] } }, K.before(map));
-      if (!map.getLayer("osm-plat")) map.addLayer({ id: "osm-plat", type: "circle", source: "w-osm-sea", minzoom: K.gz(9), filter: ["==", ["geometry-type"], "Point"],
+      if (!map.getLayer("osm-plat")) map.addLayer({ id: "osm-plat", type: "circle", source: SRC, filter: ["==", ["geometry-type"], "Point"],
         paint: { "circle-radius": K.markerScale.bind(map, "osm-plat", "circle-radius", 4),
           "circle-color": "#ffcc33", "circle-stroke-color": "#3a2a00", "circle-stroke-width": 1 } }, K.before(map));
-    },
-    title: (p) => { return p.ty === "pipeline" ? "Undersea pipeline" : "Offshore platform"; },
-    lines: (p) => { return [p.ty === "pipeline" ? "Underwater pipeline" + (p.sub ? ", carries " + K.esc(p.sub) : "") : "Offshore platform"].concat(common(p)); } });
+    };
+    var setOv = (map) => {
+      if (!ov || !map.getSource(SRC)) return;
+      var feats = (ov.features || []).map((f) => {
+        var p = f.properties || {};
+        return { type: "Feature", properties: { name: p.n || "", id: "pipe", ty: "pipeline", sub: p.s || "", op: p.o || "", ov: 1 }, geometry: f.geometry };
+      });
+      map.getSource(SRC).setData(K.fc(feats));
+    };
+    var loadOv = (map) => {
+      if (ov) { setOv(map); return Promise.resolve(ov); }
+      if (ovLoading) return ovLoading;
+      ovLoading = K.loadJson(BASE + "pipelines.geo.json").then((g) => { ov = g; ovLoading = false; if (band() === "ov") setOv(map); return g; })
+        .catch(() => { ovLoading = false; });
+      return ovLoading;
+    };
+    var drawRaw = (map, items) => {
+      var geo = K.fc(items.map((it) => { return { type: "Feature", properties: it.t, geometry: it.g }; }));
+      if (map.getSource(SRC)) map.getSource(SRC).setData(geo);
+    };
+    var sync = (map) => {
+      mapRef = map;
+      if (!L.isOn("osm-undersea")) return;
+      ensure(map);
+      if (band() === "ov") { loadOv(map); return; }
+      if (loader) loader.refresh();
+    };
+    var apply = (map, on) => { K.vis(map, IDS, on); if (on) sync(map); };
+    L.add({ id: "osm-undersea", name: "Undersea pipelines (OSM)", icon: "🛢️", group: "Ocean", taps: IDS, apply: apply,
+      legend: K.legKeys([["#d98c2b", "line", "pipeline"], ["#ffcc33", "dot", "platform"]]),
+      tip: "Underwater pipelines and offshore platforms (OpenStreetMap). Overview from the Geofabrik extract; live OSM detail and platforms when closer",
+      note: () => { return ovLoading ? K.lod.note(true) : ""; },
+      attach: (map, on) => {
+        mapRef = map;
+        loader = K.tiles(map, { key: "osm-undersea", minZoom: 9, maxTiles: 15, ttlMs: 7 * 864e5,
+          isOn: () => { return L.isOn("osm-undersea") && band() === "raw"; },
+          fetchTile: (b) => {
+            var bb = "(" + [b[1], b[0], b[3], b[2]].map((x) => { return x.toFixed(4); }).join(",") + ")";
+            var q = 'way["man_made"="pipeline"]["location"="underwater"]' + bb + ';nwr["man_made"="offshore_platform"]' + bb + ';';
+            return K.overpass("[out:json][timeout:25];(" + q + ");out geom 400;").then((j) => {
+              return (j.elements || []).map((el) => {
+                var t = tg(el);
+                if (el.type === "way" && el.geometry && (el.tags || {}).man_made === "pipeline") {
+                  var r5 = (v) => Math.round(v * 1e5) / 1e5;
+                  return { t: t, g: { type: "LineString", coordinates: el.geometry.map((c) => [r5(c.lon), r5(c.lat)]) } };
+                }
+                var g = ptOf(el);
+                return g ? { t: t, g: g } : null;
+              }).filter(Boolean);
+            });
+          },
+          onData: (items) => { if (band() === "raw") drawRaw(map, items); } });
+        map.on("zoomend", () => { if (L.isOn("osm-undersea")) sync(map); });
+        map.on("click", "osm-pipe", (e) => {
+          var p = e.features[0].properties;
+          K.show(map, e.lngLat, p.name || "Undersea pipeline",
+            [p.sub ? "Carries " + K.esc(p.sub) : "Underwater pipeline", p.op ? "Operator " + K.esc(p.op) : ""],
+            ["OpenStreetMap", p.id ? "https://www.openstreetmap.org/" + p.id : "https://www.openstreetmap.org/"]);
+        });
+        map.on("click", "osm-plat", (e) => {
+          var p = e.features[0].properties;
+          K.show(map, e.lngLat, p.name || "Offshore platform", common(p),
+            ["OpenStreetMap " + p.id, "https://www.openstreetmap.org/" + p.id]);
+        });
+        apply(map, on);
+      } });
+  })();
 })();
