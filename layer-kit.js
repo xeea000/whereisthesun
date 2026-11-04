@@ -496,9 +496,13 @@
       var w = bounds[0], s = bounds[1], e = bounds[2], n = bounds[3];
       return [[w, n], [e, n], [e, s], [w, s]];
     }
+    function absUrl(u) {
+      if (!u) return u;
+      try { return new URL(u, window.location.href).href; } catch (e) { return u; }
+    }
     function pickUrl(z) {
-      if (urls.hi && z >= cutZ) return urls.hi;
-      return urls.ov || urls.hi;
+      if (urls.hi && z >= cutZ) return absUrl(urls.hi);
+      return absUrl(urls.ov || urls.hi);
     }
     function ensure(map) {
       if (!map) return;
@@ -524,6 +528,7 @@
       } else {
         try { map.setPaintProperty(lyrId, "raster-opacity", opacity); } catch (e) {}
       }
+      try { map.moveLayer(lyrId); } catch (e) {}
     }
     function syncZoom(map) {
       if (!map || !map.getSource(srcId)) return;
