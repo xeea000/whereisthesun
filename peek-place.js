@@ -36,6 +36,13 @@
   var place = (peek, map, ll, again) => {
     if (!peek || peek.hidden) return;
     last = [peek, map, ll];
+    /* t370u: once the user drags the card, keep the spot they chose */
+    if (window.SunnyDrag && window.SunnyDrag.hasCardPos()) {
+      peek.style.transform = "none";
+      peek.style.bottom = "auto";
+      window.SunnyDrag.placeCard(peek);
+      return;
+    }
     var vw = window.innerWidth, vh = window.innerHeight;
     var phone = vw <= 700; /* t361u: phones get a smaller card that sits high, never mid-screen */
     var w = phone ? Math.min(320, vw - 2 * 32) : Math.min(360, vw - 2 * 38);

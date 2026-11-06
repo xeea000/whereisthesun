@@ -3,7 +3,7 @@
 # Gates: layer-budget (required if script present), kids-render (optional if present).
 # Default = FULL mode: every layer's download budget (about an hour). Use it for broad changes.
 # Targeted mode for small sniped fixes: SUNNY_GATE_LAYERS="mtg,parks" runs the same budget gate for only
-# those layers, then tools/smoke-mtg-card.py when SUNNY_GATE_CARD=1. Lint still runs in sdeploy either way.
+# those layers, then tools/smoke-mtg-card.py when SUNNY_GATE_CARD=1 and tools/smoke-drag.py when SUNNY_GATE_DRAG=1. Lint still runs in sdeploy either way.
 set -e
 D="${1:-.}"
 cd "$D"
@@ -50,6 +50,10 @@ done
 if [ "$SUNNY_GATE_CARD" = "1" ] && [ -f tools/smoke-mtg-card.py ]; then
   echo ":: gate mtg-card (phone width)"
   python3 tools/smoke-mtg-card.py "$URL" || { echo "mtg-card gate failed"; exit 1; }
+fi
+if [ "$SUNNY_GATE_DRAG" = "1" ] && [ -f tools/smoke-drag.py ]; then
+  echo ":: gate drag (phone touch gestures)"
+  python3 tools/smoke-drag.py "$URL" || { echo "drag gate failed"; exit 1; }
 fi
 echo ":: smoke gates ok"
 exit 0

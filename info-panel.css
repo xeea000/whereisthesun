@@ -134,3 +134,10 @@ body:not(.loc-on) .user-dot { display: none; }
   .ip-panel .pc-code { font-size: 9.5px; white-space: normal; }
   .ip-panel .pf-wx { font-size: 9.5px; padding: 0 5px; margin-left: 0; }
 }
+/* t370u: drag handles (drag-kit.js) — card header/footer hold-to-move, panel tabs drag to move/resize */
+.ip-peek .tp-ll, .ip-peek .mtg-card-head, .ip-peek .pk-foot, .lp-tab, .ip-tab { touch-action: none; }
+.lp-tab, .ip-tab { cursor: grab; }
+.ip-peek .pk-foot, .ip-peek .tp-ll { cursor: grab; }
+body.sk-dragging, body.sk-dragging * { user-select: none; -webkit-user-select: none; cursor: grabbing !important; }
+.ip-peek.is-dragging { box-shadow: 0 0 0 2px #ffd34d, 0 8px 24px rgba(0,0,0,.5); }
+.lp-panel.is-dragging, .ip-panel.is-dragging { transition: none; box-shadow: 0 0 0 2px rgba(255,211,77,.6); }
