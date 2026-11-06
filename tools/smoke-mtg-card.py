@@ -35,7 +35,10 @@ async def main(url):
       callBox:cr?[Math.round(cr.width),Math.round(cr.height),getComputedStyle(call).borderRadius]:null,
       copy:pr?{right:Math.round(b.right-pr.right),top:Math.round(pr.top-b.top),text:cp.innerText.trim(),label:cp.getAttribute('aria-label')}:null,
       est:/Estimate\\s*·\\s*how/i.test(e.innerText), preName:nm?nm.innerText:'', preNameH:nm?Math.round(nm.getBoundingClientRect().height):0,
-      rows:[...e.querySelectorAll('.mtg-prow')].map(x=>x.innerText.replace(/\\s+/g,' ')).slice(0,3)}}""")
+      rows:[...e.querySelectorAll('.mtg-prow')].map(x=>x.innerText.replace(/\\s+/g,' ')).slice(0,3),
+      days:[...e.querySelectorAll('.mtg-pday')].map(g=>({h:g.querySelector('.mtg-pday-h').innerText.trim(),
+        kids:[...g.querySelectorAll('.mtg-prow')].map(x=>({t:x.querySelector('.mtg-pwhen').innerText.trim(),txt:x.innerText.replace(/\\s+/g,' '),
+          chips:x.querySelectorAll('.mtg-chip').length,indent:Math.round(x.querySelector('.mtg-pwhen').getBoundingClientRect().left-g.querySelector('.mtg-pday-h').getBoundingClientRect().left)}))}))}}""")
     print("card", c["n"], r)
     if not r["tel"]: bad.append("no tel: call button")
     if re.search(r"[0-9A-Za-z]", r["callText"]): bad.append("call button shows text %r" % r["callText"])
@@ -44,6 +47,24 @@ async def main(url):
     if r["est"]: bad.append("Estimate · how? still shown")
     if not r["rows"]: bad.append("no prerelease rows")
     if r["preName"] and "·" not in r["preName"]: bad.append("set name and release date not on one line")
+    # t369u: one heading per unique day, times as indented children, chronological, chips kept
+    hs = [d["h"] for d in r["days"]]
+    if not hs: bad.append("no prerelease day groups")
+    if len(hs) != len(set(hs)): bad.append("day heading repeated %s" % hs)
+    import datetime as _dt
+    def _day(h):
+      try: return _dt.datetime.strptime(h.split(", ", 1)[1] + " 2026", "%B %d %Y")
+      except Exception: return None
+    ds = [_day(h) for h in hs]
+    if None in ds or ds != sorted(ds): bad.append("day headings not real/chronological %s" % hs)
+    for d in r["days"]:
+      if not d["kids"]: bad.append("day %s has no times" % d["h"])
+      ts = [_dt.datetime.strptime(k["t"], "%I:%M %p") for k in d["kids"] if re.match(r"^\d{1,2}:\d{2} [AP]M$", k["t"])]
+      if len(ts) != len(d["kids"]) or ts != sorted(ts): bad.append("times under %s wrong/out of order %s" % (d["h"], [k["t"] for k in d["kids"]]))
+      for k in d["kids"]:
+        if d["h"].split(",")[0] in k["txt"] or k["indent"] < 6: bad.append("child row repeats day or not indented %s" % k)
+        if not k["chips"]: bad.append("child row lost format/fee %s" % k)
+    if not any(len(d["kids"]) > 1 for d in r["days"]): print("note: this store has no day with two times")
     if r["top"] > 844 * 0.25: bad.append("card not near top (%d px)" % r["top"])
     await pg.evaluate("()=>{const m=document.querySelector('#ip-peek .pk-more');m&&m.click()}")
     await pg.wait_for_timeout(600)

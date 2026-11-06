@@ -163,16 +163,36 @@
   function parseJson(s) {
     try { return JSON.parse(s || "[]"); } catch (e) { return []; }
   }
-  /* t361u: one compact row per prerelease: day + time, then format chips as the locator lists them */
+  /* t369u: prerelease events grouped by the event's own local day: one day row, then indented time rows */
+  var DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  function preDay(e) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(e.iso || ""); /* local wall time as listed; never re-zoned */
+    if (!m) return { key: e.date || "", label: e.date || "Date not listed", sort: e.date || "" };
+    var y = +m[1], mo = +m[2], d = +m[3];
+    var wd = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+    return { key: m[1] + m[2] + m[3], label: DAYS[wd] + ", " + MONTHS[mo - 1] + " " + d, sort: m[1] + m[2] + m[3] + m[4] + m[5] };
+  }
   function preRow(e) {
-    var when = ((e.date || "") + (e.time ? " · " + e.time : "")).trim();
     var bits = [];
     if (e.format && e.format !== "Other" && e.format !== "Not listed") bits.push(chip(K.esc(e.format), "mtg-chip-fmt"));
     if (e.teams) bits.push(chip(K.esc(e.teams), "mtg-chip-fmt mtg-chip-team"));
     (e.notes || []).forEach((n) => { bits.push(chip(K.esc(n), "mtg-chip-note")); });
     if (e.fee) bits.push(chip(K.esc(e.fee) + " entry", "mtg-chip-note"));
     if (!bits.length) bits.push('<span class="mtg-muted">Format not listed</span>');
-    return '<div class="mtg-prow"><span class="mtg-pwhen">' + K.esc(when || "Date not listed") + "</span>" + bits.join("") + "</div>";
+    return '<div class="mtg-prow"><span class="mtg-pwhen">' + K.esc(e.time || "Time not listed") + "</span>" + bits.join("") + "</div>";
+  }
+  function preDays(rows) {
+    var list = rows.map((e, i) => { var d = preDay(e); return { e: e, d: d, i: i }; });
+    list.sort((a, b) => { return a.d.sort < b.d.sort ? -1 : a.d.sort > b.d.sort ? 1 : a.i - b.i; });
+    var out = [], cur = null;
+    list.forEach((x) => {
+      if (!cur || cur.key !== x.d.key) { cur = { key: x.d.key, label: x.d.label, rows: [] }; out.push(cur); }
+      cur.rows.push(x.e);
+    });
+    return out.map((g) => {
+      return '<div class="mtg-pday"><div class="mtg-pday-h">' + K.esc(g.label) + "</div>" + g.rows.map(preRow).join("") + "</div>";
+    }).join("");
   }
   function cardHtml(p) {
     var pre = parseJson(p.preJson);
@@ -213,7 +233,7 @@
         blocks.push(thumbHtml(set, false));
         blocks.push('<div class="mtg-pre-body">');
         blocks.push('<div class="mtg-pre-name">' + K.esc(name) + (set && set.released ? '<span class="mtg-pre-rel"> · ' + K.esc(fmtDate(set.released)) + "</span>" : "") + "</div>");
-        blocks.push(rows.slice(0, 8).map(preRow).join(""));
+        blocks.push(preDays(rows.slice(0, 8)));
         if (set && set.wizards) {
           blocks.push('<a class="mtg-link" href="' + K.esc(set.wizards) + '" target="_blank" rel="noopener">Wizards set page ↗</a>');
         }

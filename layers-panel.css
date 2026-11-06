@@ -193,3 +193,9 @@
 .mtg-card .mtg-sec-b{padding:0 0 2px}
 .mtg-card .mtg-pre{margin:2px 0 3px;padding:4px 6px}
 .mtg-pre-rel{font-weight:500;opacity:.8;font-size:.92em}
+/* t369u: prerelease day rows with indented time rows */
+.mtg-pday{border-top:1px solid rgba(255,255,255,.06);padding:2px 0 1px}
+.mtg-pday:first-of-type{border-top:0}
+.mtg-pday-h{font:700 11.5px/1.25 system-ui,sans-serif;color:#ffe9a0;margin:1px 0}
+.mtg-pday .mtg-prow{border-top:0;padding:1px 0 1px 10px}
+.mtg-pday .mtg-pwhen{color:#e8edf3;font-weight:700}
