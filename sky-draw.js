@@ -259,7 +259,7 @@
     var need = cells.filter((c) => { return !cellStore[c.k] && !K.getStore("ns-" + c.k); });
     var cp = !need.length ? Promise.resolve() : fetchClouds(need, 0);
     cp.then(() => {
-      return Promise.all(cells.map((c) => { return S().darkness(c.lat, c.lng).catch(() => { return null; }); })).then((lums) => {
+      return Promise.all(cells.map((c) => { return S().darkness(c.lat, c.lng, Math.floor(map.getZoom()) - 1).catch(() => { return null; }); })).then((lums) => {
         if (key !== gridKey) return;
         var f = cells.map((c, k) => {
           var cc = cellStore[c.k] || K.getStore("ns-" + c.k) || coarse(c), v = cc ? scoreOf(cc, lums[k], c.lat, c.lng) : null;

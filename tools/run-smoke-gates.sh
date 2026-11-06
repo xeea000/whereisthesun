@@ -1,6 +1,9 @@
 #!/bin/bash
 # Run SUNNY deploy smoke gates against a worktree dir (default: cwd).
 # Gates: layer-budget (required if script present), kids-render (optional if present).
+# Default = FULL mode: every layer's download budget (about an hour). Use it for broad changes.
+# Targeted mode for small sniped fixes: SUNNY_GATE_LAYERS="mtg,parks" runs the same budget gate for only
+# those layers, then tools/smoke-mtg-card.py when SUNNY_GATE_CARD=1. Lint still runs in sdeploy either way.
 set -e
 D="${1:-.}"
 cd "$D"
@@ -19,6 +22,7 @@ for i in 1 2 3 4 5 6 7 8; do
 done
 EC=0
 if [ -f tools/smoke-layer-budget.py ]; then
+  if [ -n "$SUNNY_GATE_LAYERS" ]; then export SUNNY_BUDGET_ONLY="$SUNNY_GATE_LAYERS"; echo ":: TARGETED mode: layers $SUNNY_GATE_LAYERS"; else echo ":: FULL mode: all layers"; fi
   echo ":: gate layer-budget"
   SUNNY_BUDGET_OUT="${SUNNY_BUDGET_OUT:-/tmp/sunny-layer-budget.json}" \
     python3 tools/smoke-layer-budget.py "$URL" || EC=$?
@@ -43,5 +47,9 @@ for KIDS in tools/smoke-kids-render.py tools/smoke-kids-render.js tools/smoke-ki
     break
   fi
 done
+if [ "$SUNNY_GATE_CARD" = "1" ] && [ -f tools/smoke-mtg-card.py ]; then
+  echo ":: gate mtg-card (phone width)"
+  python3 tools/smoke-mtg-card.py "$URL" || { echo "mtg-card gate failed"; exit 1; }
+fi
 echo ":: smoke gates ok"
 exit 0

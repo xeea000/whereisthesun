@@ -70,3 +70,33 @@ body:not(.loc-on) .user-dot { display: none; }
 #btn-locate.is-on { background: #3b82f6; color: #fff; }
 .pc-code { margin-left: 8px; font: 12px/1.2 ui-monospace, monospace; color: #cfe3ff; white-space: nowrap; }
 .pc-copy { margin-left: 4px; padding: 1px 8px; font-size: 11px; border-radius: 10px; border: 1px solid rgba(143, 196, 255, 0.5); background: transparent; color: #cfe3ff; cursor: pointer; }
+/* t361u: shared green call button (SunnyKit.callBtn) — real harvested numbers only */
+.sk-call{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 4px;padding:8px 12px;border-radius:999px;background:linear-gradient(180deg,#34d058,#1a9b3c);color:#fff !important;text-decoration:none;font:700 13px/1.1 system-ui,sans-serif;box-shadow:0 2px 8px rgba(26,155,60,.45),inset 0 1px 0 rgba(255,255,255,.35)}
+.sk-call:active{transform:scale(.97)}
+.sk-call-ico{font-size:16px;line-height:1}
+.sk-call-txt b{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+/* t361u: phones — cards sit high and small, blades pop out less with smaller type; map stays usable */
+@media (max-width: 700px) {
+  .ip-peek { font-size: 12px; line-height: 1.3; padding: 7px 10px 5px; border-radius: 11px; }
+  .ip-peek .pk-more { padding: 4px 10px; font-size: 12px; }
+  .ip-panel { width: 236px; max-width: 64vw; font-size: 11.5px; }
+  .ip-head { padding: 7px 10px 4px; font-size: 12.5px; }
+  .ip-body { padding: 0 7px 10px; }
+  .ip-card, .ip-sec { padding: 6px 22px 6px 8px; margin-bottom: 7px; }
+  .ip-sec h3 { font-size: 12px; }
+  .ip-tab, .lp-tab { width: 24px; height: 52px; font-size: 18px; }
+  .ip-tab { left: -24px; } .lp-tab { right: -24px; }
+  .lp-panel { width: 228px; max-width: 62vw; font-size: 11.5px; }
+  .lp-row { font-size: 11.5px; gap: 5px; }
+  .lp-kid { font-size: 11px; }
+  .lp-title-txt { font-size: 12.5px; }
+  .lp-clear, .lp-foldall { padding: 4px 7px; font-size: 11px; }
+  .lp-ctrls, .lp-kids { padding-left: 22px; }
+  .pf-popup .maplibregl-popup-content, .mtg-card { font-size: 12px; }
+  .sk-call { padding: 7px 10px; font-size: 12.5px; }
+}
+@media (max-width: 700px) { .ip-panel .pf-wx, .ip-peek .pf-wx { font-size: 11px; padding: 1px 8px; } }
+/* t363u: plus-code row wraps inside narrow phone panels instead of running off the edge */
+.tp-ll{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0;max-width:100%}
+.tp-ll .pc-code{min-width:0;overflow-wrap:anywhere}
+.ip-panel .ip-card, .ip-panel .ip-body{min-width:0;overflow-x:hidden}

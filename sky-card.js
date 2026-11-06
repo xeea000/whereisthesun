@@ -122,11 +122,13 @@
     return list.length ? list : ["🛰️ No visible ISS, Tiangong or Hubble passes in the next 36 h"];
   }
   /* night-sky score */
-  function darkness(lat, lng) {
-    var key = "lum-" + (window.SunnyDataSaver && window.SunnyDataSaver.low() ? "l" : "") + lat.toFixed(1) + "," + lng.toFixed(1);
+  /* zMax (optional): coarse views sample a coarser Black Marble tile — progressive disclosure, a coarse view stays under 1 MB */
+  function darkness(lat, lng, zMax) {
+    var z = window.SunnyDataSaver && window.SunnyDataSaver.low() ? 4 : 8;
+    if (zMax != null) z = Math.max(1, Math.min(z, zMax));
+    var key = "lum-" + (z === 8 ? "" : z === 4 ? "l" : "z" + z + "-") + lat.toFixed(1) + "," + lng.toFixed(1);
     var c = K.getStore(key);
     if (c != null) return Promise.resolve(c);
-    var z = window.SunnyDataSaver && window.SunnyDataSaver.low() ? 4 : 8;
     var n = Math.pow(2, z);
     var x = (lng + 180) / 360 * n;
     var r = lat * Math.PI / 180;

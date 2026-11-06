@@ -115,7 +115,7 @@
     peek.querySelector(".pk-body").insertAdjacentHTML("afterbegin", coordHtml());
     if (src) peek.querySelector(".pk-src").appendChild(src);
     if (live.length > 1) peek.querySelector(".pk-more").textContent = "More (+" + (live.length - 1) + ") ›";
-    peek.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+    peek.querySelectorAll("a:not([href^=\"tel:\"])").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
     peek.querySelector(".pk-more").addEventListener("click", () => { setOpen(true); });
     var px = peek.querySelector(".pk-x");
     px.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
@@ -174,7 +174,7 @@
       var part = el("div", "ip-part");
       if (i) part.classList.add("ip-more");
       part.innerHTML = c.html;
-      part.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+      part.querySelectorAll("a:not([href^=\"tel:\"])").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
       box.appendChild(part);
     });
     cardsEl.appendChild(box);

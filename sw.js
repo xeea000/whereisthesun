@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt232"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt233"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,15 +32,15 @@ var PRECACHE = [
   "styles.css?h=abe35cdd07",
   "settings-panel.css?h=f5be224c45",
   "side-buttons.css?h=9e18a6b16c",
-  "layers-panel.css?h=1ea72a3fb1",
-  "info-panel.css?h=90932599a5",
+  "layers-panel.css?h=7730b36093",
+  "info-panel.css?h=63e27e8099",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
   "tap-snap.js?h=3fe785f8f8",
   "points.js?h=bd3ec9c286",
-  "peek-place.js?h=f0d14e00bc",
+  "peek-place.js?h=20bd23406d",
   "plus-code.js?h=f565a0bf77",
-  "info-panel.js?h=f8dfb33aff",
+  "info-panel.js?h=22e67b718f",
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=134a01870a",
   "data-saver.js?h=ab8a4eacad",
@@ -60,7 +60,7 @@ var PRECACHE = [
   "beach-toggle.js?h=6ed1375f1c",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
-  "layer-kit.js?h=9e5b0e0d94",
+  "layer-kit.js?h=6497556fed",
   "layer-lazy.js?h=dc91d4950e",
   "layers-panel.js?h=49f0769467",
   "share-link.js?h=cf29a929f8",
@@ -105,7 +105,7 @@ var PRECACHE = [
   "flight-time.js?h=79218c417c",
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
-  "sky-layers.js?h=a4e092c437",
+  "sky-layers.js?h=df4aa86dcf",
   "earth-layers.js?h=9be3f18de9",
   "forest-loss.js?h=f5913f4711",
   "oil-spills.js?h=2d5c0335c0",
@@ -128,11 +128,11 @@ var PRECACHE = [
   "ca-cover.js?h=c5dd186c2a",
   "world-layers.js?h=9a3dc33d0b",
   "outdoor-layers.js?h=a63aab75b7",
-  "mtg-stores.js?h=5c47a6035d",
-  "parks-ca.js?h=eefe5efb4e",
-  "sky-card.js?h=29233a05a1",
+  "mtg-stores.js?h=d8a3d4f651",
+  "parks-ca.js?h=fb1fec2c6b",
+  "sky-card.js?h=b371ae5f3a",
   "sats.js?h=ac6320e177",
-  "sky-draw.js?h=5a0be91e6d",
+  "sky-draw.js?h=de5f452ae8",
   "hover-tips.js?h=a6001eefb3",
   "manifest.webmanifest?h=3122f023bd",
   "icon-192.png?h=737599b667",
@@ -208,7 +208,7 @@ function trim(name, max) {
   return caches.open(name).then(trimKeys).catch(noop);
 }
 function putIn(name, max, req, res) {
-  if (!res || !res.ok) return;
+  if (!res || !res.ok) return Promise.resolve();
   var copy = res.clone();
   function store(cache) {
     return cache.put(req, copy);
@@ -216,12 +216,12 @@ function putIn(name, max, req, res) {
   function capped() {
     return trim(name, max);
   }
-  caches.open(name).then(store).then(capped).catch(noop);
+  return caches.open(name).then(store).then(capped).catch(noop);
 }
 function cacheFirst(name, max, req) {
   function stored(res) {
-    putIn(name, max, req, res);
-    return res;
+    function keep() { return res; }
+    return putIn(name, max, req, res).then(keep, keep);
   }
   function hitOrNet(hit) {
     return hit || netFetch(req).then(stored);
@@ -233,8 +233,8 @@ function cacheFirst(name, max, req) {
 }
 function networkFirst(req) {
   function stored(res) {
-    putIn(CACHE, 9999, req, res);
-    return res;
+    function keep() { return res; }
+    return putIn(CACHE, 9999, req, res).then(keep, keep);
   }
   function orError(hit) {
     return hit || Response.error();

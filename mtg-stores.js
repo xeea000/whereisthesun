@@ -10,7 +10,7 @@
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=c060020e";
+  var DATA = "data/mtg-stores.json?v=1e6bc8fb";
   var SETS = "data/mtg-sets.json?v=91fc2e44";
   var meta = null, setCat = null, pMap = null, filterSet = "";
   var panelEl = null, scheduleBtn = null;
@@ -163,6 +163,17 @@
   function parseJson(s) {
     try { return JSON.parse(s || "[]"); } catch (e) { return []; }
   }
+  /* t361u: one compact row per prerelease: day + time, then format chips as the locator lists them */
+  function preRow(e) {
+    var when = ((e.date || "") + (e.time ? " · " + e.time : "")).trim();
+    var bits = [];
+    if (e.format && e.format !== "Other" && e.format !== "Not listed") bits.push(chip(K.esc(e.format), "mtg-chip-fmt"));
+    if (e.teams) bits.push(chip(K.esc(e.teams), "mtg-chip-fmt mtg-chip-team"));
+    (e.notes || []).forEach((n) => { bits.push(chip(K.esc(n), "mtg-chip-note")); });
+    if (e.fee) bits.push(chip(K.esc(e.fee) + " entry", "mtg-chip-note"));
+    if (!bits.length) bits.push('<span class="mtg-muted">Format not listed</span>');
+    return '<div class="mtg-prow"><span class="mtg-pwhen">' + K.esc(when || "Date not listed") + "</span>" + bits.join("") + "</div>";
+  }
   function cardHtml(p) {
     var pre = parseJson(p.preJson);
     var past = parseJson(p.pastJson);
@@ -178,14 +189,7 @@
     }
     var blocks = [];
     blocks.push('<div class="mtg-chips">' + chips.join("") + "</div>");
-    if (busy && busy.level) {
-      var why = (busy.why || []).map((w) => { return "<li>" + K.esc(w) + "</li>"; }).join("");
-      blocks.push('<div class="mtg-sec mtg-busy-sec"><button type="button" class="mtg-sec-h" aria-expanded="false">Estimate · how? ▸</button><div class="mtg-sec-b" hidden>' +
-        '<div class="mtg-muted">' + K.esc(busy.note || "Estimate from public signals — not measured attendance") + "</div>" +
-        (why ? "<ul class=\"mtg-busy-why\">" + why + "</ul>" : "") +
-        '<div class="mtg-muted">Sources: Statistics Canada table 98-10-0011-01; Wizards locator snapshot.</div>' +
-        "</div></div>");
-    }
+    if (p.phone && K.callBtn) blocks.push(K.callBtn(p.phone));
     if (past.length) {
       var pastChips = past.slice(0, 2).map((e) => {
         var label = ((e.name || e.set || "Set") + (e.date ? " · " + e.date : "")).trim();
@@ -206,15 +210,12 @@
         var set = setByCode(code);
         var rows = bySet[code];
         var name = set ? set.name : (rows[0] && rows[0].title) || "Prerelease";
-        var dates = rows.map((e) => { return ((e.date || "") + " " + (e.time || "")).trim(); }).filter(Boolean);
         blocks.push('<div class="mtg-pre">');
         blocks.push(thumbHtml(set, false));
         blocks.push('<div class="mtg-pre-body">');
-        blocks.push('<div class="mtg-pre-name">' + K.esc(set ? set.name : name) + "</div>");
+        blocks.push('<div class="mtg-pre-name">' + K.esc(name) + "</div>");
         if (set && set.released) blocks.push('<div class="mtg-pre-meta">Release ' + K.esc(fmtDate(set.released)) + "</div>");
-        if (dates.length) {
-          blocks.push('<div class="mtg-dates">' + dates.slice(0, 6).map((d) => { return chip(K.esc(d), "mtg-chip-date"); }).join("") + "</div>");
-        }
+        blocks.push(rows.slice(0, 8).map(preRow).join(""));
         if (set && set.wizards) {
           blocks.push('<a class="mtg-link" href="' + K.esc(set.wizards) + '" target="_blank" rel="noopener">Wizards set page ↗</a>');
         }
@@ -234,7 +235,6 @@
       blocks.push("</div></div>");
     }
     if (p.addr) blocks.push('<div class="mtg-addr">' + K.esc(p.addr) + "</div>");
-    if (p.phone) blocks.push('<div class="mtg-addr">' + K.esc(p.phone) + "</div>");
     if (p.web) blocks.push('<a class="mtg-link" href="' + K.esc(p.web) + '" target="_blank" rel="noopener">Store website ↗</a>');
     var built = meta && meta.built ? meta.built : "";
     return '<div class="mtg-card"><div class="mtg-card-title">' + K.esc(p.name || "Magic store") + "</div>" +

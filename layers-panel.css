@@ -178,3 +178,9 @@
 .lp-relsize input{accent-color:#7eb6ff;width:14px;height:14px;margin:0}
 .mag-leg{margin-top:2px}
 .mag-leg .mag-dot{box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+/* t361u: prerelease rows — day · time, then format chips from the locator */
+.mtg-prow{display:flex;flex-wrap:wrap;align-items:center;gap:3px 4px;padding:3px 0;border-top:1px solid rgba(255,255,255,.06);font-size:11.5px}
+.mtg-pwhen{font-weight:700;color:#ffe9a0;margin-right:2px;white-space:nowrap}
+.mtg-chip-fmt{background:#24506e;color:#d6ecff}
+.mtg-chip-team{background:#5b2f6e;color:#f1dcff}
+.mtg-chip-note{background:rgba(255,255,255,.08);font-weight:600}

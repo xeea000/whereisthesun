@@ -774,12 +774,27 @@
     hiRaw: (id) => { return magRegs[id] && magRegs[id].hiRaw; },
     radiusAt: magRadiusFor, radiusAtValue: magRadiusAtValue
   };
+  /* t361u: shared call action for any business card. Real harvested number only; "" when none. */
+  function telHref(phone) {
+    var raw = String(phone || "").trim();
+    var plus = /^\s*\+/.test(raw);
+    var d = raw.replace(/\D/g, "");
+    if (d.length < 7 || d.length > 15) return "";
+    if (!plus && d.length === 12 && d.slice(0, 2) === "11") d = d.slice(1); /* "1 1519..." typed twice */
+    return "tel:" + (plus || (d.length === 11 && d[0] === "1") ? "+" : "") + d;
+  }
+  function callBtn(phone) {
+    var h = telHref(phone);
+    if (!h) return "";
+    return '<a class="sk-call" href="' + esc(h) + '" aria-label="Call ' + esc(phone) + '"><span class="sk-call-ico" aria-hidden="true">📞</span>' +
+      '<span class="sk-call-txt">Call <b>' + esc(String(phone).trim()) + "</b></span></a>";
+  }
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };
   window.SunnyKit = { legRamp: legRamp, legKeys: legKeys, grouped: grouped, gz: gz, kids: kids, markerScale: markerScale,
     mapBrightness: mapBrightness, field: field, magnitude: magnitude,
     size: size, overzoom: overzoom, uncapped: uncapped,
-    esc: esc, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
+    esc: esc, telHref: telHref, callBtn: callBtn, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
     loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,
     zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote, lod: lod };
 })();

@@ -83,6 +83,9 @@ async def main() -> int:
         .filter(d=>d.name&&d.id)
         .map(d=>({id:d.id,name:d.name,group:d.group||''}))""")
       defs = [d for d in defs if d["id"] not in SKIP_IDS]
+      _only = os.environ.get("SUNNY_BUDGET_ONLY", "")
+      if _only:
+        defs = [d for d in defs if d["id"] in _only.split(",")]
       print(f"layers: {len(defs)} budget={BUDGET}", flush=True)
       await page.evaluate("""()=>{
         for(const d of window.SunnyLayers.defs()){

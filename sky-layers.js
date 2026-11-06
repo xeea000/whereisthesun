@@ -77,7 +77,18 @@
     }
     cx.putImageData(im, 0, 0);
     window.SunnyAurora.canvas = cv;
-    return cv.toDataURL("image/png");
+    return cv;
+  }
+  /* t361u: async PNG encode (toBlob) so the band never stalls a frame; the replaced blob URL is freed after swap */
+  var aurUrl = null;
+  function aurPush(map, cv) {
+    cv.toBlob((b) => {
+      if (!b) return;
+      var prev = aurUrl;
+      aurUrl = URL.createObjectURL(b);
+      try { aurAdd(map, aurUrl); } catch (e) {}
+      if (prev) setTimeout(() => { URL.revokeObjectURL(prev); }, 5000);
+    }, "image/png");
   }
   function aurAdd(map, url) {
     var co = [[-180, MAXLAT], [180, MAXLAT], [180, -MAXLAT], [-180, -MAXLAT]];
@@ -93,7 +104,7 @@
   function redraw() {
     TUNE = aurTune();
     if (redrawQ || !lastD || !mapRef) return;
-    redrawQ = requestAnimationFrame(() => { redrawQ = 0; try { aurAdd(mapRef, aurImage(lastD)); } catch (e) {} });
+    redrawQ = requestAnimationFrame(() => { redrawQ = 0; try { aurPush(mapRef, aurImage(lastD)); } catch (e) {} });
   }
   window.SunnyAurora = { at: (lon, lat) => (L.isOn("aurora") && aurGrid ? aurAt(lon, lat) : 0), time: () => aurTime, redraw: redraw };
   function aurApply(map, on) {
@@ -103,7 +114,7 @@
     aurData().then((d) => {
       if (!L.isOn("aurora")) return;
       lastD = d; mapRef = map;
-      try { aurAdd(map, aurImage(d)); aurTop(map); } catch (e) {}
+      try { aurPush(map, aurImage(d)); aurTop(map); } catch (e) {}
       K.vis(map, AUR_IDS, L.isOn("aurora"));
     }).catch(() => {});
   }

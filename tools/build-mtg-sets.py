@@ -416,13 +416,14 @@ def main() -> None:
     enriched = []
     for e in store.get("prereleaseNext") or []:
       m = match_set(e.get("title") or "", expansions)
-      row = {
+      row = dict(e)  # t361u: keep locator phone-era fields (format, teams, notes, fee, iso)
+      row.update({
         "title": e.get("title", "")[:100],
         "date": e.get("date", ""),
         "time": e.get("time", ""),
         "format": e.get("format", "Other"),
-        "set": m["code"] if m else "",
-      }
+        "set": (m["code"] if m else "") or e.get("set", ""),
+      })
       enriched.append(row)
     store["prereleaseNext"] = enriched
     # set codes on the store for quick filter

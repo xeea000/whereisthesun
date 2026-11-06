@@ -37,7 +37,8 @@
     if (!peek || peek.hidden) return;
     last = [peek, map, ll];
     var vw = window.innerWidth, vh = window.innerHeight;
-    var w = Math.min(360, vw - 2 * 38);
+    var phone = vw <= 700; /* t361u: phones get a smaller card that sits high, never mid-screen */
+    var w = phone ? Math.min(320, vw - 2 * 32) : Math.min(360, vw - 2 * 38);
     var x0 = (vw - w) / 2;
     peek.style.width = w + "px";
     peek.style.left = x0 + "px";
@@ -48,14 +49,14 @@
     var pt = ll && map ? map.project(ll) : null;
     var py = pt ? pt.y : -1;
     /* biggest band, preferring one that does not hold the pin */
-    var score = (b) => { return (b[1] - b[0]) * (pt && py >= b[0] && py <= b[1] ? 0.45 : 1); };
+    var score = (b) => { return (phone ? 1e6 - b[0] : (b[1] - b[0])) * (pt && py >= b[0] && py <= b[1] && !phone ? 0.45 : 1); };
     list.sort((a, b) => { return score(b) - score(a); });
     var band = list[0];
-    var maxH = Math.min(band[1] - band[0], Math.round(vh * 0.42));
+    var maxH = Math.min(band[1] - band[0], Math.round(vh * (phone ? 0.36 : 0.42)));
     peek.style.maxHeight = maxH + "px";
     var h = Math.min(peek.scrollHeight, maxH);
     /* sit at the edge of the band nearest the screen edge, away from the pin */
-    var top = (band[0] + band[1]) / 2 < vh / 2 ? band[0] : band[1] - h;
+    var top = phone || (band[0] + band[1]) / 2 < vh / 2 ? band[0] : band[1] - h;
     peek.style.top = Math.round(top) + "px";
     if (!pt || again) return;
     var pinTop = py - 40, pinBot = py + 6;

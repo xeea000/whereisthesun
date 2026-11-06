@@ -46,8 +46,10 @@
       K.size({ stops: [[2, 2], [8, 4], [14, 6]] })),
       "circle-color": color, "circle-stroke-color": "#fff", "circle-stroke-width": ["match", ["get", "s"], "n", 1.6, 0.8] } }, K.before(map));
   };
+  /* t361u: progressive disclosure — dots show at every zoom; outline files load only from z5 so world view stays under 1 MB */
+  var OUTLINE_Z = 5;
   var loadB = () => {
-    if (!data) return;
+    if (!data || map.getZoom() < OUTLINE_Z) return;
     var v = map.getBounds();
     Object.keys(data.b).forEach((k) => {
       var b = data.b[k];
