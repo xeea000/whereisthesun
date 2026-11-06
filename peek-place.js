@@ -52,7 +52,7 @@
     var score = (b) => { return (phone ? 1e6 - b[0] : (b[1] - b[0])) * (pt && py >= b[0] && py <= b[1] && !phone ? 0.45 : 1); };
     list.sort((a, b) => { return score(b) - score(a); });
     var band = list[0];
-    var maxH = Math.min(band[1] - band[0], Math.round(vh * (phone ? 0.36 : 0.42)));
+    var maxH = Math.min(band[1] - band[0], Math.round(vh * (phone ? 0.3 : 0.42)));
     peek.style.maxHeight = maxH + "px";
     var h = Math.min(peek.scrollHeight, maxH);
     /* sit at the edge of the band nearest the screen edge, away from the pin */

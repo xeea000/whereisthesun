@@ -30,7 +30,7 @@
     var w = ll.lat.toFixed(4) + "," + ll.lng.toFixed(4);
     var at = pinOn ? PIN + " " + ll.lat.toFixed(4) + "°, " + ll.lng.toFixed(4) + "° " : ""; /* Weather stays in every tap card; pin and coordinates follow the switch */
     var pc = window.SunnyPlusCode ? window.SunnyPlusCode(ll.lat, ll.lng) : ""; /* opt157: Plus Code with Copy */
-    var pcH = pc ? '<span class="pc-code" title="Plus Code (Open Location Code)">' + pc + '</span><button type="button" class="pc-copy" data-c="' + pc + '">Copy</button>' : "";
+    var pcH = pc ? '<span class="pc-code" title="Plus Code (Open Location Code)">' + pc + '</span><button type="button" class="pc-copy" data-c="' + pc + '" title="Copy Plus Code" aria-label="Copy Plus Code"><svg class="pc-ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.6"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5"/></svg></button>' : "";
     return '<div class="tp-ll">' + at + '<button type="button" class="pf-wx" data-ll="' + w + '">Weather</button>' + pcH + '</div>';
   }
   function syncPin() {

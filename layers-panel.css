@@ -184,3 +184,12 @@
 .mtg-chip-fmt{background:#24506e;color:#d6ecff}
 .mtg-chip-team{background:#5b2f6e;color:#f1dcff}
 .mtg-chip-note{background:rgba(255,255,255,.08);font-weight:600}
+/* t368u: compact store card — title row holds the call button; prerelease heading sits tight */
+.mtg-card-head{display:flex;align-items:center;gap:8px;margin:0 0 4px}
+.mtg-card-head .mtg-card-title{flex:1 1 auto;margin:0}
+.mtg-chips{margin:0 0 2px}
+.mtg-card .mtg-sec{border-top:0;margin-top:0;padding-top:0}
+.mtg-card .mtg-sec-h{padding:1px 0;line-height:1.2}
+.mtg-card .mtg-sec-b{padding:0 0 2px}
+.mtg-card .mtg-pre{margin:2px 0 3px;padding:4px 6px}
+.mtg-pre-rel{font-weight:500;opacity:.8;font-size:.92em}

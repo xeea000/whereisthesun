@@ -21,7 +21,7 @@
     var b = e.target && e.target.closest && e.target.closest(".pc-copy");
     if (!b) return;
     e.preventDefault(); e.stopPropagation();
-    var done = () => { b.textContent = "Copied"; setTimeout(() => { b.textContent = "Copy"; }, 1500); };
+    var done = () => { b.classList.add("is-done"); b.title = "Copied"; setTimeout(() => { b.classList.remove("is-done"); b.title = "Copy Plus Code"; }, 1500); };
     try { navigator.clipboard.writeText(b.dataset.c).then(done, () => { window.prompt("Plus Code", b.dataset.c); }); } catch (x) { window.prompt("Plus Code", b.dataset.c); }
   }, true);
 })();

@@ -783,11 +783,11 @@
     if (!plus && d.length === 12 && d.slice(0, 2) === "11") d = d.slice(1); /* "1 1519..." typed twice */
     return "tel:" + (plus || (d.length === 11 && d[0] === "1") ? "+" : "") + d;
   }
-  function callBtn(phone) {
+  function callBtn(phone, name) {
     var h = telHref(phone);
     if (!h) return "";
-    return '<a class="sk-call" href="' + esc(h) + '" aria-label="Call ' + esc(phone) + '"><span class="sk-call-ico" aria-hidden="true">📞</span>' +
-      '<span class="sk-call-txt">Call <b>' + esc(String(phone).trim()) + "</b></span></a>";
+    var lab = "Call " + (name ? String(name) : String(phone).trim());
+    return '<a class="sk-call" href="' + esc(h) + '" aria-label="' + esc(lab) + '" title="' + esc(lab) + '"><span class="sk-call-ico" aria-hidden="true">📞</span></a>';
   }
   var markerScale = { KEY: MS_KEY, MIN: MS_MIN, MAX: MS_MAX, DEF: MS_DEF,
     get: msGet, set: msSet, onChange: msOnChange, size: msSize, bind: msBind, refresh: msRefresh };

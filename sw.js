@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt233"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt234"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,15 +32,15 @@ var PRECACHE = [
   "styles.css?h=abe35cdd07",
   "settings-panel.css?h=f5be224c45",
   "side-buttons.css?h=9e18a6b16c",
-  "layers-panel.css?h=7730b36093",
-  "info-panel.css?h=63e27e8099",
+  "layers-panel.css?h=e8db5fe0b1",
+  "info-panel.css?h=4bd872bbd8",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
   "tap-snap.js?h=3fe785f8f8",
   "points.js?h=bd3ec9c286",
-  "peek-place.js?h=20bd23406d",
-  "plus-code.js?h=f565a0bf77",
-  "info-panel.js?h=22e67b718f",
+  "peek-place.js?h=ac8ebbbe70",
+  "plus-code.js?h=2de5aed8e0",
+  "info-panel.js?h=7faece29ac",
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=134a01870a",
   "data-saver.js?h=ab8a4eacad",
@@ -60,7 +60,7 @@ var PRECACHE = [
   "beach-toggle.js?h=6ed1375f1c",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
-  "layer-kit.js?h=6497556fed",
+  "layer-kit.js?h=34c4c7777b",
   "layer-lazy.js?h=dc91d4950e",
   "layers-panel.js?h=49f0769467",
   "share-link.js?h=cf29a929f8",
@@ -128,7 +128,7 @@ var PRECACHE = [
   "ca-cover.js?h=c5dd186c2a",
   "world-layers.js?h=9a3dc33d0b",
   "outdoor-layers.js?h=a63aab75b7",
-  "mtg-stores.js?h=d8a3d4f651",
+  "mtg-stores.js?h=e87adaedab",
   "parks-ca.js?h=fb1fec2c6b",
   "sky-card.js?h=b371ae5f3a",
   "sats.js?h=ac6320e177",

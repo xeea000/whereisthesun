@@ -189,7 +189,6 @@
     }
     var blocks = [];
     blocks.push('<div class="mtg-chips">' + chips.join("") + "</div>");
-    if (p.phone && K.callBtn) blocks.push(K.callBtn(p.phone));
     if (past.length) {
       var pastChips = past.slice(0, 2).map((e) => {
         var label = ((e.name || e.set || "Set") + (e.date ? " · " + e.date : "")).trim();
@@ -213,8 +212,7 @@
         blocks.push('<div class="mtg-pre">');
         blocks.push(thumbHtml(set, false));
         blocks.push('<div class="mtg-pre-body">');
-        blocks.push('<div class="mtg-pre-name">' + K.esc(name) + "</div>");
-        if (set && set.released) blocks.push('<div class="mtg-pre-meta">Release ' + K.esc(fmtDate(set.released)) + "</div>");
+        blocks.push('<div class="mtg-pre-name">' + K.esc(name) + (set && set.released ? '<span class="mtg-pre-rel"> · ' + K.esc(fmtDate(set.released)) + "</span>" : "") + "</div>");
         blocks.push(rows.slice(0, 8).map(preRow).join(""));
         if (set && set.wizards) {
           blocks.push('<a class="mtg-link" href="' + K.esc(set.wizards) + '" target="_blank" rel="noopener">Wizards set page ↗</a>');
@@ -237,7 +235,8 @@
     if (p.addr) blocks.push('<div class="mtg-addr">' + K.esc(p.addr) + "</div>");
     if (p.web) blocks.push('<a class="mtg-link" href="' + K.esc(p.web) + '" target="_blank" rel="noopener">Store website ↗</a>');
     var built = meta && meta.built ? meta.built : "";
-    return '<div class="mtg-card"><div class="mtg-card-title">' + K.esc(p.name || "Magic store") + "</div>" +
+    var call = p.phone && K.callBtn ? K.callBtn(p.phone, p.name) : "";
+    return '<div class="mtg-card"><div class="mtg-card-head"><div class="mtg-card-title">' + K.esc(p.name || "Magic store") + "</div>" + call + "</div>" +
       blocks.join("") +
       '<div class="pf-src">Source: <a href="https://locator.wizards.com/" target="_blank" rel="noopener">Wizards locator</a>' +
       (built ? " · snapshot " + K.esc(built) : "") +

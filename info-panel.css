@@ -100,3 +100,37 @@ body:not(.loc-on) .user-dot { display: none; }
 .tp-ll{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0;max-width:100%}
 .tp-ll .pc-code{min-width:0;overflow-wrap:anywhere}
 .ip-panel .ip-card, .ip-panel .ip-body{min-width:0;overflow-x:hidden}
+/* t368u: compact card header — copy icon top right, round call button by the title */
+.tp-ll{position:relative;padding-right:30px}
+.tp-ll .pc-copy{position:absolute;right:0;top:0;margin:0;width:26px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:7px}
+.tp-ll .pc-copy .pc-ico, .ip-peek .pk-body .tp-ll .pc-copy svg{display:block;width:15px;height:15px;fill:none;stroke:#cfe3ff;stroke-width:1.5}
+.tp-ll .pc-copy.is-done{border-color:#34d058}.tp-ll .pc-copy.is-done .pc-ico{stroke:#34d058}
+.tp-ll .pc-code{margin-left:2px}
+.sk-call{width:34px;height:34px;min-width:34px;margin:0;padding:0;border-radius:50%;gap:0;flex:0 0 auto}
+.sk-call-ico{font-size:17px}
+/* t368u: portrait phones — blades at half the opt233 width (228→114, 236→118); inner rows reflow, no sideways scroll */
+@media (max-width: 700px) and (orientation: portrait) {
+  .lp-panel { width: 114px; max-width: 114px; font-size: 10px; }
+  .lp-body, .ip-body { overflow-x: hidden; }
+  .ip-panel { width: 118px; max-width: 118px; font-size: 10px; }
+  .lp-panel *:not(.lp-tab), .ip-panel *:not(.ip-tab) { min-width: 0; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
+  .lp-title, .lp-actions, .lp-msize, .lp-bscale { flex-wrap: wrap; }
+  .lp-title { padding: 4px 4px 2px; gap: 3px; }
+  .lp-title-txt { font-size: 11px; }
+  .lp-clear, .lp-foldall { padding: 3px 5px; font-size: 9.5px; }
+  .lp-msize, .lp-bscale { gap: 2px; padding: 2px 0; font-size: 9.5px; }
+  .lp-msize input[type=range], .lp-bscale input[type=range] { width: 100%; flex-basis: 100%; }
+  .lp-head { font-size: 8.5px; margin: 4px 2px 1px; letter-spacing: 0; }
+  .lp-fold-h { font-size: 10px; padding: 2px 3px; }
+  .lp-row { font-size: 10px; gap: 3px; padding: 2px 2px; }
+  .lp-ico { width: 14px; font-size: 11px; }
+  .lp-sw { width: 22px; height: 13px; flex: 0 0 auto; } .lp-sw::after { width: 9px; height: 9px; } .lp-row.is-on .lp-sw::after { transform: translateX(9px); }
+  .lp-ctrls, .lp-kids { padding-left: 6px; padding-right: 2px; }
+  .lp-kid { font-size: 9.5px; gap: 3px; } .lp-kid input { width: 14px; height: 14px; flex: 0 0 auto; }
+  .ip-head { padding: 5px 6px 3px; font-size: 11px; }
+  .ip-body { padding: 0 4px 8px; }
+  .ip-card, .ip-sec { padding: 5px 16px 5px 5px; }
+  .ip-panel .tp-ll { font-size: 9.5px; }
+  .ip-panel .pc-code { font-size: 9.5px; white-space: normal; }
+  .ip-panel .pf-wx { font-size: 9.5px; padding: 0 5px; margin-left: 0; }
+}
