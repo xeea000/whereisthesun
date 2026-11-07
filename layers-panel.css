@@ -199,3 +199,7 @@
 .mtg-pday-h{font:700 11.5px/1.25 system-ui,sans-serif;color:#ffe9a0;margin:1px 0}
 .mtg-pday .mtg-prow{border-top:0;padding:1px 0 1px 10px}
 .mtg-pday .mtg-pwhen{color:#e8edf3;font-weight:700}
+/* t376u/t377u: unconfirmed team labels look tentative; per-row source link */
+.mtg-chip-team.mtg-chip-unsure{background:transparent;border:1px dashed #b98ad0;color:#e6d2f2}
+.mtg-src{font-size:10px;color:#8fc4ff;margin-left:auto;white-space:nowrap;text-decoration:none}
+.mtg-src:hover{text-decoration:underline}

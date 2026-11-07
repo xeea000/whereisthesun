@@ -10,7 +10,7 @@
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=1e6bc8fb";
+  var DATA = "data/mtg-stores.json?v=2004a00b";
   var SETS = "data/mtg-sets.json?v=91fc2e44";
   var meta = null, setCat = null, pMap = null, filterSet = "";
   var panelEl = null, scheduleBtn = null;
@@ -173,16 +173,27 @@
     var wd = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
     return { key: m[1] + m[2] + m[3], label: DAYS[wd] + ", " + MONTHS[mo - 1] + " " + d, sort: m[1] + m[2] + m[3] + m[4] + m[5] };
   }
-  function preRow(e) {
+  /* t377u: each row links to the exact Wizards page its facts came from; only these two shapes are ever linked */
+  var SRC_OK = /^https:\/\/locator\.wizards\.com\/en\/(?:event|store)\/\d{1,12}$/;
+  function srcLink(e, storeId) {
+    var u = SRC_OK.test(e.src || "") ? e.src : "", lab = "Source", tip = "Wizards event listing";
+    if (!u && /^\d{1,12}$/.test(String(storeId || ""))) { u = "https://locator.wizards.com/en/store/" + storeId; lab = "Wizards store listing"; tip = lab; }
+    if (!u) return "";
+    return '<a class="mtg-src" href="' + K.esc(u) + '" target="_blank" rel="noopener noreferrer" title="' + tip + '">' + lab + " ↗</a>";
+  }
+  function preRow(e, storeId) {
     var bits = [];
     if (e.format && e.format !== "Other" && e.format !== "Not listed") bits.push(chip(K.esc(e.format), "mtg-chip-fmt"));
-    if (e.teams) bits.push(chip(K.esc(e.teams), "mtg-chip-fmt mtg-chip-team"));
+    if (e.teams) {
+      var sure = e.teams === "Two-Headed Giant" || /^Teams of \d+$/.test(e.teams);
+      bits.push('<span class="mtg-chip mtg-chip-fmt mtg-chip-team' + (sure ? "" : " mtg-chip-unsure") + '" title="' + K.esc(e.teamEv || "") + '">' + K.esc(e.teams) + "</span>");
+    }
     (e.notes || []).forEach((n) => { bits.push(chip(K.esc(n), "mtg-chip-note")); });
     if (e.fee) bits.push(chip(K.esc(e.fee) + " entry", "mtg-chip-note"));
     if (!bits.length) bits.push('<span class="mtg-muted">Format not listed</span>');
-    return '<div class="mtg-prow"><span class="mtg-pwhen">' + K.esc(e.time || "Time not listed") + "</span>" + bits.join("") + "</div>";
+    return '<div class="mtg-prow"><span class="mtg-pwhen">' + K.esc(e.time || "Time not listed") + "</span>" + bits.join("") + srcLink(e, storeId) + "</div>";
   }
-  function preDays(rows) {
+  function preDays(rows, storeId) {
     var list = rows.map((e, i) => { var d = preDay(e); return { e: e, d: d, i: i }; });
     list.sort((a, b) => { return a.d.sort < b.d.sort ? -1 : a.d.sort > b.d.sort ? 1 : a.i - b.i; });
     var out = [], cur = null;
@@ -191,7 +202,7 @@
       cur.rows.push(x.e);
     });
     return out.map((g) => {
-      return '<div class="mtg-pday"><div class="mtg-pday-h">' + K.esc(g.label) + "</div>" + g.rows.map(preRow).join("") + "</div>";
+      return '<div class="mtg-pday"><div class="mtg-pday-h">' + K.esc(g.label) + "</div>" + g.rows.map((e) => { return preRow(e, storeId); }).join("") + "</div>";
     }).join("");
   }
   function cardHtml(p) {
@@ -233,7 +244,7 @@
         blocks.push(thumbHtml(set, false));
         blocks.push('<div class="mtg-pre-body">');
         blocks.push('<div class="mtg-pre-name">' + K.esc(name) + (set && set.released ? '<span class="mtg-pre-rel"> · ' + K.esc(fmtDate(set.released)) + "</span>" : "") + "</div>");
-        blocks.push(preDays(rows.slice(0, 8)));
+        blocks.push(preDays(rows.slice(0, 8), p.id));
         if (set && set.wizards) {
           blocks.push('<a class="mtg-link" href="' + K.esc(set.wizards) + '" target="_blank" rel="noopener">Wizards set page ↗</a>');
         }

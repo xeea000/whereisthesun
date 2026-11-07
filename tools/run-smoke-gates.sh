@@ -48,6 +48,7 @@ for KIDS in tools/smoke-kids-render.py tools/smoke-kids-render.js tools/smoke-ki
   fi
 done
 if [ "$SUNNY_GATE_CARD" = "1" ] && [ -f tools/smoke-mtg-card.py ]; then
+  python3 tools/test-mtg-classify.py >/dev/null || { python3 tools/test-mtg-classify.py | grep FAIL; echo "mtg classify fixtures failed"; exit 1; }
   echo ":: gate mtg-card (phone width)"
   python3 tools/smoke-mtg-card.py "$URL" || { echo "mtg-card gate failed"; exit 1; }
 fi

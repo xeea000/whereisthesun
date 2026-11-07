@@ -66,6 +66,21 @@ async def main(url):
         if not k["chips"]: bad.append("child row lost format/fee %s" % k)
     if not any(len(d["kids"]) > 1 for d in r["days"]): print("note: this store has no day with two times")
     if r["top"] > 844 * 0.25: bad.append("card not near top (%d px)" % r["top"])
+    # t377u: every event row links to its own Wizards event page, matching the raw data for this store
+    src = await pg.evaluate("""async()=>{const P=document.getElementById('ip-peek');const name=(P.querySelector('.mtg-card-title')||{}).textContent||'';
+      const d=await (await fetch('data/mtg-stores.json',{cache:'no-store'})).json();const s=d.stores.find(x=>name.includes(x.name)||x.name.includes(name.trim()));
+      const rows=[...P.querySelectorAll('.mtg-prow')].map(r=>{const a=r.querySelectorAll('a.mtg-src');const t=r.querySelector('.mtg-chip-team');return {n:a.length,href:a[0]&&a[0].getAttribute('href'),tgt:a[0]&&a[0].target,rel:a[0]&&a[0].rel,lab:a[0]&&a[0].textContent,team:t?t.textContent:''}});
+      const want=(s&&s.prereleaseNext||[]).slice(0,8).map(e=>({src:e.src,teams:e.teams||''}));
+      return {store:s&&s.id,rows:rows,want:want,setSrc:P.querySelectorAll('a.mtg-link.mtg-src').length}}""")
+    print("sources", src["store"], [x["href"] for x in src["rows"]])
+    if not src["rows"] or len(src["rows"]) != len(src["want"]): bad.append("row count %d vs data %d" % (len(src["rows"]), len(src["want"])))
+    import re as _re
+    for x in src["rows"]:
+      if x["n"] != 1 or not _re.fullmatch(r"https://locator\.wizards\.com/en/(event|store)/\d+", x["href"] or "") or x["tgt"] != "_blank" or "noopener" not in (x["rel"] or "") or "noreferrer" not in (x["rel"] or ""):
+        bad.append("bad source link %s" % x)
+    if sorted(x["href"] for x in src["rows"]) != sorted(w["src"] for w in src["want"]): bad.append("source links do not match the store's events %s" % src)
+    if sorted(x["team"] for x in src["rows"]) != sorted(w["teams"] for w in src["want"]): bad.append("team labels differ from data %s" % src)
+    if src["setSrc"]: bad.append("set page link styled as an event source")
     await pg.evaluate("()=>{const m=document.querySelector('#ip-peek .pk-more');m&&m.click()}")
     await pg.wait_for_timeout(600)
     ip = await pg.evaluate("()=>{const clip=(P)=>{const R=P.getBoundingClientRect();return [...P.querySelectorAll('*')].filter(x=>{const r=x.getBoundingClientRect();if(!r.width)return false;const ox=getComputedStyle(x).overflowX;return r.right>R.right+1||r.left<R.left-1||((ox==='auto'||ox==='scroll')&&x.scrollWidth-x.clientWidth>2)}).map(x=>x.tagName+'.'+x.className).slice(0,5)};const e=document.querySelector('.ip-panel');return {w:Math.round(e.getBoundingClientRect().width),clipped:clip(e.querySelector('.ip-body')||e)}}")
