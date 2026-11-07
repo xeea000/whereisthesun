@@ -32,6 +32,39 @@ BO1 = re.compile(r"\bbo1\b|best[- ]of[- ](?:one|1)\b", re.I)
 BO3 = re.compile(r"\bbo3\b|best[- ]of[- ](?:three|3)\b", re.I)
 HOME = re.compile(r"\bat home\b|take[- ]home", re.I)
 EVENT_URL = "https://locator.wizards.com/en/event/{}"
+OFFICIAL = ROOT / "data" / "mtg-official.json"  # hand-checked store pages for exact event slots (t376u)
+STORE_PAGE = re.compile(r"https://[a-z0-9.-]+\.[a-z]{2,}/[^\s\"'<>]*", re.I)
+
+def _num(fee: str):
+  m = re.search(r"\d+(?:\.\d+)?", fee or "")
+  return float(m.group()) if m else None
+
+def apply_official(row: dict, off: dict | None) -> dict:
+  """merge one store-page check into a row; never upgrades without an exact-slot 'agree'"""
+  if not off or not STORE_PAGE.fullmatch(off.get("url") or ""):
+    return row
+  row["off"] = {k: off.get(k, "") for k in ("url", "match", "says", "fee", "evidence")}
+  says, ev = off.get("says") or "", off.get("evidence") or ""
+  if off.get("match") == "agree":
+    if says == "Two-Headed Giant" and row["teams"] != "Two-Headed Giant":
+      row["teamEv"] = ("store page: " + ev + " · Wizards: " + row["teamEv"])[:160]
+      row["teams"] = "Two-Headed Giant · store page"
+    elif says == "Two-Headed Giant":
+      row["teamEv"] = (row["teamEv"] + " · store page agrees")[:160]
+    if "best of 1" in says.lower() and "Best of one" not in row["notes"]:
+      row["notes"].append("Best of one (store page)")
+  elif off.get("match") == "conflict":
+    if row["teams"].startswith("Two-Headed Giant") and says != "Two-Headed Giant":
+      row["teams"], row["teamEv"] = "Wizards says Two-Headed Giant · store page differs", ("store page: " + ev)[:160]
+    elif says == "Two-Headed Giant":
+      row["teams"], row["teamEv"] = "Store page says Two-Headed Giant · Wizards lists solo", ("store page: " + ev)[:160]
+    else:
+      row["notes"].append("Store page says " + says)
+  a, b = _num(row.get("fee")), _num(off.get("fee"))
+  per_team = "per team" in (off.get("fee") or "")
+  if a is not None and b is not None and abs(a - b) > 1 and not (per_team and abs(2 * a - b) <= 1):
+    row["feeStore"] = off.get("fee")
+  return row
 
 def thg_hit(text: str):
   """first un-negated 2HG mention in text, as a short literal snippet, else None"""
@@ -169,6 +202,7 @@ def main() -> None:
   doc = json.loads(STORES.read_text())
   sets = json.loads(SETS.read_text()).get("sets", []) if SETS.exists() else []
   stores = doc["stores"]
+  official = (json.loads(OFFICIAL.read_text()).get("events") or {}) if OFFICIAL.exists() else {}
   if lim:
     stores = stores[:lim]
   ok = phones = pre = 0
@@ -202,6 +236,7 @@ def main() -> None:
       w = "https://" + w
     s["web"] = w
     rows = [x for x in (row_of(e, sets) for e in (r.get("selectedStoreEvents") or [])) if x]
+    rows = [apply_official(x, official.get(x["eid"])) for x in rows]
     cut = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat(timespec="minutes")
     rows = [x for x in rows if datetime.fromisoformat(x["iso"]).astimezone(timezone.utc).isoformat(timespec="minutes") >= cut]
     rows.sort(key=lambda x: x["iso"])

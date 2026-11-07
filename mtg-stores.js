@@ -10,7 +10,7 @@
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=2004a00b";
+  var DATA = "data/mtg-stores.json?v=4be140c0";
   var SETS = "data/mtg-sets.json?v=91fc2e44";
   var meta = null, setCat = null, pMap = null, filterSet = "";
   var panelEl = null, scheduleBtn = null;
@@ -174,22 +174,28 @@
     return { key: m[1] + m[2] + m[3], label: DAYS[wd] + ", " + MONTHS[mo - 1] + " " + d, sort: m[1] + m[2] + m[3] + m[4] + m[5] };
   }
   /* t377u: each row links to the exact Wizards page its facts came from; only these two shapes are ever linked */
+  var STORE_OK = /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}\/[^\s"'<>]*$/i; /* hand-checked store event page (data/mtg-official.json) */
   var SRC_OK = /^https:\/\/locator\.wizards\.com\/en\/(?:event|store)\/\d{1,12}$/;
   function srcLink(e, storeId) {
     var u = SRC_OK.test(e.src || "") ? e.src : "", lab = "Source", tip = "Wizards event listing";
     if (!u && /^\d{1,12}$/.test(String(storeId || ""))) { u = "https://locator.wizards.com/en/store/" + storeId; lab = "Wizards store listing"; tip = lab; }
     if (!u) return "";
-    return '<a class="mtg-src" href="' + K.esc(u) + '" target="_blank" rel="noopener noreferrer" title="' + tip + '">' + lab + " ↗</a>";
+    var out = '<a class="mtg-src" href="' + K.esc(u) + '" target="_blank" rel="noopener noreferrer" title="' + tip + '">' + lab + " ↗</a>";
+    var o = e.off || {};
+    if (STORE_OK.test(o.url || "")) {
+      out += '<a class="mtg-src" href="' + K.esc(o.url) + '" target="_blank" rel="noopener noreferrer" title="' + K.esc((o.match === "conflict" ? "Store page differs: " : "Store page agrees: ") + (o.evidence || "")) + '">Store page ↗</a>';
+    }
+    return out;
   }
   function preRow(e, storeId) {
     var bits = [];
     if (e.format && e.format !== "Other" && e.format !== "Not listed") bits.push(chip(K.esc(e.format), "mtg-chip-fmt"));
     if (e.teams) {
-      var sure = e.teams === "Two-Headed Giant" || /^Teams of \d+$/.test(e.teams);
+      var sure = /^Two-Headed Giant( · store page)?$/.test(e.teams) || /^Teams of \d+$/.test(e.teams);
       bits.push('<span class="mtg-chip mtg-chip-fmt mtg-chip-team' + (sure ? "" : " mtg-chip-unsure") + '" title="' + K.esc(e.teamEv || "") + '">' + K.esc(e.teams) + "</span>");
     }
     (e.notes || []).forEach((n) => { bits.push(chip(K.esc(n), "mtg-chip-note")); });
-    if (e.fee) bits.push(chip(K.esc(e.fee) + " entry", "mtg-chip-note"));
+    if (e.fee) bits.push(chip(K.esc(e.fee) + " entry" + (e.feeStore ? " (Wizards) · store page " + K.esc(e.feeStore) : ""), "mtg-chip-note"));
     if (!bits.length) bits.push('<span class="mtg-muted">Format not listed</span>');
     return '<div class="mtg-prow"><span class="mtg-pwhen">' + K.esc(e.time || "Time not listed") + "</span>" + bits.join("") + srcLink(e, storeId) + "</div>";
   }

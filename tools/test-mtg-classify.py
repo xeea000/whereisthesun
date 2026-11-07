@@ -36,5 +36,18 @@ eq(m.row_of(ev(15, "Foundations Prerelease", t="2025-11-07T23:00:00Z"), SETS)["s
 x, y = m.row_of(ev(16, "2HG Prerelease", team=2), SETS), m.row_of(ev(17, "Draft Prerelease", fmt="Booster Draft"), SETS)
 eq((x["teams"], y["teams"], y["format"]), ("Two-Headed Giant", "", "Booster Draft"), "two events at one store keep their own formats")
 eq(m.row_of(ev("1;alert(1)", "Prerelease"), SETS)["src"], "", "non-numeric event id gets no link")
+# t376u store-page overlay: exact-slot agree upgrades, conflicts stay visible, bad URLs ignored
+base = lambda team, title="Prerelease": m.row_of(ev(30, title, team=team), SETS) | {"fee": "CA$50"}
+o = m.apply_official(base(2), {"url": "https://shop.example/products/x", "match": "agree", "says": "Two-Headed Giant", "evidence": "Sat 6 PM 2HG", "fee": "$100 per team"})
+eq((o["teams"], o.get("feeStore")), ("Two-Headed Giant · store page", None), "teams of two + store page 2HG at same slot upgrades; per-team fee is not a conflict")
+o = m.apply_official(base(2, "2HG Prerelease"), {"url": "https://shop.example/p", "match": "conflict", "says": "Sealed (solo)", "evidence": "regular", "fee": "$50"})
+eq(o["teams"], "Wizards says Two-Headed Giant · store page differs", "Wizards 2HG vs store solo shows the conflict")
+o = m.apply_official(base(1), {"url": "https://shop.example/p", "match": "conflict", "says": "Two-Headed Giant", "evidence": "Sun 2HG", "fee": ""})
+eq(o["teams"], "Store page says Two-Headed Giant · Wizards lists solo", "store 2HG vs Wizards solo shows the conflict")
+o = m.apply_official(base(1), {"url": "https://shop.example/p", "match": "agree", "says": "Sealed, best of 1", "evidence": "bo1", "fee": "$45"})
+eq((o["feeStore"], o["notes"]), ("$45", ["Best of one (store page)"]), "store fee differs: kept beside the Wizards fee")
+o = m.apply_official(base(2), {"url": "javascript:alert(1)", "match": "agree", "says": "Two-Headed Giant"})
+eq((o["teams"], "off" in o), ("Teams of two — variant not confirmed", False), "non-https store URL is ignored")
+eq(m.apply_official(base(2), None)["teams"], "Teams of two — variant not confirmed", "no store check: label unchanged")
 print("classify:", "FAIL %d" % len(bad) if bad else "ok")
 sys.exit(1 if bad else 0)

@@ -77,8 +77,10 @@ async def main(url):
     await pg.evaluate("()=>{document.querySelector('#ip-peek .pk-body').scrollTop=0}")
     ov = await pg.evaluate("""()=>{const P=document.getElementById('ip-peek');const gs=[...P.querySelectorAll('.pk-grip')];
       const hit=(a,b)=>a.left<b.right&&b.left<a.right&&a.top<b.bottom&&b.top<a.bottom;
-      const ctl=[...P.querySelectorAll('a,button,input,label,[role=button]')].map(e=>e.getBoundingClientRect()).filter(r=>r.width);
-      return {n:gs.length,bad:gs.filter(g=>ctl.some(c=>hit(g.getBoundingClientRect(),c))).map(g=>g.className)}}""")
+      const B=P.querySelector('.pk-body').getBoundingClientRect();
+      const vis=(e)=>{const r=e.getBoundingClientRect();if(!e.closest('.pk-body'))return r;return {left:r.left,right:r.right,top:Math.max(r.top,B.top),bottom:Math.min(r.bottom,B.bottom)}};
+      const ctl=[...P.querySelectorAll('a,button,input,label,[role=button]')].map(e=>[e,vis(e)]).filter(([e,r])=>r.right>r.left&&r.bottom>r.top);
+      return {n:gs.length,bad:gs.flatMap(g=>ctl.filter(([e,c])=>hit(g.getBoundingClientRect(),c)).map(([e])=>g.className+' x '+e.className+' '+(e.textContent||'').slice(0,20)))}}""")
     check(ov["n"] == 4 and not ov["bad"], "4 grips, none over a button or link %s" % ov)
     for k, dx, dy in (("n", 0, 30), ("s", 0, -30), ("e", -20, 0), ("w", 20, 0)):
       a = await rect("#ip-peek"); x, y = await center(".pk-grip-" + k)
