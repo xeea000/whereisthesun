@@ -134,16 +134,14 @@ body:not(.loc-on) .user-dot { display: none; }
   .ip-panel .pc-code { font-size: 9.5px; white-space: normal; }
   .ip-panel .pf-wx { font-size: 9.5px; padding: 0 5px; margin-left: 0; }
 }
-/* t370u: drag handles (drag-kit.js) — card header/footer hold-to-move, panel tabs drag to move/resize */
+/* t370u: drag handles (drag-kit.js) — card header/footer/grips drag to move, panel tabs drag to move/resize */
 .ip-peek .tp-ll, .ip-peek .mtg-card-head, .ip-peek .pk-foot, .lp-tab, .ip-tab { touch-action: none; }
 .lp-tab, .ip-tab { cursor: grab; }
 .ip-peek .pk-foot, .ip-peek .tp-ll { cursor: grab; }
 body.sk-dragging, body.sk-dragging * { user-select: none; -webkit-user-select: none; cursor: grabbing !important; }
 .ip-peek.is-dragging { box-shadow: 0 0 0 2px #ffd34d, 0 8px 24px rgba(0,0,0,.5); }
 .lp-panel.is-dragging, .ip-panel.is-dragging { transition: none; box-shadow: 0 0 0 2px rgba(255,211,77,.6); }
-/* t374u: hold cue, four card grips, tab nudge */
-.ip-peek { transition: box-shadow .5s ease-out; }
-.ip-peek.is-pressing { box-shadow: 0 0 0 2px rgba(255,211,77,.55), 0 4px 16px rgba(0,0,0,.4); }
+/* t374u/t375u: four card grips, tab nudge */
 .ip-peek .tp-ll, .ip-peek .mtg-card-head, .ip-peek .pk-foot, .ip-peek .pk-grip { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .ip-peek .pk-grip { position: absolute; touch-action: none; cursor: grab; z-index: 1; }
 .ip-peek .pk-grip::after { content: ""; position: absolute; inset: 0; margin: auto; opacity: .45; border-radius: 1px; }
@@ -155,4 +153,4 @@ body.sk-dragging, body.sk-dragging * { user-select: none; -webkit-user-select: n
 .ip-peek .pk-grip-e::after, .ip-peek .pk-grip-w::after { width: 3px; height: 22px; background: repeating-linear-gradient(180deg, #cfe3ff 0 2px, transparent 2px 4px); }
 .lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: sknudge .9s ease-in-out 1; }
 @keyframes sknudge { 0%, 100% { text-indent: 0; letter-spacing: 0; } 25% { text-indent: 4px; } 50% { text-indent: -3px; } 75% { text-indent: 2px; } }
-@media (prefers-reduced-motion: reduce) { .lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: none; } .ip-peek { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: none; } }

@@ -1,9 +1,8 @@
 // workspace/whereisthesun/drag-kit.js
 /* SUNNY t370u/t374u: one small shared gesture helper for the tap card and both side panels.
- * Card: long-press (500 ms from the finger landing, one timer) on its header, title row, footer or one of
- *   the four edge grips, then drag to move it. A soft ring fades in at once so the hold shows it registered.
- *   Moving more than 10 px before the hold ends cancels, so a swipe still scrolls; buttons, links and
- *   inputs never start a drag; a second finger cancels. A mouse drags the same handles at once.
+ * Card (t375u): touch or mouse on its header, title row, footer or one of the four edge grips drags it
+ *   at once, no hold. The scrolling body never drags; buttons, links and inputs never start a drag;
+ *   a second finger cancels.
  *   The spot you choose is kept for this session and clamped to the visible screen.
  * Panels: the edge tab is the grip. Tap still opens/closes. Drag up/down moves the panel up/down;
  *   drag outward/inward makes an open panel wider/narrower (dragging out also opens a closed one).
@@ -12,7 +11,7 @@
  *   drag, which sets one localStorage flag and ends hints for good. Never with reduced motion or a hidden page. */
 (() => {
   "use strict";
-  var HOLD_MS = 500, SLOP = 10, MOVE = 6, PAD = 6;
+  var MOVE = 6, PAD = 6;
   var SS = window.sessionStorage;
   var get = (k) => { try { return JSON.parse(SS.getItem("sunny-drag-" + k) || "null"); } catch (e) { return null; } };
   var put = (k, v) => { try { SS.setItem("sunny-drag-" + k, JSON.stringify(v)); } catch (e) {} };
@@ -61,12 +60,10 @@
     if (peek && !peek.hidden) placeCard(peek);
   }
   /* one gesture tracker for card and panel tabs */
-  var g = null; /* {id, kind, x0, y0, timer, active, el, side, start} */
+  var g = null; /* {id, kind, x0, y0, active, el, side, start} */
   var swallowClick = false;
   function end() {
     if (!g) return;
-    clearTimeout(g.timer);
-    if (g.el) g.el.classList.remove("is-pressing");
     if (g.active) {
       document.body.classList.remove("sk-dragging");
       if (g.el) g.el.classList.remove("is-dragging");
@@ -80,7 +77,6 @@
   function activate() {
     if (!g) return;
     g.active = true;
-    g.el.classList.remove("is-pressing");
     document.body.classList.add("sk-dragging");
     if (g.el) g.el.classList.add("is-dragging");
     try { g.cap.setPointerCapture(g.id); } catch (e) {}
@@ -112,17 +108,11 @@
     var handle = t === peek || t.closest(CARD_HANDLES);
     if (!handle) return; /* card body content stays a scroll area */
     g = { id: e.pointerId, kind: "card", x0: e.clientX, y0: e.clientY, el: peek, cap: peek, active: false, mouse: e.pointerType === "mouse" };
-    if (g.mouse) return;
-    peek.classList.add("is-pressing"); /* instant cue; CSS fades the ring in over the hold */
-    /* one timer, measured from the finger landing (event timeStamp), so dispatch lag is not added on top */
-    var waited = Math.max(0, performance.now() - (e.timeStamp || performance.now()));
-    g.timer = setTimeout(activate, Math.max(0, HOLD_MS - waited));
   }
   function onMove(e) {
     if (!g || e.pointerId !== g.id) return;
     var dx = e.clientX - g.x0, dy = e.clientY - g.y0, far = Math.abs(dx) + Math.abs(dy);
     if (!g.active) {
-      if (g.kind === "card" && !g.mouse) { if (far > SLOP) end(); return; } /* moved before the hold: it was a scroll */
       if (far < MOVE) return;
       activate();
     }
@@ -150,12 +140,13 @@
       p.style.top = t0 + d + "px"; p.style.bottom = b0 - d + "px"; g.save.dy = d;
     }
   }
-  /* a still finger held on a handle must not start a native scroll once the hold has fired */
+  /* once a drag is live, the finger must not also scroll the page */
   document.addEventListener("touchmove", (e) => { if (g && g.active && e.cancelable) e.preventDefault(); }, { passive: false, capture: true });
   document.addEventListener("pointerdown", onDown, true);
   document.addEventListener("pointermove", onMove, { capture: true, passive: false });
-  ["pointerup", "pointercancel", "lostpointercapture"].forEach((n) => { document.addEventListener(n, (e) => { if (g && e.pointerId === g.id) end(); }, true); });
-  /* the browser's own long-press (text selection, callout menu) must not race the hold */
+  /* moving capture to the card makes the touched child lose its implicit capture; only the card losing it ends the drag */
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((n) => { document.addEventListener(n, (e) => { if (g && e.pointerId === g.id && (n !== "lostpointercapture" || e.target === g.cap)) end(); }, true); });
+  /* the browser's own long-press (text selection, callout menu) must not interrupt a drag */
   document.addEventListener("contextmenu", (e) => { if (g) e.preventDefault(); }, true);
   document.addEventListener("selectstart", (e) => { if (g) e.preventDefault(); }, true);
   document.addEventListener("click", (e) => { if (swallowClick) { e.stopPropagation(); e.preventDefault(); swallowClick = false; } }, true);
@@ -170,7 +161,7 @@
     if (!peek || peek.querySelector(".pk-grip")) return;
     ["n", "e", "s", "w"].forEach((k) => {
       var d = document.createElement("div");
-      d.className = "pk-grip pk-grip-" + k; d.setAttribute("aria-hidden", "true"); d.title = "Hold to move";
+      d.className = "pk-grip pk-grip-" + k; d.setAttribute("aria-hidden", "true"); d.title = "Drag to move";
       peek.appendChild(d);
     });
   }
@@ -227,7 +218,7 @@
   var boot = () => { if (document.querySelector(".lp-panel") || document.querySelector(".ip-panel")) applyAll(); else setTimeout(boot, 800); };
   boot();
   schedule();
-  window.SunnyDrag = { placeCard: placeCard, grips: grips, HOLD_MS: HOLD_MS,
+  window.SunnyDrag = { placeCard: placeCard, grips: grips,
     nudge: { due: (t) => { var x = due(t); return x ? x.id : null; }, tick: tick, engaged: engaged, learned: () => learned, learn: learn,
       timerLive: () => !!nz.timer, schedule: schedule, state: nz }, hasCardPos: () => !!cardPos, applyPanels: applyAll,
     reset: () => { cardPos = null; ["card", "lp", "ip"].forEach((k) => { try { SS.removeItem("sunny-drag-" + k); } catch (e) {} });
