@@ -110,9 +110,9 @@ body:not(.loc-on) .user-dot { display: none; }
 .sk-call-ico{font-size:17px}
 /* t368u: portrait phones — blades at half the opt233 width (228→114, 236→118); inner rows reflow, no sideways scroll */
 @media (max-width: 700px) and (orientation: portrait) {
-  .lp-panel { width: 114px; max-width: 114px; font-size: 10px; }
+  .lp-panel { width: 150px; max-width: 150px; font-size: 10px; }
   .lp-body, .ip-body { overflow-x: hidden; }
-  .ip-panel { width: 118px; max-width: 118px; font-size: 10px; }
+  .ip-panel { width: 156px; max-width: 156px; font-size: 10px; }
   .lp-panel *:not(.lp-tab), .ip-panel *:not(.ip-tab) { min-width: 0; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
   .lp-title, .lp-actions, .lp-msize, .lp-bscale { flex-wrap: wrap; }
   .lp-title { padding: 4px 4px 2px; gap: 3px; }
@@ -141,3 +141,18 @@ body:not(.loc-on) .user-dot { display: none; }
 body.sk-dragging, body.sk-dragging * { user-select: none; -webkit-user-select: none; cursor: grabbing !important; }
 .ip-peek.is-dragging { box-shadow: 0 0 0 2px #ffd34d, 0 8px 24px rgba(0,0,0,.5); }
 .lp-panel.is-dragging, .ip-panel.is-dragging { transition: none; box-shadow: 0 0 0 2px rgba(255,211,77,.6); }
+/* t374u: hold cue, four card grips, tab nudge */
+.ip-peek { transition: box-shadow .5s ease-out; }
+.ip-peek.is-pressing { box-shadow: 0 0 0 2px rgba(255,211,77,.55), 0 4px 16px rgba(0,0,0,.4); }
+.ip-peek .tp-ll, .ip-peek .mtg-card-head, .ip-peek .pk-foot, .ip-peek .pk-grip { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ip-peek .pk-grip { position: absolute; touch-action: none; cursor: grab; z-index: 1; }
+.ip-peek .pk-grip::after { content: ""; position: absolute; inset: 0; margin: auto; opacity: .45; border-radius: 1px; }
+.ip-peek .pk-grip-n, .ip-peek .pk-grip-s { left: calc(50% - 22px); width: 44px; height: 7px; }
+.ip-peek .pk-grip-n { top: 0; } .ip-peek .pk-grip-s { bottom: 0; }
+.ip-peek .pk-grip-n::after, .ip-peek .pk-grip-s::after { width: 22px; height: 3px; background: repeating-linear-gradient(90deg, #cfe3ff 0 2px, transparent 2px 4px); }
+.ip-peek .pk-grip-e, .ip-peek .pk-grip-w { top: calc(50% - 22px); height: 44px; width: 8px; }
+.ip-peek .pk-grip-e { right: 0; } .ip-peek .pk-grip-w { left: 0; }
+.ip-peek .pk-grip-e::after, .ip-peek .pk-grip-w::after { width: 3px; height: 22px; background: repeating-linear-gradient(180deg, #cfe3ff 0 2px, transparent 2px 4px); }
+.lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: sknudge .9s ease-in-out 1; }
+@keyframes sknudge { 0%, 100% { text-indent: 0; letter-spacing: 0; } 25% { text-indent: 4px; } 50% { text-indent: -3px; } 75% { text-indent: 2px; } }
+@media (prefers-reduced-motion: reduce) { .lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: none; } .ip-peek { transition: none; } }

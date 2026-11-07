@@ -37,6 +37,7 @@
     if (!peek || peek.hidden) return;
     last = [peek, map, ll];
     /* t370u: once the user drags the card, keep the spot they chose */
+    if (window.SunnyDrag) window.SunnyDrag.grips(peek);
     if (window.SunnyDrag && window.SunnyDrag.hasCardPos()) {
       peek.style.transform = "none";
       peek.style.bottom = "auto";

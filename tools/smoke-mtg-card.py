@@ -73,7 +73,7 @@ async def main(url):
     await pg.wait_for_timeout(600)
     lp = await pg.evaluate("()=>{const clip=(P)=>{const R=P.getBoundingClientRect();return [...P.querySelectorAll('*')].filter(x=>{const r=x.getBoundingClientRect();if(!r.width)return false;const ox=getComputedStyle(x).overflowX;return r.right>R.right+1||r.left<R.left-1||((ox==='auto'||ox==='scroll')&&x.scrollWidth-x.clientWidth>2)}).map(x=>x.tagName+'.'+x.className).slice(0,5)};const e=document.querySelector('.lp-panel');return {w:Math.round(e.getBoundingClientRect().width),clipped:clip(e.querySelector('.lp-body')||e)}}")
     print("right panel", ip, "left panel", lp)
-    want_r, want_l = int(os.environ.get("SUNNY_RIGHT_W", "118")), int(os.environ.get("SUNNY_LEFT_W", "114"))
+    want_r, want_l = int(os.environ.get("SUNNY_RIGHT_W", "156")), int(os.environ.get("SUNNY_LEFT_W", "150"))
     if abs(ip["w"] - want_r) > 6: bad.append("right panel %d px, want about %d" % (ip["w"], want_r))
     if abs(lp["w"] - want_l) > 6: bad.append("left panel %d px, want about %d" % (lp["w"], want_l))
     if ip["clipped"]: bad.append("right panel content cut off or scrolls sideways %s" % ip)

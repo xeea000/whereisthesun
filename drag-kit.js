@@ -1,14 +1,18 @@
 // workspace/whereisthesun/drag-kit.js
-/* SUNNY t370u: one small shared gesture helper for the tap card and both side panels.
- * Card: long-press (400 ms, finger held still) on its header, title row or footer, then drag to move it.
- *   Moving more than 8 px before the hold ends cancels, so a swipe still scrolls; buttons, links and
+/* SUNNY t370u/t374u: one small shared gesture helper for the tap card and both side panels.
+ * Card: long-press (500 ms from the finger landing, one timer) on its header, title row, footer or one of
+ *   the four edge grips, then drag to move it. A soft ring fades in at once so the hold shows it registered.
+ *   Moving more than 10 px before the hold ends cancels, so a swipe still scrolls; buttons, links and
  *   inputs never start a drag; a second finger cancels. A mouse drags the same handles at once.
  *   The spot you choose is kept for this session and clamped to the visible screen.
  * Panels: the edge tab is the grip. Tap still opens/closes. Drag up/down moves the panel up/down;
- *   drag outward/inward makes an open panel wider/narrower (dragging out also opens a closed one). */
+ *   drag outward/inward makes an open panel wider/narrower (dragging out also opens a closed one).
+ * Nudge (t374u): while a panel has sat open 7 s with no touch, hover or focus on it, its tab briefly
+ *   squashes and stretches, at most once per 20 s for both panels together, until the first real width
+ *   drag, which sets one localStorage flag and ends hints for good. Never with reduced motion or a hidden page. */
 (() => {
   "use strict";
-  var HOLD_MS = 400, SLOP = 8, MOVE = 6, PAD = 6;
+  var HOLD_MS = 500, SLOP = 10, MOVE = 6, PAD = 6;
   var SS = window.sessionStorage;
   var get = (k) => { try { return JSON.parse(SS.getItem("sunny-drag-" + k) || "null"); } catch (e) { return null; } };
   var put = (k, v) => { try { SS.setItem("sunny-drag-" + k, JSON.stringify(v)); } catch (e) {} };
@@ -18,7 +22,8 @@
   };
   var clamp = (n, a, b) => { return Math.max(a, Math.min(b, n)); };
   var INTERACTIVE = "a,button,input,select,textarea,summary,label,[role=button],[contenteditable]";
-  var CARD_HANDLES = ".tp-ll, .mtg-card-head, .pk-foot";
+  var CARD_HANDLES = ".tp-ll, .mtg-card-head, .pk-foot, .pk-grip";
+  var LEARN = "sunny-blade-learned", NUDGE_IDLE = 7000, NUDGE_GAP = 20000;
   /* tap card: user-chosen spot, clamped to the visible screen */
   var cardPos = get("card");
   function placeCard(peek) {
@@ -61,11 +66,12 @@
   function end() {
     if (!g) return;
     clearTimeout(g.timer);
+    if (g.el) g.el.classList.remove("is-pressing");
     if (g.active) {
       document.body.classList.remove("sk-dragging");
       if (g.el) g.el.classList.remove("is-dragging");
       if (g.kind === "card") put("card", cardPos);
-      if (g.kind === "panel") put(g.side.key, g.save);
+      if (g.kind === "panel") { put(g.side.key, g.save); if (g.axis === "x" && g.save.w && Math.abs(g.save.w - g.start.w) >= 8) learn(); }
       swallowClick = true; setTimeout(() => { swallowClick = false; }, 0);
     }
     try { if (g.cap && g.cap.hasPointerCapture(g.id)) g.cap.releasePointerCapture(g.id); } catch (e) {}
@@ -74,6 +80,7 @@
   function activate() {
     if (!g) return;
     g.active = true;
+    g.el.classList.remove("is-pressing");
     document.body.classList.add("sk-dragging");
     if (g.el) g.el.classList.add("is-dragging");
     try { g.cap.setPointerCapture(g.id); } catch (e) {}
@@ -105,7 +112,11 @@
     var handle = t === peek || t.closest(CARD_HANDLES);
     if (!handle) return; /* card body content stays a scroll area */
     g = { id: e.pointerId, kind: "card", x0: e.clientX, y0: e.clientY, el: peek, cap: peek, active: false, mouse: e.pointerType === "mouse" };
-    if (!g.mouse) g.timer = setTimeout(activate, HOLD_MS);
+    if (g.mouse) return;
+    peek.classList.add("is-pressing"); /* instant cue; CSS fades the ring in over the hold */
+    /* one timer, measured from the finger landing (event timeStamp), so dispatch lag is not added on top */
+    var waited = Math.max(0, performance.now() - (e.timeStamp || performance.now()));
+    g.timer = setTimeout(activate, Math.max(0, HOLD_MS - waited));
   }
   function onMove(e) {
     if (!g || e.pointerId !== g.id) return;
@@ -144,6 +155,9 @@
   document.addEventListener("pointerdown", onDown, true);
   document.addEventListener("pointermove", onMove, { capture: true, passive: false });
   ["pointerup", "pointercancel", "lostpointercapture"].forEach((n) => { document.addEventListener(n, (e) => { if (g && e.pointerId === g.id) end(); }, true); });
+  /* the browser's own long-press (text selection, callout menu) must not race the hold */
+  document.addEventListener("contextmenu", (e) => { if (g) e.preventDefault(); }, true);
+  document.addEventListener("selectstart", (e) => { if (g) e.preventDefault(); }, true);
   document.addEventListener("click", (e) => { if (swallowClick) { e.stopPropagation(); e.preventDefault(); swallowClick = false; } }, true);
   window.addEventListener("blur", end);
   var reQ = 0;
@@ -151,9 +165,71 @@
   window.addEventListener("resize", re);
   window.addEventListener("orientationchange", () => { setTimeout(re, 250); });
   if (window.visualViewport) window.visualViewport.addEventListener("resize", re);
+  /* four small edge grips on the tap card (re-added after each card render) */
+  function grips(peek) {
+    if (!peek || peek.querySelector(".pk-grip")) return;
+    ["n", "e", "s", "w"].forEach((k) => {
+      var d = document.createElement("div");
+      d.className = "pk-grip pk-grip-" + k; d.setAttribute("aria-hidden", "true"); d.title = "Hold to move";
+      peek.appendChild(d);
+    });
+  }
+  /* tab nudge: plain state + one self-rescheduling timer, only while a panel is open and the page visible */
+  var LS = window.localStorage;
+  var learned = (() => { try { return LS.getItem(LEARN) === "1"; } catch (e) { return false; } })();
+  var nz = { lastNudge: -Infinity, seen: {}, busy: {}, timer: 0 };
+  function learn() {
+    learned = true; clearTimeout(nz.timer); nz.timer = 0;
+    document.querySelectorAll(".sk-nudge").forEach((t) => { t.classList.remove("sk-nudge"); });
+    try { LS.setItem(LEARN, "1"); } catch (e) {}
+  }
+  if (!learned && ["lp", "ip"].some((k) => { var v = get(k); return v && v.w; })) learn(); /* a saved width means they already did it */
+  var reduced = () => { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); };
+  function engaged(key, now) { nz.busy[key] = now; }
+  /* the tab that nudges at time now, or null */
+  function due(now) {
+    if (learned || document.hidden || reduced() || g || now - nz.lastNudge < NUDGE_GAP) return null;
+    var pick = null;
+    Object.keys(SIDES).forEach((id) => {
+      var side = SIDES[id], p = document.querySelector(side.panel), tab = document.getElementById(id);
+      var open = !!(p && tab && p.classList.contains("is-open"));
+      if (!open) { nz.seen[side.key] = 0; return; }
+      if (!nz.seen[side.key]) nz.seen[side.key] = now;
+      if (p.contains(document.activeElement) || p.matches(":hover")) engaged(side.key, now);
+      var quiet = Math.min(now - nz.seen[side.key], now - (nz.busy[side.key] || -Infinity));
+      if (!pick && quiet >= NUDGE_IDLE) pick = tab;
+    });
+    return pick;
+  }
+  function tick(now) {
+    now = now == null ? performance.now() : now;
+    var tab = due(now);
+    if (!tab) return null;
+    nz.lastNudge = now;
+    tab.classList.remove("sk-nudge"); void tab.offsetWidth; tab.classList.add("sk-nudge");
+    tab.addEventListener("animationend", () => { tab.classList.remove("sk-nudge"); }, { once: true });
+    return tab.id;
+  }
+  var anyOpen = () => { return !!document.querySelector(".lp-panel.is-open, .ip-panel.is-open"); };
+  function schedule() {
+    clearTimeout(nz.timer); nz.timer = 0;
+    if (learned || document.hidden || reduced() || !anyOpen()) return; /* nothing to watch: no timer */
+    nz.timer = setTimeout(() => { nz.timer = 0; tick(); schedule(); }, 1000);
+  }
+  var poke = (e) => {
+    var p = e.target && e.target.closest && e.target.closest(".lp-panel, .ip-panel");
+    if (p) engaged(p.classList.contains("lp-panel") ? "lp" : "ip", performance.now());
+    if (!nz.timer && !learned) setTimeout(schedule, 0); /* after a tab click has toggled is-open */
+  };
+  ["pointerdown", "focusin", "input", "change", "wheel"].forEach((n) => { document.addEventListener(n, poke, { capture: true, passive: true }); });
+  document.addEventListener("pointerover", (e) => { if (e.pointerType === "mouse") poke(e); }, { capture: true, passive: true });
+  document.addEventListener("visibilitychange", schedule);
   var boot = () => { if (document.querySelector(".lp-panel") || document.querySelector(".ip-panel")) applyAll(); else setTimeout(boot, 800); };
   boot();
-  window.SunnyDrag = { placeCard: placeCard, hasCardPos: () => !!cardPos, applyPanels: applyAll,
+  schedule();
+  window.SunnyDrag = { placeCard: placeCard, grips: grips, HOLD_MS: HOLD_MS,
+    nudge: { due: (t) => { var x = due(t); return x ? x.id : null; }, tick: tick, engaged: engaged, learned: () => learned, learn: learn,
+      timerLive: () => !!nz.timer, schedule: schedule, state: nz }, hasCardPos: () => !!cardPos, applyPanels: applyAll,
     reset: () => { cardPos = null; ["card", "lp", "ip"].forEach((k) => { try { SS.removeItem("sunny-drag-" + k); } catch (e) {} });
       document.querySelectorAll(".lp-panel, .ip-panel").forEach((p) => { p.style.width = p.style.maxWidth = p.style.top = p.style.bottom = ""; }); } };
 })();
