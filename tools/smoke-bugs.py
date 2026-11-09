@@ -303,9 +303,20 @@ async def maxdetail_boot(b):
       return {sw:sw,pill:p?p.style.display:'none',lazy:SunnyLayerLazy.ready()}}""")
     check("Max detail notice works without opening Layers", r["sw"] and r["pill"] == "block" and not r["lazy"], r)
     await ctx.close()
+OBS_KIDS = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));document.getElementById('lp-tab').click();await SunnyLayerLazy.load();
+  const d=SunnyLayers.defs().find(d=>d.id==='observatories');SunnyLayers.set('observatories',true);map.jumpTo({center:[-40,30],zoom:2});await s(5000);
+  const tot=()=>map.queryRenderedFeatures({layers:['obs-cluster','obs-point']}).reduce((a,f)=>a+(f.properties.point_count||1),0);const all=tot();
+  d.kids.forEach(k=>SunnyLayers.kidSet(k.id,k.id==='observatories-darksky'));await s(3000);const dark=tot();
+  d.kids.forEach(k=>SunnyLayers.kidSet(k.id,true));await s(3000);return {all:all,dark:dark,back:tot()}}"""
+async def obs_kids(b):
+    """t382u: with only Dark Sky Reserves switched on, the group bubbles still counted 2,719 hidden telescopes and detectors."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+    r = await pg.evaluate(OBS_KIDS)
+    check("Observatories bubbles count only the classes switched on", 0 < r["dark"] <= 40 and r["all"] > 1000 and r["back"] == r["all"], r)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

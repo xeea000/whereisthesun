@@ -40,7 +40,10 @@
     return undefined;
   }
   function addLayers() {
-    if (!map.getSource(SRC)) map.addSource(SRC, { type: "geojson", data: data, attribution: ATTRIB, cluster: window.SunnyKit.grouped(), clusterRadius: 36, clusterMaxZoom: 7 });
+    if (!map.getSource(SRC)) {
+      shownKey = null;
+      map.addSource(SRC, { type: "geojson", data: data, attribution: ATTRIB, cluster: window.SunnyKit.grouped(), clusterRadius: 36, clusterMaxZoom: 7 });
+    }
     var before = beforeId();
     if (!map.getLayer("obs-cluster")) {
       map.addLayer({ id: "obs-cluster", type: "circle", source: SRC, filter: ["has", "point_count"],
@@ -64,9 +67,22 @@
     ["darksky", "Dark Sky Reserve or Park", "#1c2b6b"], ["stargaze", "Stargazing site or planetarium", "#ffd34d"]];
   /* opt199: kids via SunnyKit.kids (loaded before first refresh) */
   var OBS_KIDS = CLS.map((c) => { return { id: "observatories-" + c[0], dflt: true, code: c[0] }; });
+  function activeCodes() {
+    var KK = window.SunnyKit && window.SunnyKit.kids;
+    return KK ? KK.activeCodes(OBS_KIDS, (k) => { return k.code; }) : CLS.map((c) => { return c[0]; });
+  }
+  /* group bubbles count what the source holds, so the source keeps only the classes that are switched on */
+  var shownKey = null;
+  function syncData() {
+    var src = map.getSource(SRC);
+    var codes = activeCodes();
+    if (!src || !data || codes.join(",") === shownKey) return;
+    shownKey = codes.join(",");
+    src.setData({ type: "FeatureCollection", features: data.features.filter((f) => { return codes.indexOf(f.properties.cat) >= 0; }) });
+  }
   function pointFilter() {
     var KK = window.SunnyKit && window.SunnyKit.kids;
-    var codes = KK ? KK.activeCodes(OBS_KIDS, (k) => { return k.code; }) : CLS.map((c) => { return c[0]; });
+    var codes = activeCodes();
     /* opt220: empty codes → kids.noneFilter / false (never ["==",1,0]) */
     var cat = KK ? KK.inFilter(["get", "cat"], codes)
       : (codes.length ? ["in", ["get", "cat"], ["literal", codes]] : false);
@@ -75,6 +91,7 @@
   function refresh() {
     if (!map) return;
     if (map.getLayer("obs-point")) map.setFilter("obs-point", pointFilter());
+    syncData();
     var KK = window.SunnyKit && window.SunnyKit.kids;
     if (isOn()) setVisible(KK ? KK.parentShow(true, OBS_KIDS) : true);
   }
