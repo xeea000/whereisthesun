@@ -1,6 +1,7 @@
 // workspace/whereisthesun/update-banner.js
 /* SUNNY update banner (opt61). Polls version.json; when the deployed build differs from the
- * running build, shows "A new update is ready" with an UPDATE button. Shows on every screen. */
+ * running build (the page's own sunny-build meta), shows "Update ready" with an UPDATE button. Shows on every screen.
+ * Coming back to the app after 10 minutes or more in the background on an older build updates right away. */
 (function () {
   "use strict";
   var CHECK_MS = 3 * 60 * 1000;
@@ -9,10 +10,11 @@
   var dismissedFor = null;
   var updating = false;
   var banner = null;
+  var hiddenAt = 0;
+  var STALE_MS = 10 * 60 * 1000;
   try {
-    var own = document.currentScript;
-    var m = own && /[?&]v=([^&]+)/.exec(own.src);
-    if (m) running = decodeURIComponent(m[1]);
+    var meta = document.querySelector('meta[name="sunny-build"]');
+    if (meta) running = meta.getAttribute("content") || null;
   } catch (eSelf) {}
   function bareUrl() {
     var u = new URL(location.href);
@@ -53,8 +55,9 @@
     banner.classList.remove("is-on");
     banner.hidden = true;
   }
+  /* only the app files cache; saved offline regions, data and map tiles stay */
   function isSunnyCache(key) {
-    return key.indexOf("sunny-") === 0;
+    return key.indexOf("sunny-app-") === 0;
   }
   function deleteCache(key) {
     return caches.delete(key);
@@ -111,33 +114,35 @@
   function readJson(r) {
     return r.ok ? r.json() : null;
   }
-  function compare(v) {
+  function compare(v, resumed) {
     if (!v || !v.build) return;
     if (!running) {
       running = v.build;
       return;
     }
-    if (v.build !== running) show(v.build);
-    else hide();
+    if (v.build === running) { hide(); return; }
+    if (resumed) applyUpdate();
+    else show(v.build);
   }
-  function check() {
+  function check(resumed) {
     if (updating) return;
     try {
       /* Only pause while the GPS card is on screen — still offer UPDATE after confirm. */
       var el = document.getElementById("geo-ask");
       if (el && !el.hidden) return;
     } catch (eHold) {}
-    fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(readJson).then(compare).catch(ignore);
+    fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(readJson).then((v) => { compare(v, resumed); }).catch(ignore);
   }
   function onVisible() {
-    if (document.visibilityState === "visible") check();
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    check(hiddenAt > 0 && Date.now() - hiddenAt >= STALE_MS);
   }
   function start() {
     check();
-    setInterval(check, CHECK_MS);
+    setInterval(() => { check(); }, CHECK_MS);
     document.addEventListener("visibilitychange", onVisible);
   }
-  window.SunnyUpdate = { check: check, apply: applyUpdate };
+  window.SunnyUpdate = { check: check, apply: applyUpdate, running: () => { return running; } };
   if (document.readyState === "complete") start();
   else window.addEventListener("load", start);
 })();

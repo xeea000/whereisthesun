@@ -23,8 +23,13 @@ var box = document.getElementById("lag-controls");
 if (box) mountLagControls(box, meter, { key: "sunny-lag-prefs", fallback: fallback, classes: { group: "set-row", title: "set-title", check: "sun-opt", row: "sun-opt" } });
 /* The build under the settings (2026-10-22): the opt name and hash that tools/write-version.js stamps into version.json. */
 var buildLine = document.getElementById("set-build");
+/* The line names the build this page runs (its sunny-build meta); a newer deployed build is named as ready */
 function showBuild(v) {
-  if (buildLine && v && v.build) buildLine.textContent = "Build " + v.build + (v.hash ? " · " + v.hash.slice(0, 7) : "") + (v.at ? " · " + v.at : "");
+  var meta = document.querySelector('meta[name="sunny-build"]');
+  var mine = meta ? meta.getAttribute("content") : "";
+  if (!buildLine || !v || !v.build) return;
+  if (mine && mine !== v.build) { buildLine.textContent = "Build " + mine + " · update " + v.build + " ready"; return; }
+  buildLine.textContent = "Build " + v.build + (v.hash ? " · " + v.hash.slice(0, 7) : "") + (v.at ? " · " + v.at : "");
 }
 function readJson(r) {
   return r.ok ? r.json() : null;

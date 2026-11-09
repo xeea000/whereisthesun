@@ -338,9 +338,30 @@ async def undersea_state(b):
         r = await pg.evaluate(UNDERSEA, mode)
         check("Undersea row says %s and keeps the overview pipelines" % mode, want in r["note"] and r["pipes"] > 0, r)
         await ctx.close()
+async def update_flow(b):
+    """t386u: a phone kept an old build; the banner took its "running" build from the server, so a page served from an
+    older cache never offered the update. The page now names its own build, and coming back after 10 minutes updates."""
+    ctx = await b.new_context(viewport={"width": 390, "height": 800}, service_workers="block")
+    await ctx.add_init_script("localStorage.setItem('sunny-layers-off-v1','1')")
+    pg = await ctx.new_page()
+    await pg.route("**/version.json*", lambda r: r.fulfill(status=200, content_type="application/json", body='{"build":"opt999","hash":"x","at":"x"}'))
+    loads = []
+    pg.on("load", lambda: loads.append(1))
+    await pg.goto(URL, wait_until="load", timeout=120000)
+    await pg.wait_for_function("()=>window.SunnyUpdate", timeout=60000)
+    await pg.evaluate("()=>{const n=document.querySelector('.geo-ask-deny');if(n)n.click();SunnyUpdate.check()}")
+    await pg.wait_for_timeout(2500)
+    r = await pg.evaluate("""()=>{const b=document.querySelector('.update-banner');return {mine:SunnyUpdate.running(),banner:!!(b&&!b.hidden),
+      line:(document.getElementById('set-build')||{}).textContent||'',geo:(document.getElementById('geo-ask')||{hidden:'none'}).hidden,el:!!b}}""")
+    check("a page behind the server offers UPDATE and says which build it runs", r["banner"] and r["mine"] != "opt999" and "update opt999 ready" in r["line"], r)
+    await pg.evaluate("""()=>{const real=Date.now;let vis='hidden';Object.defineProperty(document,'visibilityState',{configurable:true,get:()=>vis});
+      document.dispatchEvent(new Event('visibilitychange'));Date.now=()=>real()+11*60000;vis='visible';document.dispatchEvent(new Event('visibilitychange'));}""")
+    await pg.wait_for_timeout(6000)
+    check("coming back after 10 minutes on an older build updates by itself", len(loads) >= 2, {"loads": len(loads)})
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

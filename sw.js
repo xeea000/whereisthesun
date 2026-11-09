@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt262"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt263"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -98,9 +98,9 @@ var PRECACHE = [
   "app-play-clock.js?h=638b075435",
   "app-scrub.js?h=2f5017e5cb",
   "app.js?h=0b946f883c",
-  "update-banner.js?h=20237e0cb8",
+  "update-banner.js?h=5dc7a338ad",
   "settings-panel.js?h=0e2b6b8551",
-  "lagmeter.js?h=1da2e674c3",
+  "lagmeter.js?h=3ed84b3cb2",
   "craters.js?h=d099c3bfa6",
   "sky-glow.js?h=e40dbd832b",
   "observatories.js?h=bd401379ef",
@@ -270,7 +270,10 @@ function networkFirst(req, ev) {
   function offline() {
     return caches.match(req).then(orError);
   }
-  return netFetch(req).then(stored).catch(offline);
+  /* a page load asks the server again (GitHub Pages lets browsers reuse index.html for 10 minutes) */
+  var net = req.mode !== "navigate" ? netFetch(req) : netFetch(req.url, { cache: "no-cache", credentials: "same-origin" })
+    .then((res) => { return res.redirected ? netFetch(req) : res; }); /* a redirected answer cannot serve a page load */
+  return net.then(stored).catch(offline);
 }
 /* Time of a satellite/radar frame named in its URL; 0 if none. */
 function frameTime(u) {
