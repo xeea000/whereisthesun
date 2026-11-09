@@ -11,6 +11,12 @@
 (() => {
   "use strict";
   var K = window.SunnyKit, L = window.SunnyLayers, P = window.SunnyPoints;
+  /* live OpenStreetMap (Overpass) tiles can take a minute or more; the row says so, and says when the servers did not answer */
+  function osmNote(loader) {
+    var st = loader ? loader.state() : "";
+    if (st === "loading") return "Loading OpenStreetMap detail (can take a minute)…";
+    return st === "failed" ? "OpenStreetMap servers did not answer; trying again in 30 s" : "";
+  }
   if (!K || !L || !P) return;
   var NOW = new Date().getFullYear();
   var BASE = "data/world/";
@@ -428,9 +434,10 @@
       if (on && loader) loader.refresh();
     }
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply, legend: o.legend,
-      note: (map) => { return ""; },
+      note: () => { return osmNote(loader); },
       attach: (map, on) => {
-        loader = K.tiles(map, { key: o.id, minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
+        loader = K.tiles(map, { key: o.id, onState: () => { if (L.refresh) L.refresh(); },
+          minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
             var bb = "(" + [b[1], b[0], b[3], b[2]].map((x) => { return x.toFixed(4); }).join(",") + ")";
             return K.overpass("[out:json][timeout:25];(" + o.q.split("BB").join(bb) + ");out geom 400;").then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });
@@ -511,7 +518,12 @@
     var loadOv = (map) => {
       if (ov) { setOv(map); return Promise.resolve(ov); }
       if (ovLoading) return ovLoading;
-      ovLoading = K.loadJson(BASE + "pipelines.geo.json").then((g) => { ov = g; ovLoading = false; if (band() === "ov") setOv(map); return g; })
+      ovLoading = K.loadJson(BASE + "pipelines.geo.json").then((g) => {
+        ov = g; ovLoading = false;
+        if (band() === "ov" || (loader && loader.state() !== "")) setOv(map); /* raw detail still on its way */
+        if (L.refresh) L.refresh();
+        return g;
+      })
         .catch(() => { ovLoading = false; });
       return ovLoading;
     };
@@ -530,7 +542,10 @@
     L.add({ id: "osm-undersea", name: "Undersea pipelines (OSM)", icon: "🛢️", group: "Ocean", taps: IDS, apply: apply,
       legend: K.legKeys([["#d98c2b", "line", "pipeline"], ["#ffcc33", "dot", "platform"]]),
       tip: "Underwater pipelines and offshore platforms (OpenStreetMap). Overview from the Geofabrik extract; live OSM detail and platforms when closer",
-      note: () => { return ovLoading ? K.lod.note(true) : ""; },
+      note: () => {
+        if (ovLoading) return K.lod.note(true);
+        return band() === "raw" ? osmNote(loader) : "";
+      },
       attach: (map, on) => {
         mapRef = map;
         loader = K.tiles(map, { key: "osm-undersea", minZoom: 9, maxTiles: 15, ttlMs: 7 * 864e5,
@@ -550,7 +565,13 @@
               }).filter(Boolean);
             });
           },
-          onData: (items) => { if (band() === "raw") drawRaw(map, items); } });
+          /* while the first detail tile is on its way, the overview pipelines stay drawn */
+          onData: (items) => {
+            if (band() !== "raw") return;
+            if (!items.length && loader && loader.state() !== "") { loadOv(map); return; }
+            drawRaw(map, items);
+          },
+          onState: () => { if (L.refresh) L.refresh(); } });
         map.on("zoomend", () => { if (L.isOn("osm-undersea")) sync(map); });
         map.on("click", "osm-pipe", (e) => {
           var p = e.features[0].properties;

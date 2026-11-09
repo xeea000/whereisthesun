@@ -1,6 +1,6 @@
 // workspace/whereisthesun/storms.js
 /* SUNNY opt126: tropical cyclones (hurricanes, typhoons, cyclones).
- * Tracks: every storm that reached category 3 or more, seasons 1980 on, NOAA IBTrACS (public domain), 57 KB gzipped, cached for good.
+ * Tracks: every storm that reached category 3 or more, seasons 1980–2025, NOAA IBTrACS (public domain), 57 KB gzipped, cached for good.
  * Active: GDACS tropical cyclone list for the past two weeks, about 20 KB, fetched at most once an hour while the layer is on. */
 (() => {
   "use strict";
@@ -41,7 +41,7 @@
   };
   var legend = K.legKeys(CAT.map((c) => { return [c[0], "line", c[1]]; }).concat([["#90a4ae", "line", "weaker, before or after"]]));
   L.add({ id: "stormtracks", name: "Hurricane and typhoon tracks", icon: "🌀", group: "Weather", taps: ["storm-track"], dflt: true, apply: trackApply, legend: legend,
-    tip: "Paths of every tropical cyclone that reached category 3 or more, 1980 on (NOAA IBTrACS), coloured by strength along the way",
+    tip: "Paths of every tropical cyclone that reached category 3 or more, 1980–2025 (NOAA IBTrACS), coloured by strength along the way",
     attach: (map, on) => {
       map.on("idle", () => { if (L.isOn("stormtracks") && !map.getLayer("storm-track")) trackApply(map, true); });
       map.on("click", "storm-track", (e) => {

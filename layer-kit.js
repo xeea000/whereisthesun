@@ -114,8 +114,7 @@
   function tiles(map, opts) {
     var Z = 10;
     var mem = {};
-    var timer = null;
-    var busy = false;
+    var timer = null, busy = false;
     function wanted() {
       var b = map.getBounds();
       var a = tileOf(b.getWest(), b.getNorth(), Z);
@@ -124,6 +123,8 @@
       for (var x = a[0]; x <= c[0]; x++) for (var y = a[1]; y <= c[1]; y++) out.push(x + "/" + y);
       return out;
     }
+    var state = ""; /* "loading" while tiles are due, "failed" after a failed one, until the next success */
+    var setState = (v) => { if (v !== state) { state = v; if (opts.onState) opts.onState(v); } };
     function emit(list) {
       var all = [];
       list.forEach((k) => { if (mem[k]) all = all.concat(mem[k]); });
@@ -143,14 +144,15 @@
         if (c) mem[k] = c;
         else missing.push(k);
       });
+      setState(missing.length ? "loading" : "");
       emit(list);
       if (!missing.length) return;
       busy = true;
       var k = missing[0];
       var p = k.split("/");
       opts.fetchTile(tileBox(+p[0], +p[1], Z)).then((items) => {
-        mem[k] = items;
-        putStore("t-" + opts.key + "-" + k, items, opts.ttlMs);
+        mem[k] = items; putStore("t-" + opts.key + "-" + k, items, opts.ttlMs);
+        setState(missing.length > 1 ? "loading" : "");
         /* Re-check gate: user may have zoomed out while the tile was in flight. */
         var g2 = zoomGate(map, { minZoom: opts.minZoom, tileCount: wanted().length, maxTiles: opts.maxTiles || 6 });
         if (!opts.isOn() || !g2.show) opts.onData([]);
@@ -158,7 +160,7 @@
         busy = false;
         if (missing.length > 1) schedule(1500);
       }).catch(() => {
-        busy = false;
+        busy = false; setState("failed");
         schedule(30000);
       });
     }
@@ -167,7 +169,7 @@
       timer = setTimeout(run, ms == null ? 700 : ms);
     }
     map.on("moveend", () => { schedule(); });
-    return { refresh: schedule };
+    return { refresh: schedule, state: () => { return state; } };
   }
   /* opt206 shared zoom gate: what is visible must depend only on the current view/zoom.
    * Loaders that fetch above a threshold use this instead of early-return-and-keep-source.
@@ -196,21 +198,19 @@
     if (!map || map.getZoom() >= (minZoom || 0)) return "";
     return label || "";
   }
-  /* main Overpass server first, then public mirrors when it is busy */
+  /* main Overpass server first, then public mirrors when it is busy; each server gets at most 45 s to answer */
   var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
-  function overpass(ql, i) {
-    i = i || 0;
-    return fetch(OVERPASS[i] + "?data=" + encodeURIComponent(ql)).then((r) => {
+  function overpass(ql, i = 0) {
+    var ac = new AbortController(), timer = setTimeout(() => { ac.abort(); }, 45000);
+    return fetch(OVERPASS[i] + "?data=" + encodeURIComponent(ql), { signal: ac.signal }).then((r) => {
       if (!r.ok) throw new Error("overpass " + r.status);
       return r.json();
-    }).catch((e) => {
+    }).finally(() => { clearTimeout(timer); }).catch((e) => {
       if (i + 1 < OVERPASS.length) return overpass(ql, i + 1);
       throw e;
     });
   }
-  function fc(feats) {
-    return { type: "FeatureCollection", features: feats || [] };
-  }
+  function fc(feats) { return { type: "FeatureCollection", features: feats || [] }; }
   /* opt108: one shared Group nearby markers setting (default on); off drops clustering and zoom gates on point layers */
   var grouped = () => { try { return localStorage.getItem("sunny-group") !== "0"; } catch (e) { return true; } };
   var gz = (z) => { return grouped() ? z : 0; };

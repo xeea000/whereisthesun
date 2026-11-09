@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt261"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt262"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -64,7 +64,7 @@ var PRECACHE = [
   "beach-toggle.js?h=6f8bbe8fdf",
   "side-buttons.js?h=b0ec3429d6",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
-  "layer-kit.js?h=34c4c7777b",
+  "layer-kit.js?h=3f91cd8bbe",
   "frame-kit.js?h=483b24432b",
   "layer-lazy.js?h=26794f51c2",
   "layers-panel.js?h=65ff5aa147",
@@ -121,7 +121,7 @@ var PRECACHE = [
   "plates.js?h=fc25f7fdd7",
   "quakes.js?h=96c8ef8693",
   "volcanoes.js?h=9767dc9a3d",
-  "storms.js?h=d3f06c9fa6",
+  "storms.js?h=4f9c730441",
   "tornadoes.js?h=e268aebfac",
   "golden-hour.js?h=674767defb",
   "sun-hours.js?h=cb04d37309",
@@ -131,7 +131,7 @@ var PRECACHE = [
   "ca-cell.js?h=f203aa492e",
   "fire-lookout.js?h=3a7c53c59c",
   "ca-cover.js?h=c5dd186c2a",
-  "world-layers.js?h=9a3dc33d0b",
+  "world-layers.js?h=1cb35646ef",
   "outdoor-layers.js?h=a63aab75b7",
   "mtg-stores.js?h=2871228799",
   "parks-ca.js?h=fb1fec2c6b",
