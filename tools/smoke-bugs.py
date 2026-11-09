@@ -452,9 +452,23 @@ async def currents(b):
     check("each kid hides only its own part", r["sstOff"] and r["curOff"], r)
     check("Water temperature & currents off clears both", r["allOff"] and not errs, [r, errs])
     await ctx.close()
+VOLC = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:[15,38],zoom:5});await s(800);
+  SunnyLayers.set('volcanoes',true);for(let i=0;i<40&&!map.getLayer('volc-dot');i++)await s(500);await s(1500);
+  const d=SunnyLayers.defs().find(d=>d.id==='volcanoes');const rows=SunnyLayers.defs().filter(d=>d.name&&/olcan/.test(d.name)).map(d=>d.id).join();
+  return {rec:map.querySourceFeatures('volcanoes').filter(f=>f.properties.rc>0).map(f=>f.properties.name),leg:d.legend(),rows,
+    col:JSON.stringify(map.getPaintProperty('volc-dot','circle-color')).slice(0,80)}}"""
+async def volc_recent(b):
+    """t388u: recent eruptions are a colour of the Volcanoes dots (no new switch): erupting, or an eruption that ended in the
+    12 months before the data build, with that date in the legend (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(VOLC)
+    check("recent eruptions marked on the Volcanoes dots (Etna or Stromboli in view)", any(n in r["rec"] for n in ["Etna", "Stromboli"]) and "rc" in r["col"], r)
+    check("legend names the recent class and the build date", "erupting, or an eruption ended in the 12 months before 20" in r["leg"], r)
+    check("no extra volcano switch", r["rows"] == "volcanoes,volcdue" and not errs, [r, errs])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
