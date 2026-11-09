@@ -154,19 +154,19 @@
           f.push(g);
           label(g.geometry.coordinates[10], K.esc(r[2]) + " " + K.esc(sky.fmtTime(r[1])) + " " + sky.compass(az), "sky-moon");
         });
-        var sh = sky.nextShower();
-        var rd = sh && RADIANT[sh.n];
-        if (rd) {
-          var t2 = new Date(now);
-          t2.setHours(26, 0, 0, 0);
-          var aa = radiantAzAlt(rd, h, t2);
-          var g2 = ray(h, aa.az, 280, "radiant");
-          f.push(g2);
-          var when = sh.d.toLocaleDateString([], { month: "short", day: "numeric" });
-          label(g2.geometry.coordinates[10], "☄️ " + K.esc(sh.n) + " radiant, peak " + K.esc(when) + "<br>" + sky.compass(aa.az) + ", " +
-            Math.max(0, Math.round(aa.alt)) + "° up at 2 AM", "sky-met");
-        }
       }
+    }
+    var sh = L.isOn("showers") && h ? sky.nextShower() : null;
+    var rd = sh && RADIANT[sh.n];
+    if (rd) {
+      var t2 = new Date(now);
+      t2.setHours(26, 0, 0, 0);
+      var aa = radiantAzAlt(rd, h, t2);
+      var g2 = ray(h, aa.az, 280, "radiant");
+      f.push(g2);
+      var when = sh.d.toLocaleDateString([], { month: "short", day: "numeric" });
+      label(g2.geometry.coordinates[10], "☄️ " + K.esc(sh.n) + " radiant, peak " + K.esc(when) + "<br>" + sky.compass(aa.az) + ", " +
+        Math.max(0, Math.round(aa.alt)) + "° up at 2 AM", "sky-met");
     }
     if (L.isOn("sats") && sky.sats().length) f = f.concat(satFeats(h, now));
     try {
@@ -304,7 +304,7 @@
     map = m;
     map.on("moveend", () => { setTimeout(grid, 500); });
     map.on("idle", above);
-    setInterval(() => { if (L.isOn("sats") || L.isOn("moon")) redraw(); }, 20000);
+    setInterval(() => { if (L.isOn("sats") || L.isOn("moon") || L.isOn("showers")) redraw(); }, 20000);
     setTimeout(apply, 1500);
   }, apply: apply });
   window.SunnySkyDraw = { redraw: redraw, apply: apply };

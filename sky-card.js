@@ -52,8 +52,9 @@
     var t = S.getMoonTimes(now, here.lat, here.lng);
     var sh = nextShower();
     var days = Math.round((sh.d - new Date(now.toDateString())) / 864e5);
-    return ["🌙 " + phaseName(ill.phase) + ", " + Math.round(ill.fraction * 100) + " % lit · rise " + fmtTime(t.rise) + " · set " + fmtTime(t.set),
-      "☄️ " + sh.n + " peak " + (days <= 0 ? "tonight" : days === 1 ? "tomorrow" : "in " + days + " days") + " (up to " + sh.z + "/h)"];
+    var moon = "🌙 " + phaseName(ill.phase) + ", " + Math.round(ill.fraction * 100) + " % lit · rise " + fmtTime(t.rise) + " · set " + fmtTime(t.set);
+    var met = "☄️ " + sh.n + " peak " + (days <= 0 ? "tonight" : days === 1 ? "tomorrow" : "in " + days + " days") + " (up to " + sh.z + "/h)";
+    return (L.isOn("moon") ? [moon] : []).concat(L.isOn("showers") ? [met] : []);
   }
   /* satellites come from sats.js (opt102); passes here use the space stations and science groups */
   function sunEci(date) {
@@ -130,7 +131,7 @@
     var c = K.getStore(key);
     if (c != null) return Promise.resolve(c);
     var n = Math.pow(2, z);
-    var x = (lng + 180) / 360 * n;
+    var x = Math.min(n - 1e-9, Math.max(0, (lng + 180) / 360 * n));
     var r = lat * Math.PI / 180;
     var y = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
     var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/" + z + "/" + Math.floor(y) + "/" + Math.floor(x) + ".png";
@@ -209,12 +210,14 @@
     if (!I) return;
     var parts = [];
     var srcs = [];
-    if (L.isOn("moon")) {
+    if (L.isOn("moon") || L.isOn("showers")) {
       parts = parts.concat(moonLines());
-      srcs.push(a("https://github.com/mourner/suncalc", "SunCalc"), a("https://www.imo.net/", "IMO shower calendar"));
+      srcs.push(a("https://github.com/mourner/suncalc", "SunCalc"));
+      if (L.isOn("showers")) srcs.push(a("https://www.imo.net/", "IMO shower calendar"));
     }
     if (L.isOn("nightscore")) {
       parts = parts.concat(scoreLines());
+      if (window.SunnyDarkSpot) parts = parts.concat(window.SunnyDarkSpot.lines());
       srcs.push(a("https://open-meteo.com/en/docs", "Open-Meteo clouds"), a("https://earthobservatory.nasa.gov/features/NightLights", "NASA Black Marble"));
     }
     if (L.isOn("sats")) {
@@ -226,7 +229,7 @@
       return;
     }
     var html = parts.map((l) => { return "<div>" + K.esc(l) + "</div>"; }).join("") + '<div class="pf-src">Source: ' + srcs.join(" · ") + "</div>";
-    I.section("tonight", "Tonight here (map centre)", html);
+    I.section("tonight", "Tonight's sky here (map centre)", html);
     if (window.SunnySkyDraw) window.SunnySkyDraw.redraw();
   }
   function moved() {
@@ -241,18 +244,21 @@
     if (!map) return;
     if (L.isOn("sats")) { findPasses(); if (!sats.length) setTimeout(applyAll, 4000); }
     if (L.isOn("nightscore") && !score) computeScore();
+    if (window.SunnyDarkSpot) window.SunnyDarkSpot.refresh();
     render();
     if (window.SunnySkyDraw) window.SunnySkyDraw.apply();
   }
   function def(id, name, icon, tip, leg) {
     L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, apply: applyAll, legend: leg });
   }
-  def("moon", "Moon & meteor showers", "🌙", "Moon phase, moonrise and moonset here, and the next meteor shower peak (IMO)",
-    '<div class="ls-k">Labels: moonrise / moonset direction and the next meteor shower radiant. Phase and times in the sky card.</div>');
-  def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data",
+  def("moon", "Moon", "🌙", "Moon phase, moonrise and moonset here, where the moon is overhead, and the night side of the Earth",
+    '<div class="ls-k">Labels: moonrise and moonset directions from the map centre. Phase and times in the Tonight\'s sky block.</div>');
+  def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data, " +
+    "and a green ring on the darkest land within 100 km (NASA Black Marble night lights, 2016)",
     '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#b2182b,#ef8a62 30%,#fddb6d 50%,#a6d96a 70%,#1a9850)"></div>' +
     '<div class="sat-rl"><span>0 poor</span><span>score tonight</span><span>10 great</span></div>' +
-    '<div class="ls-k">Clouds count most: overcast is 0. A full moon costs about 3 points, city light up to 3. Grey square: no cloud data yet.</div></div>');
+    '<div class="ls-k">Clouds count most: overcast is 0. A full moon costs about 3 points, city light up to 3. Grey square: no cloud data yet.</div>' +
+    '<div class="ls-k"><i class="ls-sw ls-dot" style="background:#0b1d3a;box-shadow:0 0 0 2px #1a9850"></i>darkest land within 100 km of the map centre (night lights 2016, water left out)</div></div>');
   /* opt116: meteor showers layer. The legend lists the next five peaks with rate and moonlight; the map shades where the next radiant never rises */
   var upcoming = () => {
     var now = Date.now() - 864e5, y = new Date().getFullYear(), out = [];
@@ -281,6 +287,8 @@
     return { type: "FeatureCollection", features: f };
   };
   function shApply(m, on) {
+    render();
+    if (window.SunnySkyDraw) window.SunnySkyDraw.redraw();
     K.vis(m, ["shower-band"], on);
     if (!on || m.getLayer("shower-band")) return;
     try {
@@ -290,7 +298,8 @@
     } catch (e) {}
   }
   L.add({ id: "showers", name: "Meteor showers", icon: "☄️", group: "Sky & Space", taps: ["shower-band"], dflt: true,
-    tip: "The next meteor shower peaks, rates and moonlight (IMO calendar); colour bands show how high its radiant climbs by latitude", legend: shLegend(), apply: shApply,
+    tip: "The next meteor shower peaks, rates and moonlight (IMO calendar); colour bands show how high its radiant climbs by latitude, " +
+      "and a line from the map centre points at the radiant", legend: shLegend(), apply: shApply,
     attach: (m, on) => {
       m.on("idle", () => { if (L.isOn("showers") && !m.getLayer("shower-band")) shApply(m, true); });
       (window.SunnyHoverName = window.SunnyHoverName || {})["shower-band"] = (f) => { var sh = nextShower(), k = f.properties.k;
@@ -306,7 +315,7 @@
       shApply(m, on);
     } });
   window.SunnySky = { sats: () => { return sats; }, look: look, here: () => { return here; }, passes: () => { return passes; },
-    nextShower: nextShower, clouds: clouds, darkness: darkness, compass: compass, fmtTime: fmtTime };
+    render: render, nextShower: nextShower, clouds: clouds, darkness: darkness, compass: compass, fmtTime: fmtTime };
   L.add({ id: "skycard-attach", group: "none", attach: (m) => {
     map = m;
     map.on("moveend", () => { setTimeout(moved, 400); });

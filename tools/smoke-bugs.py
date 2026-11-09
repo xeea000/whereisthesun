@@ -396,9 +396,29 @@ async def sun_card(b):
     check("Sun path kid off hides the drawing and its line", not r["pathOff"] and "shadows point" not in r["secOff"] and "below the horizon" not in r["secOff"], r)
     check("Sun row off clears the map and the panel", r["gone"] and not errs, [r, errs])
     await ctx.close()
+TONIGHT = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:[-79.38,43.65],zoom:7});await s(800);
+  const sec=()=>[...document.querySelectorAll('.ip-sec')].map(x=>x.innerText).join(' | ');document.getElementById('lp-tab').click();await s(400);
+  const tg=[...document.querySelectorAll('#layers-panel .lp-head')].find(h=>/Tonight/.test(h.textContent));
+  const a={folder:tg?[...tg.nextElementSibling.querySelectorAll('.lp-row')].map(r=>r.dataset.id).sort().join():''};
+  SunnyLayers.set('moon',true);await s(1200);a.moon=sec();a.moonRad=document.querySelectorAll('.sky-met').length;SunnyLayers.set('moon',false);
+  SunnyLayers.set('showers',true);await s(1200);a.met=sec();a.metRad=document.querySelectorAll('.sky-met').length;SunnyLayers.set('showers',false);
+  SunnyLayers.set('nightscore',true);for(let i=0;i<60&&!/Darkest sky within 100 km: (\\d|only water)/.test(sec());i++)await s(500);
+  a.dark=sec();a.ring=!!map.getLayer('dark-spot')&&map.getLayoutProperty('dark-spot','visibility')!=='none';
+  SunnyLayers.set('nightscore',false);await s(400);a.off=sec();a.ringOff=map.getLayoutProperty('dark-spot','visibility');return a}"""
+async def tonight_sky(b):
+    """t388u: Moon, Meteor showers, Night-sky score and Dark sky share one Tonight's sky folder; the next shower shows only
+    under Meteor showers (no longer under Moon too), and Night-sky score adds the darkest land within 100 km (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(TONIGHT)
+    check("Tonight's sky folder holds moon, showers, night-sky score and dark sky", r["folder"] == "moon,nightscore,showers,skyglow", r)
+    check("Moon alone shows the moon and no meteor shower", "🌙" in r["moon"] and "☄" not in r["moon"] and r["moonRad"] == 0, r)
+    check("Meteor showers shows the next peak and its radiant line", "☄" in r["met"] and "🌙" not in r["met"] and r["metRad"] == 1, r)
+    check("Night-sky score names the darkest sky within 100 km and rings it", "Darkest sky within 100 km" in r["dark"] and r["ring"], r)
+    check("Night-sky score off clears the block and the ring", r["off"] == "" and r["ringOff"] == "none" and not errs, [r, errs])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
