@@ -38,13 +38,15 @@
       }
       if (!mode) return;
       var s = document.querySelector('#overlay-seg [data-overlay="' + mode + '"]');
-      if (s) s.click();
+      /* opt242: the seg button toggles; clicking the mode that is already on would turn it off */
+      if (s && !s.classList.contains("is-on")) s.click();
     } catch (e) {}
   }
-  function collectKids(defs) {
+  function collectKids(defs, has) {
     var out = [];
     defs.forEach((d) => {
       if (!d.kids || !window.SunnyLayers.isOn(d.id)) return;
+      if (has) has.any = true;
       d.kids.forEach((k) => {
         var on = false;
         try {
@@ -94,10 +96,12 @@
     };
     var layers = window.SunnyLayers.list().map((d) => { return d.id; }).filter(Boolean);
     if (layers.length) st.l = layers;
-    var kids = collectKids(window.SunnyLayers.defs());
-    if (kids.length) st.k = kids;
-    var ov = overlayMode();
-    if (ov && ov !== "clouds") st.o = ov;
+    var has = { any: false };
+    var kids = collectKids(window.SunnyLayers.defs(), has);
+    /* opt242: k is written whenever a shared layer has sub-switches, even if none are on, so "all off" travels too */
+    if (kids.length || has.any) st.k = kids;
+    /* opt242: always say which overlay is on; a fresh visitor starts with none, so a missing value cannot mean Clouds */
+    st.o = overlayMode() || "none";
     if (window.SunnyMtg) {
       var mf = window.SunnyMtg.getFilter && window.SunnyMtg.getFilter();
       var mb = window.SunnyMtg.getBusyRange && window.SunnyMtg.getBusyRange();
@@ -204,7 +208,7 @@
       var on = !!want[d.id];
       if (window.SunnyLayers.isOn(d.id) !== on) window.SunnyLayers.set(d.id, on);
     });
-    if (st.k && st.k.length) {
+    if (Array.isArray(st.k)) {
       /* Turn listed kids on; leave others as saved defaults for off layers */
       var kidOn = {};
       st.k.forEach((id) => { kidOn[id] = true; });

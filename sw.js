@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt241"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt242"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -64,7 +64,7 @@ var PRECACHE = [
   "layer-kit.js?h=34c4c7777b",
   "layer-lazy.js?h=26794f51c2",
   "layers-panel.js?h=49f0769467",
-  "share-link.js?h=cf29a929f8",
+  "share-link.js?h=770348876e",
   "bar-toggles.js?h=e6af9b608f",
   "legend-stack.js?h=4554a57966",
   "existing-layers.js?h=936da8aa52",

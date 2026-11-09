@@ -10,14 +10,14 @@ FAILS = []
 def check(name, ok, info=""):
     print(("PASS " if ok else "FAIL ") + name + ("" if ok else "  " + str(info)[:400]), flush=True)
     if not ok: FAILS.append(name)
-async def boot(b, store=None, w=1366):
+async def boot(b, store=None, w=1366, url=None):
     ctx = await b.new_context(viewport={"width": w, "height": 800}, service_workers="block")
     if store:
         await ctx.add_init_script("(()=>{const s=%s;for(const k in s)localStorage.setItem(k,s[k]);})()" % json.dumps(store))
     pg = await ctx.new_page()
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)[:300]))
-    await pg.goto(URL, wait_until="load", timeout=120000)
+    await pg.goto(url or URL, wait_until="load", timeout=120000)
     await pg.wait_for_function("()=>window.map&&map.loaded&&map.loaded()&&window.SunnyLayers", timeout=90000)
     return ctx, pg, errs
 LEGACY = {"craters": "craters-dot", "observatories": "obs-point", "skyglow": "skyglow-raster", "crown": "crown-land"}
@@ -52,9 +52,54 @@ async def lazy_legacy(b):
     check("saved legacy layers restore at boot without opening the panel", ok)
     check("saved legacy rows read on", await pg.evaluate("()=>SunnyLayers.isOn('craters')&&SunnyLayers.isOn('skyglow')"))
     await ctx.close()
+SEG = "()=>{const b=document.querySelector('#overlay-seg .seg-btn.is-on');return b?b.getAttribute('data-overlay'):'none'}"
+def enc(st):
+    import base64
+    return base64.urlsafe_b64encode(json.dumps(st, separators=(",", ":")).encode()).decode().rstrip("=")
+async def share_restore(b):
+    """Bug 2: share links lost the overlay (Clouds was never written, and a link's mode switched the
+    recipient's same saved mode off) and a shared layer with every sub-switch off came back with defaults."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+    await pg.evaluate("()=>document.querySelector('#overlay-seg [data-overlay=\"clouds\"]').click()")
+    await pg.wait_for_timeout(500)
+    st = await pg.evaluate("()=>SunnyShare.build()")
+    check("share writes Clouds", st.get("o") == "clouds", st)
+    await pg.evaluate("()=>document.querySelector('#overlay-seg [data-overlay=\"clouds\"]').click()")
+    await pg.wait_for_timeout(300)
+    st = await pg.evaluate("()=>SunnyShare.build()")
+    check("share writes none", st.get("o") == "none", st)
+    await pg.evaluate("()=>document.getElementById('lp-tab').click()")
+    await pg.wait_for_function("()=>SunnyLayerLazy.ready()", timeout=60000)
+    await pg.evaluate("()=>{SunnyLayers.set('mtg',true);SunnyLayers.defs().find(d=>d.id==='mtg').kids.forEach(k=>SunnyLayers.kidSet(k.id,false))}")
+    st = await pg.evaluate("()=>SunnyShare.build()")
+    check("share writes empty kid list", st.get("k") == [], st)
+    await ctx.close()
+    base = URL.split("#")[0]
+    for mode, store in (("clouds", {}), ("radar", {"sunny-overlay": "radar", "sunny-overlay-none": "0"})):
+        h = enc({"v": 1, "c": [43.65, -79.38, 6, 0, 0], "o": mode})
+        st0 = dict(store); st0["sunny-layers-off-v1"] = "1"; st0["sunny-geo-ask"] = "done"
+        ctx = await b.new_context(viewport={"width": 1366, "height": 800}, service_workers="block")
+        await ctx.add_init_script("(()=>{const s=%s;for(const k in s)localStorage.setItem(k,s[k]);})()" % json.dumps(st0))
+        pg = await ctx.new_page()
+        await pg.goto(base + "#s=" + h, wait_until="load", timeout=120000)
+        await pg.wait_for_function("()=>window.map&&map.loaded&&map.loaded()&&window.SunnyLayers", timeout=90000)
+        try:
+            await pg.wait_for_function(SEG.replace("return b?", "return (b?").replace(":'none'}", ":'none')===%s}" % json.dumps(mode)), timeout=20000)
+        except Exception:
+            pass
+        got = await pg.evaluate(SEG)
+        check("share link restores %s (recipient saved %s)" % (mode, store.get("sunny-overlay", "nothing")), got == mode, got)
+        await ctx.close()
+    h = enc({"v": 1, "c": [43.65, -79.38, 6, 0, 0], "l": ["mtg"], "k": []})
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"}, url=base + "#s=" + h)
+    await pg.wait_for_function("()=>window.SunnyLayers&&SunnyLayers.isOn('mtg')", timeout=60000)
+    await pg.wait_for_timeout(1500)
+    kids = await pg.evaluate("()=>SunnyLayers.defs().find(d=>d.id==='mtg').kids.filter(k=>localStorage.getItem('sunny-L-'+k.id)==='1'||(localStorage.getItem('sunny-L-'+k.id)==null&&k.dflt)).map(k=>k.id)")
+    check("share link restores all sub-switches off", kids == [], kids)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy]
+    tests = [lazy_legacy, share_restore]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
