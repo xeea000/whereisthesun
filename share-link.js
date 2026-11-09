@@ -1,5 +1,6 @@
 // workspace/whereisthesun/share-link.js
-/* SUNNY share link (opt192/opt193/opt198): chain button copies camera + layers + kids + filters + selection
+/* SUNNY share link (opt192/opt193/opt198): chain button copies camera + layers + kids + filters + selection,
+ * plus base map, time span, cloud opacity and layer year/class filters
  * into a short #s= hash. Opening restores after layers load. Unknown ids are ignored. */
 (() => {
   "use strict";
@@ -41,6 +42,68 @@
       /* opt242: the seg button toggles; clicking the mode that is already on would turn it off */
       if (s && !s.classList.contains("is-on")) s.click();
     } catch (e) {}
+  }
+  /* layer filters stored per layer; box is the blade control that owns them */
+  var FILTERS = [
+    { id: "airbursts", key: "sunny-air-year", box: ".air-year-range" },
+    { id: "nuclear", key: "sunny-nuclear-year", box: ".nuclear-year-range" },
+    { id: "oilspills", key: "sunny-oil-year", box: ".oil-year-range" },
+    { id: "spacecraft", key: "sunny-sc-year", box: ".sc-year-range" },
+    { id: "forest", key: "sunny-forest-year", box: ".forest-year-range" },
+    { id: "oceangarbage", key: "sunny-og-class", box: ".og-class-range" }
+  ];
+  function segPick(seg, attr, val) {
+    var b = document.querySelector("#" + seg + " [" + attr + '="' + val + '"]');
+    if (b && !b.classList.contains("is-on")) b.click();
+  }
+  function segOn(seg, attr) {
+    var b = document.querySelector("#" + seg + " .seg-btn.is-on");
+    return b ? b.getAttribute(attr) : "";
+  }
+  function collectFilters(on) {
+    var y = {};
+    FILTERS.forEach((F) => {
+      if (!on[F.id]) return;
+      try {
+        var v = localStorage.getItem(F.key);
+        if (v != null) y[F.id] = v;
+      } catch (e) {}
+    });
+    return Object.keys(y).length ? y : null;
+  }
+  function applyFilters(y) {
+    FILTERS.forEach((F) => {
+      if (y[F.id] == null) return;
+      var v = String(y[F.id]);
+      try { localStorage.setItem(F.key, v); } catch (e) {}
+      var box = document.querySelector(F.box);
+      if (!box) return;
+      var ins = box.querySelectorAll('input[type="range"]');
+      var p = v.split(",");
+      if (!ins.length) return;
+      ins[0].value = p[0];
+      if (ins[1] && p[1] != null) ins[1].value = p[1];
+      ins[ins.length - 1].dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  function cloudPct() {
+    try {
+      var v = localStorage.getItem("sunny-cloud-opacity");
+      if (v != null && isFinite(Number(v))) return Number(v);
+    } catch (e) {}
+    var el = document.getElementById("cloud-opacity");
+    return el && !el.disabled ? Number(el.value) : NaN;
+  }
+  function applyCloudPct(pct) {
+    var el = document.getElementById("cloud-opacity");
+    if (el && !el.disabled) {
+      el.value = String(pct);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    /* radar holds the slider; the saved value comes back when clouds return */
+    try { localStorage.setItem("sunny-cloud-opacity", String(pct)); } catch (e) {}
+    if (typeof cloudOpacitySavedForRadar !== "undefined") cloudOpacitySavedForRadar = pct;
   }
   function collectKids(defs, has) {
     var out = [];
@@ -102,6 +165,16 @@
     if (kids.length || has.any) st.k = kids;
     /* opt242: always say which overlay is on; a fresh visitor starts with none, so a missing value cannot mean Clouds */
     st.o = overlayMode() || "none";
+    var bm = segOn("basemap-seg", "data-basemap");
+    if (bm) st.bm = bm;
+    var hb = Number(segOn("range-seg", "data-range"));
+    if (hb) st.h = hb;
+    var op = cloudPct();
+    if (isFinite(op)) st.op = Math.round(op);
+    var on = {};
+    (layers || []).forEach((id) => { on[id] = true; });
+    var y = collectFilters(on);
+    if (y) st.y = y;
     if (window.SunnyMtg) {
       var mf = window.SunnyMtg.getFilter && window.SunnyMtg.getFilter();
       var mb = window.SunnyMtg.getBusyRange && window.SunnyMtg.getBusyRange();
@@ -219,7 +292,11 @@
         });
       });
     }
+    if (st.bm) segPick("basemap-seg", "data-basemap", st.bm);
+    if (st.h) segPick("range-seg", "data-range", st.h);
+    if (st.op != null && isFinite(Number(st.op))) applyCloudPct(Math.max(0, Math.min(100, Math.round(Number(st.op)))));
     if (st.o) setOverlay(st.o);
+    if (st.y) applyFilters(st.y);
     if (st.f && window.SunnyMtg) {
       if (st.f.mtg && window.SunnyMtg.setFilter) {
         try { window.SunnyMtg.setFilter(st.f.mtg); } catch (e) {}

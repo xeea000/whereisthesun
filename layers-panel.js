@@ -171,9 +171,12 @@
     forest: "Human impact" };
   var SUBS = { "Sky & Space": ["", "Artificial"], Earth: ["", "Geology"] };
   function fold(parent, path, label, lvl) {
-    var key = "sunny-lp-g2-" + path; /* opt104: new key, folded by default */
-    var open = false;
-    try { open = localStorage.getItem(key) === "1"; } catch (e) {}
+    var key = "sunny-lp-g2-" + path; /* opt104: folded by default; Outdoors starts open (owner) */
+    var open = path === "Outdoors";
+    try {
+      var v = localStorage.getItem(key);
+      if (v != null) open = v === "1";
+    } catch (e) {}
     var h = el("button", "lp-head lp-fold-h lp-l" + lvl);
     h.type = "button";
     var box = el("div", "lp-grp");
