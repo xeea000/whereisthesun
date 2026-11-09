@@ -11,6 +11,14 @@
   var STYLES = { roads: "https://tiles.openfreemap.org/styles/liberty", dark: "https://tiles.openfreemap.org/styles/dark" };
   var GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
   var CHUNK = 20;
+  /* opt249: base-map label text, one setting. "latin" draws the Latin name only, so a first visit does not download
+   * glyphs for every other script; "native" keeps the style's Latin plus native-script name. */
+  var LABELS = "latin";
+  var LABEL_FIELD = { latin: ["coalesce", ["get", "name:latin"], ["get", "name_en"], ["get", "name"]] };
+  function labelText(layout) {
+    var f = LABEL_FIELD[LABELS];
+    if (f && JSON.stringify(layout["text-field"] || "").indexOf("name:nonlatin") !== -1) layout["text-field"] = f;
+  }
   var ids = {};
   var styleJson = {};
   var added = {};
@@ -54,6 +62,7 @@
           var copy = Object.assign({}, list[i], { id: "vb-" + mode + "-" + list[i].id });
           if (copy.source) copy.source = "ofm";
           copy.layout = Object.assign({}, copy.layout, { visibility: "none" });
+          labelText(copy.layout);
           try {
             map.addLayer(copy, before);
             ids[mode].push(copy.id);
