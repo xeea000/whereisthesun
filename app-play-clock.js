@@ -33,14 +33,14 @@
       radarIndex = clampRadarIndex(Math.floor(playheadFrac + 1e-9));
       var frame = radarPast[radarIndex];
       var atNowR = playheadFrac >= radarSliderMax() - 1e-6;
-      if (timeLabel) timeLabel.textContent = formatRadarLabel(frame) + (atNowR ? " · NOW" : "");
+      window.SunnyKit.setText(timeLabel, formatRadarLabel(frame) + (atNowR ? " · NOW" : ""));
       return;
     }
     if (!cloudTimes.length) return;
     cloudIndex = clampIndex(Math.floor(playheadFrac + 1e-9));
     var iso = cloudTimes[cloudIndex];
     var atNow = playheadFrac >= sliderMax() - 1e-6;
-    if (timeLabel && iso) timeLabel.textContent = formatFrameLabel(iso) + (atNow ? " · NOW" : "");
+    if (iso) window.SunnyKit.setText(timeLabel, formatFrameLabel(iso) + (atNow ? " · NOW" : ""));
   }
   function playClockTick(now) {
     playRafId = 0;

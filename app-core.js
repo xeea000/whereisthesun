@@ -367,8 +367,7 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u; /* opt63: cloud-only */
   }
   function formatFrameLabel(iso) {
-    var d = new Date(iso);
-    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return window.SunnyKit.fmt.frameTime(Date.parse(iso));
   }
   function formatTickClock(isoOrDate) {
     var d = (isoOrDate instanceof Date) ? isoOrDate : new Date(isoOrDate);
@@ -677,11 +676,10 @@ function sunnyStep01() {
     pitchWithRotate: false,
     fadeDuration: 0,
     refreshExpiredTiles: false,
-    maxTileCacheSize: 80,
+    maxTileCacheSize: window.SunnyDataSaver.tileCache(),
     attributionControl: false,
     maxPitch: 0
   });
-  if (window.SunnyDataSaver.on("visible") && map.setPrefetchZoomDelta) map.setPrefetchZoomDelta(0); /* opt88 */
   window.SunnyVectorBase.start(map);
   if (window.SunnyKit && window.SunnyKit.mapBrightness) {
     try { window.SunnyKit.mapBrightness.refresh(map); } catch (eMb) {}

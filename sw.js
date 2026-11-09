@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt243"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt244"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -19,8 +19,11 @@ var FRAMES = "sunny-frames-1";
 var DATA = "sunny-data-1"; /* opt109: static data files kept forever, keyed by content hash */
 var OFFLINE = "sunny-offline-1"; /* opt95: regions saved from "Save for offline", never pruned here */
 var KEEP = [CACHE, STATIC, FRAMES, DATA, OFFLINE];
-var STATIC_MAX = 900;
-var FRAMES_MAX = 400;
+/* opt244: cache caps and trim pacing in one place. A trim (cache.keys over the whole cache) runs at most once
+ * per TRIM_EVERY writes or TRIM_MS, so a cache holds up to TRIM_EVERY entries over its cap between trims. */
+var CAPS = { STATIC_MAX: 900, FRAMES_MAX: 400, TRIM_EVERY: 50, TRIM_MS: 30000 };
+var STATIC_MAX = CAPS.STATIC_MAX;
+var FRAMES_MAX = CAPS.FRAMES_MAX;
 var FRAME_MAX_AGE_MS = 26 * 3600 * 1000;
 var FRAME_SETTLE_MS = 45 * 60 * 1000;
 /* PRECACHE-START (tools/fingerprint.js) */
@@ -43,8 +46,8 @@ var PRECACHE = [
   "plus-code.js?h=2de5aed8e0",
   "info-panel.js?h=aa0aff5131",
   "beach-card.js?h=0237ca65e1",
-  "beach-icons.js?h=134a01870a",
-  "data-saver.js?h=ab8a4eacad",
+  "beach-icons.js?h=75dc98510f",
+  "data-saver.js?h=b5f6ab6d25",
   "vector-base.js?h=c9dffc1e3d",
   "light-clouds.js?h=b3980fe855",
   "cloud-key.js?h=5d5b626b3c",
@@ -55,13 +58,14 @@ var PRECACHE = [
   "radar-warm.js?h=3430fcf9a7",
   "radar-mask.js?h=801e09e7d5",
   "radar-legend.js?h=82ca8259a4",
-  "wind-field.js?h=a44ddd27bd",
-  "wind-gl.js?h=48bdd93d99",
+  "wind-field.js?h=e5e0fb680c",
+  "wind-gl.js?h=09b3941c63",
   "point-forecast.js?h=3a2a36247e",
   "beach-toggle.js?h=6ed1375f1c",
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "layer-kit.js?h=34c4c7777b",
+  "frame-kit.js?h=c3f27174ed",
   "layer-lazy.js?h=26794f51c2",
   "layers-panel.js?h=49f0769467",
   "share-link.js?h=770348876e",
@@ -73,24 +77,24 @@ var PRECACHE = [
   "offline.js?h=f591704655",
   "beach-ref.js?h=dab3a52757",
   "wind-play-fade.js?h=e342e19b7e",
-  "frame-tween.js?h=f2cd6bfd0b",
+  "frame-tween.js?h=4469ac2203",
   "sw-ready.js?h=66b3059850",
   "beach-data-v.js?h=6226beb469",
   "play-pin.js?h=d91f012835",
-  "app-core.js?h=eca1c8cb85",
+  "app-core.js?h=28f47cd4f5",
   "app-timeline.js?h=cfc2a3086a",
-  "app-cloud-layers.js?h=3e1f472043",
+  "app-cloud-layers.js?h=da936274ca",
   "app-play-buffers.js?h=8c4417d046",
   "app-play-blend.js?h=a61300b670",
   "app-cloud-frames.js?h=25152c66fd",
   "app-beach-store.js?h=2f443c94e4",
   "app-beach-fetch.js?h=2b9c93ee7a",
   "app-beach-search.js?h=d42286ab71",
-  "app-wind-data.js?h=eb502eb952",
-  "app-wind-draw.js?h=d433a84b94",
+  "app-wind-data.js?h=2ae6af874a",
+  "app-wind-draw.js?h=ad70f6723c",
   "app-radar.js?h=477c8db9db",
   "geo-ask.js?h=3531b4d856",
-  "app-play-clock.js?h=2f3cb037be",
+  "app-play-clock.js?h=638b075435",
   "app-scrub.js?h=2f5017e5cb",
   "app.js?h=0b946f883c",
   "update-banner.js?h=20237e0cb8",
@@ -208,6 +212,15 @@ function trim(name, max) {
   }
   return caches.open(name).then(trimKeys).catch(noop);
 }
+var trimState = {};
+function trimDue(name) {
+  var st = trimState[name] || (trimState[name] = { n: 0, t: Date.now() });
+  st.n++;
+  if (st.n < CAPS.TRIM_EVERY && Date.now() - st.t < CAPS.TRIM_MS) return false;
+  st.n = 0;
+  st.t = Date.now();
+  return true;
+}
 function putIn(name, max, req, res) {
   if (!res || !res.ok) return Promise.resolve();
   var copy = res.clone();
@@ -215,14 +228,19 @@ function putIn(name, max, req, res) {
     return cache.put(req, copy);
   }
   function capped() {
-    return trim(name, max);
+    return trimDue(name) ? trim(name, max) : null;
   }
   return caches.open(name).then(store).then(capped).catch(noop);
 }
-function cacheFirst(name, max, req) {
+/* opt244: hand the response over at once; the cache write finishes in the background under the fetch event */
+function later(ev, p) {
+  if (ev && ev.waitUntil) { try { ev.waitUntil(p); } catch (eW) {} }
+  return p;
+}
+function cacheFirst(name, max, req, ev) {
   function stored(res) {
-    function keep() { return res; }
-    return putIn(name, max, req, res).then(keep, keep);
+    later(ev, putIn(name, max, req, res));
+    return res;
   }
   function hitOrNet(hit) {
     return hit || netFetch(req).then(stored);
@@ -232,10 +250,10 @@ function cacheFirst(name, max, req) {
   }
   return caches.open(name).then(lookup).then(hitOrNet);
 }
-function networkFirst(req) {
+function networkFirst(req, ev) {
   function stored(res) {
-    function keep() { return res; }
-    return putIn(CACHE, 9999, req, res).then(keep, keep);
+    later(ev, putIn(CACHE, 9999, req, res));
+    return res;
   }
   function orError(hit) {
     return hit || Response.error();
@@ -330,31 +348,31 @@ function pruneData() {
     });
   });
 }
-function route(req, u) {
+function route(req, u, ev) {
   var rel = relData(u);
   if (rel) {
-    return dataHashes().then((h) => { return h[rel] ? dataFirst(req, rel, h[rel]) : routeOld(req, u); });
+    return dataHashes().then((h) => { return h[rel] ? dataFirst(req, rel, h[rel]) : routeOld(req, u, ev); });
   }
-  return routeOld(req, u);
+  return routeOld(req, u, ev);
 }
-function routeOld(req, u) {
+function routeOld(req, u, ev) {
   if (u.pathname.slice(-13) === "/version.json") return netFetch(req, { cache: "no-store" });
   if (isSettledFrame(u)) {
     if (Date.now() - lastAgeOut > 600000) {
       lastAgeOut = Date.now();
       ageOutFrames();
     }
-    return cacheFirst(FRAMES, FRAMES_MAX, req);
+    return cacheFirst(FRAMES, FRAMES_MAX, req, ev);
   }
-  if (isTile(u) || isStaticData(u) || isBeachData(u)) return cacheFirst(STATIC, STATIC_MAX, req);
-  if (isHashed(u)) return cacheFirst(CACHE, 9999, req);
-  if (u.origin === self.location.origin) return networkFirst(req);
+  if (isTile(u) || isStaticData(u) || isBeachData(u)) return cacheFirst(STATIC, STATIC_MAX, req, ev);
+  if (isHashed(u)) return cacheFirst(CACHE, 9999, req, ev);
+  if (u.origin === self.location.origin) return networkFirst(req, ev);
   return netFetch(req);
 }
 /* opt95: the network (or the usual caches) first; a region saved for offline fills in when that fails. */
-function withSaved(req, u) {
+function withSaved(req, u, ev) {
   var mine = u.origin === self.location.origin;
-  if (!(mine && u.pathname.indexOf("/data/") !== -1) && u.host !== "tiles.openfreemap.org") return route(req, u);
+  if (!(mine && u.pathname.indexOf("/data/") !== -1) && u.host !== "tiles.openfreemap.org") return route(req, u, ev);
   function saved(res) {
     function pick(hit) {
       return hit || res || Response.error();
@@ -364,7 +382,7 @@ function withSaved(req, u) {
   function check(res) {
     return res && res.ok ? res : saved(res);
   }
-  return route(req, u).then(check, () => { return saved(null); });
+  return route(req, u, ev).then(check, () => { return saved(null); });
 }
 function onFetch(event) {
   var req = event.request;
@@ -372,7 +390,7 @@ function onFetch(event) {
   var u;
   try { u = new URL(req.url); } catch (eUrl) { return; }
   if (u.protocol !== "https:" && u.protocol !== "http:") return;
-  event.respondWith(withSaved(req, u));
+  event.respondWith(withSaved(req, u, event));
 }
 /* opt61: the update banner asks a waiting worker to take over now. */
 function onSwMessage(event) {

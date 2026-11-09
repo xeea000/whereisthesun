@@ -159,9 +159,12 @@
     }
     var mean = this.n / (GX * GY);
     var m = 0;
+    var uv = this.uv || (this.uv = new Float64Array(2));
+    var R2D = 180 / Math.PI;
     for (k = 0; k < this.n; k++) {
-      var ll = toLngLat(this.mx[k], this.my[k]);
-      var s = field.sample(ll[0], ll[1]);
+      /* opt244: lon/lat inline and the field writes into uv (a field that ignores out still returns {u, v}) */
+      var got = field.sample(this.mx[k] * 360 - 180, Math.atan(Math.sinh(Math.PI * (1 - 2 * this.my[k]))) * R2D, uv);
+      var s = got === true ? uv : got ? [got.u, got.v] : null;
       sx = A.a * (this.mx[k] - A.m0[0]) + A.b * (this.my[k] - A.m0[1]) + A.s0[0];
       sy = A.c * (this.mx[k] - A.m0[0]) + A.e * (this.my[k] - A.m0[1]) + A.s0[1];
       ci = cellOf(sx, sy, vw, vh);
@@ -173,11 +176,12 @@
         continue;
       }
       if (!s) continue;
-      var sp = Math.sqrt(s.u * s.u + s.v * s.v);
+      var su = s[0], sv = s[1];
+      var sp = Math.sqrt(su * su + sv * sv);
       if (sp < 0.05) continue;
       var pps = Math.max(10, Math.min(90, 8 + sp * 3.6 * 1.6));
-      var dxs = A.a * s.u - A.b * s.v;
-      var dys = A.c * s.u - A.e * s.v;
+      var dxs = A.a * su - A.b * sv;
+      var dys = A.c * su - A.e * sv;
       var len = Math.sqrt(dxs * dxs + dys * dys) || 1;
       dxs = dxs / len * pps * dt;
       dys = dys / len * pps * dt;
@@ -258,7 +262,7 @@
   Wind.prototype.frame = frame;
   Wind.prototype.state = particleState;
   var last = null;
-  /* field: any object with sample(lon, lat) returning {u, v} or null; wind by default */
+  /* field: any object with sample(lon, lat, out): true after writing u, v into out, or {u, v}, or null/false; wind by default */
   function create(canvas, count, field) {
     try {
       var w = new Wind(canvas, count, field);

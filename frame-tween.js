@@ -58,9 +58,17 @@
     "    c = vec4(rgb * k, k) * c.a; }",
     "  gl_FragColor = c * uAlpha; }"
   ].join("\n");
+  /* client size from the shared ResizeObserver cache (SunnyKit.viewSize) when it is there */
+  function sizeOf(el) {
+    var K = root.SunnyKit;
+    if (!el) return { w: 0, h: 0 };
+    return K && K.viewSize ? K.viewSize(el) : { w: el.clientWidth, h: el.clientHeight };
+  }
   function displaySize(canvas, maxSide, maxPixels) {
-    var cw = canvas.clientWidth || (canvas.parentNode && canvas.parentNode.clientWidth) || 800;
-    var ch = canvas.clientHeight || (canvas.parentNode && canvas.parentNode.clientHeight) || 600;
+    var vs = sizeOf(canvas);
+    var ps = !vs.w || !vs.h ? sizeOf(canvas.parentNode) : vs;
+    var cw = vs.w || ps.w || 800;
+    var ch = vs.h || ps.h || 600;
     var dpr = 1;
     try { dpr = Math.min(2.5, Math.max(1, root.devicePixelRatio || 1)); } catch (e) {}
     var w = Math.round(cw * dpr), h = Math.round(ch * dpr), s = 1;

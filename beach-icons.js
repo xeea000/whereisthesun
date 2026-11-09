@@ -70,6 +70,7 @@
   /* Meteocons sprite (MIT, Bas Milius), loaded once; each symbol becomes an Image for canvas drawing. */
   var ICONS = {};
   var spriteReady = false;
+  var spriteLoad = null;
   var loadSprite = () => {
     fetch("vendor/meteocons/sprite.svg?v=opt95").then((r) => { return r.text(); }).then((t) => {
       var doc = new DOMParser().parseFromString(t, "image/svg+xml");
@@ -218,6 +219,7 @@
     var m = getMap();
     if (!m) return;
     lastList = list || [];
+    if (lastList.length && window.SunnyKit) (spriteLoad || (spriteLoad = window.SunnyKit.once(loadSprite)))(); /* opt244: sprite on first beaches draw */
     try {
       ensure(m);
       var feats = lastList.map((b) => {
@@ -313,7 +315,7 @@
       '(<a href="vendor/meteocons/LICENSE" target="_blank" rel="noopener">MIT licence</a>). Forecasts from Open-Meteo.';
     b.parentNode.insertBefore(p, b);
   };
-  var boot = () => { buildSwitch(); credit(); loadSprite(); };
+  var boot = () => { buildSwitch(); credit(); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
   setInterval(() => {

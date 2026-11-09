@@ -26,6 +26,14 @@
   var LAT_MAX = 80;
   var STORE = "sunny-wf4-";
   var tiles = Object.create(null);
+  /* opt244: the same tiles by number (ty * NT + tx), so sample() finds a node without building a string key */
+  var NT = Math.ceil(360 / STEP / TILE);
+  var byNum = [];
+  function setTile(k, t) {
+    tiles[k] = t;
+    var p = k.split("_");
+    byNum[Number(p[1]) * NT + Number(p[0])] = t;
+  }
   var queue = [];
   var inFlight = 0;
   var lastKey = "";
@@ -66,11 +74,11 @@
       t.u.push(isFinite(sp) && isFinite(dr) ? Math.round(-sp * Math.sin(dr) * 100) / 100 : null);
       t.v.push(isFinite(sp) && isFinite(dr) ? Math.round(-sp * Math.cos(dr) * 100) / 100 : null);
     }
-    tiles[k] = t;
+    setTile(k, t);
     toStore(k, t);
   }
   function onFail(k) {
-    tiles[k] = { at: Date.now(), retryAt: Date.now() + 60000 };
+    setTile(k, { at: Date.now(), retryAt: Date.now() + 60000 });
   }
   function done() {
     inFlight--;
@@ -92,7 +100,7 @@
     var url = API + "?latitude=" + lats.join(",") + "&longitude=" + lons.join(",") +
       "&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms";
     inFlight++;
-    tiles[k] = { at: Date.now(), pending: true };
+    setTile(k, { at: Date.now(), pending: true });
     fetch(url).then(readJson).then(onTile.bind(null, k), onFail.bind(null, k)).then(done);
   }
   function refill() {
@@ -121,7 +129,7 @@
     if (t && (t.pending || fresh(t) || (t.retryAt && Date.now() < t.retryAt))) return false;
     var s = fromStore(k);
     if (s) {
-      tiles[k] = s;
+      setTile(k, s);
       return false;
     }
     return true;
@@ -145,15 +153,21 @@
     var y1 = Math.floor((Math.min(LAT_MAX, b.getNorth() + my) + 90) / span);
     var x0 = Math.floor((west - mx + 180) / span);
     var x1 = Math.floor((east + mx + 180) / span);
-    if (x1 - x0 > 360 / span) x1 = x0 + 360 / span - 1;
+    if (x1 - x0 >= NT) x1 = x0 + NT - 1;
     var cx = (c.lng + 180) / span;
     var cy = (c.lat + 90) / span;
     var list = [];
-    var n = 360 / span;
+    var seen = Object.create(null);
+    /* opt244: 90 node columns do not divide into whole 8-node tiles (360 / 32 = 11.25), so a span x outside 0..11 is
+     * wrapped by its first and last node column, never by x itself (wrapping x gives fractional tile keys node() never reads) */
     for (var ty = y0; ty <= y1; ty++) {
       for (var x = x0; x <= x1; x++) {
-        var tx = ((x % n) + n) % n;
-        if (want(tx, ty)) list.push([tx, ty, x]);
+        for (var q = 0; q < TILE; q += TILE - 1) {
+          var tx = Math.floor((((x * TILE + q) % NI) + NI) % NI / TILE);
+          if (seen[tx + "_" + ty]) continue;
+          seen[tx + "_" + ty] = 1;
+          if (want(tx, ty)) list.push([tx, ty, x]);
+        }
       }
     }
     list.sort(byDistX.bind(null, cx, cy));
@@ -163,29 +177,33 @@
   function byDistX(cx, cy, a, b) {
     return byDist(cx, cy, [a[2], a[1]], [b[2], b[1]]);
   }
-  function node(i, j) {
-    var n = 360 / STEP;
-    i = ((i % n) + n) % n;
-    var t = tiles[tileKey(Math.floor(i / TILE), Math.floor(j / TILE))];
-    if (!t || !t.u) return null;
+  /* node (i, j) into nu[q], nv[q]; false where its tile or value is missing. No allocation. */
+  var nu = new Float64Array(4), nv = new Float64Array(4);
+  var NI = 360 / STEP;
+  function node(i, j, q) {
+    i = ((i % NI) + NI) % NI;
+    if (j < 0) return false;
+    var t = byNum[Math.floor(j / TILE) * NT + Math.floor(i / TILE)];
+    if (!t || !t.u) return false;
     var k = (j % TILE) * TILE + (i % TILE);
-    return t.u[k] === null ? null : [t.u[k], t.v[k]];
+    if (t.u[k] === null || t.u[k] === undefined) return false;
+    nu[q] = t.u[k];
+    nv[q] = t.v[k];
+    return true;
   }
-  /* bilinear u/v (m/s, east/north) at lon/lat, or null where the field has not loaded */
-  function sample(lon, lat) {
+  /* bilinear u/v (m/s, east/north) at lon/lat. With out (any array of 2): writes u, v into it and returns true,
+   * or false where the field has not loaded, allocating nothing. Without out: returns {u, v} or null. */
+  function sample(lon, lat, out) {
     var x = (lon + 180) / STEP;
     var y = (lat + 90) / STEP;
     var i = Math.floor(x);
     var j = Math.floor(y);
-    var a = node(i, j);
-    var b = node(i + 1, j);
-    var c = node(i, j + 1);
-    var d = node(i + 1, j + 1);
-    if (!a || !b || !c || !d) return null;
+    if (!node(i, j, 0) || !node(i + 1, j, 1) || !node(i, j + 1, 2) || !node(i + 1, j + 1, 3)) return out ? false : null;
     var fx = x - i;
     var fy = y - j;
-    var u = (a[0] * (1 - fx) + b[0] * fx) * (1 - fy) + (c[0] * (1 - fx) + d[0] * fx) * fy;
-    var v = (a[1] * (1 - fx) + b[1] * fx) * (1 - fy) + (c[1] * (1 - fx) + d[1] * fx) * fy;
+    var u = (nu[0] * (1 - fx) + nu[1] * fx) * (1 - fy) + (nu[2] * (1 - fx) + nu[3] * fx) * fy;
+    var v = (nv[0] * (1 - fx) + nv[1] * fx) * (1 - fy) + (nv[2] * (1 - fx) + nv[3] * fx) * fy;
+    if (out) { out[0] = u; out[1] = v; return true; }
     return { u: u, v: v };
   }
   function stats() {

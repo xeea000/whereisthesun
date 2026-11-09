@@ -19,23 +19,32 @@
   var PREFIX = "sunny-ds-";
   var CLOUD_STEP_MS = 20 * 60000;
   var RADAR_STEP_MS = 15 * 60000;
+  /* opt244: switches are read once per page; changing one reloads the page, so a memory copy is always current */
+  var memo = {};
   function on(id) {
-    try {
-      return localStorage.getItem(PREFIX + id) !== "0";
-    } catch (e) {
-      return true;
-    }
+    if (id in memo) return memo[id];
+    var v = true;
+    try { v = localStorage.getItem(PREFIX + id) !== "0"; } catch (e) {}
+    memo[id] = v;
+    return v;
   }
   function set(id, value) {
     try {
       localStorage.setItem(PREFIX + id, value ? "1" : "0");
     } catch (e) {}
+    memo[id] = !!value;
   }
   /* Frame times kept by Fewer frames: a fixed clock grid, so the same frames stay kept as time moves on */
   /* Low data (bottom bar): Play keeps hourly cloud and half-hourly radar frames, base maps stop at zoom 12,
    * cloud pictures are half size and stop at zoom 5, night-sky squares read zoom-4 light tiles,
    * live layers refresh 4 times slower and the aurora forecast is kept 4 hours */
-  function low() { try { return localStorage.getItem("sunny-lowdata") === "1"; } catch (e) { return false; } }
+  var lowMemo = null;
+  function low() {
+    if (lowMemo === null) { try { lowMemo = localStorage.getItem("sunny-lowdata") === "1"; } catch (e) { lowMemo = false; } }
+    return lowMemo;
+  }
+  /* opt244: map tile memory. MapLibre sizes it to the screen (null) so places just visited stay drawn; Low data keeps 80 */
+  function tileCache() { return low() ? 80 : null; }
   function keepMs(ms, stepMs, isLast) {
     if ((!on("fewer") && !low()) || isLast || !isFinite(ms)) return true;
     if (low()) stepMs = stepMs * (stepMs === CLOUD_STEP_MS ? 3 : 2);
@@ -114,7 +123,7 @@
     pop.insertBefore(sec, lag || null);
   }
   window.SunnyDataSaver = { low: low, slow: (n) => { return !low() || n % 4 === 0; },
-    on: on, keepCloud: keepCloud, keepRadar: keepRadar, imageScale: imageScale, mapMoving: mapMoving };
+    on: on, tileCache: tileCache, keepCloud: keepCloud, keepRadar: keepRadar, imageScale: imageScale, mapMoving: mapMoving };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", buildPanel);
   else buildPanel();
 })();

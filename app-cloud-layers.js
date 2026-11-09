@@ -163,10 +163,10 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
   function wmsMaxSide() {
     /* opt43 Play WMS: phone ~720, tablet ~900, desktop ~1024; gate by width/DPR */
     var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
-    var cw = (el && el.clientWidth) || window.innerWidth || 800;
+    var cw = (el && window.SunnyKit.viewSize(el).w) || window.innerWidth || 800;
     var dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
     var ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
-    var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
+    var narrow = cw < 700 || window.SunnyKit.narrow();
     var phone = narrow || /Mobi|Android|iPhone/i.test(ua);
     var tablet = !phone && (cw < 1100 || /iPad|Tablet/i.test(ua));
     var cap;
@@ -209,8 +209,8 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     var base = clampWmsToNative(playSizeCache);
     var sp = getPlaySpeed();
     var el = map && map.getContainer ? map.getContainer() : document.getElementById("map");
-    var cw = (el && el.clientWidth) || window.innerWidth || 800;
-    var narrow = cw < 700 || (typeof window.matchMedia === "function" && window.matchMedia("(max-width:700px)").matches);
+    var cw = (el && window.SunnyKit.viewSize(el).w) || window.innerWidth || 800;
+    var narrow = cw < 700 || window.SunnyKit.narrow();
     var scale = 1;
     if (narrow) scale *= 0.75;
     scale *= window.SunnyDataSaver.imageScale(); /* opt88 Zoom-matched images */

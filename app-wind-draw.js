@@ -414,8 +414,7 @@ var radarTween, radarComp, radarCompOrder, RADAR_COMP_CAP, RADAR_COMP_MAX_SIDE, 
   }
   function formatRadarLabel(frame) {
     if (!frame || !frame.time) return "Radar";
-    var d = new Date(Number(frame.time) * 1000);
-    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return window.SunnyKit.fmt.frameTime(Number(frame.time) * 1000);
   }
   function syncRadarTimelineUi() {
     if (!slider || !radarPast.length) return;
