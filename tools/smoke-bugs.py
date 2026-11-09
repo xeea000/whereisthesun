@@ -97,9 +97,34 @@ async def share_restore(b):
     kids = await pg.evaluate("()=>SunnyLayers.defs().find(d=>d.id==='mtg').kids.filter(k=>localStorage.getItem('sunny-L-'+k.id)==='1'||(localStorage.getItem('sunny-L-'+k.id)==null&&k.dflt)).map(k=>k.id)")
     check("share link restores all sub-switches off", kids == [], kids)
     await ctx.close()
+async def goes_slots(b):
+    """Bug 3: Clouds asked GIBS for GOES slots it never published (a plain 10-min grid; GIBS skips slots
+    and can run over an hour late), so turning Clouds on or playing gave runs of 404 tiles."""
+    ctx = await b.new_context(viewport={"width": 1366, "height": 800}, service_workers="block")
+    await ctx.add_init_script("(()=>{localStorage.setItem('sunny-layers-off-v1','1');localStorage.setItem('sunny-geo-ask','done');})()")
+    pg = await ctx.new_page()
+    bad = []
+    pg.on("response", lambda r: bad.append(r.url[-90:]) if r.status >= 400 and "gibs.earthdata" in r.url else None)
+    await pg.goto(URL, wait_until="load", timeout=120000)
+    await pg.wait_for_function("()=>window.map&&map.loaded&&map.loaded()", timeout=90000)
+    try:
+        await pg.wait_for_function("()=>typeof goesDomain!=='undefined'&&goesDomain", timeout=20000)
+        known = True
+    except Exception:
+        known = False
+    check("GOES published slots known at boot (DescribeDomains)", known)
+    await pg.evaluate("()=>map.jumpTo({center:[-79.4,43.7],zoom:6})")
+    await pg.evaluate("()=>document.querySelector('#overlay-seg [data-overlay=\"clouds\"]').click()")
+    await pg.wait_for_timeout(12000)
+    miss = await pg.evaluate("()=>typeof goesHas==='function'?cloudTimes.filter(t=>!goesHas(Date.parse(t),-79)):['no domain check']")
+    check("timeline holds only published GOES slots", known and not miss, miss[:5])
+    await pg.evaluate("()=>{const b=document.getElementById('btn-play');if(b)b.click();}")
+    await pg.wait_for_timeout(10000)
+    check("no GIBS 4xx with Clouds on and Play", not bad, bad[:5])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore]
+    tests = [lazy_legacy, share_restore, goes_slots]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

@@ -88,6 +88,67 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     }
     return wallIso;
   }
+  /* opt243: GIBS skips some GOES slots (for example 13:40 and 13:50 missing between 13:30 and 14:00) and can
+   * publish more than 55 min late, so a plain 10-min grid asked for frames that do not exist (404 tiles).
+   * DescribeDomains (keyless, CORS, under 1 KB) lists the published periods; the timeline keeps only those. */
+  var goesDomain = null; /* { layer, t, spans: [[startMs, endMs, stepMs]] } */
+  var goesDomainP = null;
+  function parseGoesDomain(txt) {
+    var m = /<Domain>([^<]*)<\/Domain>/.exec(txt || "");
+    if (!m) return null;
+    var spans = [];
+    m[1].split(",").forEach((part) => {
+      var a = part.trim().split("/");
+      if (a.length < 2) return;
+      var s0 = Date.parse(a[0].length === 10 ? a[0] + "T00:00:00Z" : a[0]);
+      var e0 = Date.parse(a[1].length === 10 ? a[1] + "T00:00:00Z" : a[1]);
+      var st = GOES_STEP_MS, d = /^PT(\d+)([MH])$/.exec(a[2] || "");
+      if (d) st = Number(d[1]) * (d[2] === "H" ? 3600000 : 60000);
+      if (isFinite(s0) && isFinite(e0) && st > 0) spans.push([s0, e0, st]);
+    });
+    return spans.length ? spans : null;
+  }
+  function goesDomainFor(lon) {
+    var d = goesDomain;
+    return d && d.layer === goesLayer(lon == null ? -79 : lon) ? d : null;
+  }
+  function goesHas(ms, lon) {
+    var d = goesDomainFor(lon);
+    if (!d) return true; /* unknown: every 10-min slot counts */
+    return d.spans.some((x) => { return ms >= x[0] && ms <= x[1] && (ms - x[0]) % x[2] === 0; });
+  }
+  function goesDomainLatestMs(lon) {
+    var d = goesDomainFor(lon);
+    if (!d) return NaN;
+    return d.spans.reduce((m, x) => { return Math.max(m, x[1]); }, -Infinity);
+  }
+  /* the published slot at or before ms (null when the domain is unknown or has none) */
+  function goesPublishedAtOrBefore(ms, lon) {
+    var d = goesDomainFor(lon);
+    if (!d) return null;
+    var best = -Infinity;
+    d.spans.forEach((x) => {
+      if (ms < x[0]) return;
+      var t = Math.min(x[1], x[0] + Math.floor((ms - x[0]) / x[2]) * x[2]);
+      if (t > best) best = t;
+    });
+    return isFinite(best) ? best : null;
+  }
+  function fetchGoesDomain(lon) {
+    var layer = goesLayer(lon == null ? -79 : lon);
+    if (goesDomain && goesDomain.layer === layer && Date.now() - goesDomain.t < GOES_PROBE_TTL_MS) return Promise.resolve(goesDomain);
+    if (goesDomainP && goesDomainP.layer === layer) return goesDomainP.p;
+    var from = toGoesIso(Date.now() - (HOURS_BACK + 2) * 3600000), to = toGoesIso(Date.now());
+    var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/" + layer + "/default/GoogleMapsCompatible_Level7/all/" + from + "--" + to + ".xml";
+    var p = fetch(url, { cache: "no-store" }).then((r) => { return r.ok ? r.text() : null; }).then((txt) => {
+      var spans = parseGoesDomain(txt);
+      if (spans) goesDomain = { layer: layer, t: Date.now(), spans: spans };
+      goesDomainP = null;
+      return spans ? goesDomain : null;
+    }).catch(() => { goesDomainP = null; return null; });
+    goesDomainP = { layer: layer, p: p };
+    return p;
+  }
   function buildCloudTimes() {
     var latest = goesIsoMs(goesLatestIsoSync());
     if (!isFinite(latest)) latest = goesWallLatestMs();
@@ -99,10 +160,14 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
       var gMs = snapGoesMs(goesIsoMs(goesLastGoodIso));
       if (isFinite(gMs) && latest > gMs) latest = gMs;
     }
+    var lon = typeof sunnyApp_origin !== "undefined" && sunnyApp_origin ? sunnyApp_origin.lon : null;
+    var pub = goesPublishedAtOrBefore(latest, lon);
+    if (pub != null) latest = snapGoesMs(pub);
     var start = latest - HOURS_BACK * 3600 * 1000;
     var out = [];
     var t;
-    for (t = start; t <= latest; t += GOES_STEP_MS) out.push(toGoesIso(t));
+    for (t = start; t <= latest; t += GOES_STEP_MS) if (goesHas(t, lon)) out.push(toGoesIso(t));
+    if (!out.length) for (t = start; t <= latest; t += GOES_STEP_MS) out.push(toGoesIso(t));
     return out;
   }
   function goesProbeTileUrl(iso, lon) {
@@ -151,6 +216,14 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     }
     if (goesTimeProbe) return goesTimeProbe;
     var startMs = goesWallLatestMs();
+    var viaDomain = fetchGoesDomain(lon).then((d) => {
+      var last = d ? goesDomainLatestMs(lon) : NaN;
+      if (!isFinite(last)) return null;
+      var iso = toGoesIso(last);
+      goesLastGoodIso = iso;
+      goesTimeCache = { iso: iso, t: Date.now() };
+      return iso;
+    });
     /* opt52: probe several 10-min slots in parallel instead of serial walk-back */
     var PROBE_BATCH = 4;
     function tryBatch(startStep) {
@@ -178,7 +251,7 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
         return tryBatch(startStep + probes.length);
       });
     }
-    goesTimeProbe = tryBatch(0).then((iso) => {
+    goesTimeProbe = viaDomain.then((iso) => { return iso || tryBatch(0); }).then((iso) => {
       goesTimeProbe = null;
       return iso;
     }).catch(() => {
@@ -247,6 +320,11 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
   }
   function gibsTiles(iso, lon) {
     var layer = goesLayer(lon == null ? -79 : lon);
+    var ms = goesIsoMs(iso);
+    if (isFinite(ms) && !goesHas(ms, lon)) { /* opt243: never ask for a slot GIBS did not publish */
+      var pub = goesPublishedAtOrBefore(ms, lon);
+      if (pub != null) iso = toGoesIso(pub);
+    }
     var u = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer + "/default/" + iso + "/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png";
     return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u; /* opt63: cloud-only tiles */
   }

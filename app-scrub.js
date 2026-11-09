@@ -110,6 +110,12 @@ function sunnyStep14() {
         var isoBoot = cloudTimes[cloudTimes.length - 1];
         timeLabel.textContent = formatFrameLabel(isoBoot) + " · NOW";
       } catch (eBoot) {}
+      /* opt243: learn which GOES slots GIBS published (under 1 KB, no tiles) so turning Clouds on later asks only for those */
+      var lonBoot = sunnyApp_origin ? sunnyApp_origin.lon : -79;
+      fetchGoesDomain(lonBoot).then((d) => {
+        var last = d ? goesDomainLatestMs(lonBoot) : NaN;
+        if (isFinite(last)) applyGoesLatestToTimeline(toGoesIso(last));
+      }).catch(() => {});
     }
     applyBaseMap();
     if (overlayVisible()) {
