@@ -24,6 +24,8 @@ eq(m.row_of(ev(6, "Two-Headed Giant Prerelease", team=1), SETS)["teams"], "Title
 r = m.row_of(ev(7, "Prerelease", "Capacity: 44 Players, pods of four, Rounds 3", team=1), SETS)
 eq((r["teams"], r["notes"]), ("", []), "four-player / pods wording is not 2HG and adds no label")
 eq(m.row_of(ev(8, "Commander Prerelease", "four-player free-for-all", fmt="Commander"), SETS)["teams"], "", "Commander pods are not 2HG")
+eq(m.row_of(ev(18, "Casual Star Trek Commander Night Prerelease"), SETS)["notes"], ["Title says Commander · listed as Sealed Deck"], "Commander title on a Sealed listing is labelled")
+eq(m.row_of(ev(19, "Star Trek Sealed Commander Prerelease"), SETS)["notes"], [], "Sealed Commander matches its Sealed listing")
 eq(m.row_of(ev(9, "Prerelease", "$50 for sealed and $40 for draft"), SETS)["notes"], [], "draft pricing for another session adds no Draft note")
 eq(m.row_of(ev(10, "Prerelease", "Bo1 sealed; Bo3 on Sunday"), SETS)["notes"], [], "mixed best-of wording adds nothing")
 eq(m.row_of(ev(11, "Prerelease", "3 rounds best of three"), SETS)["notes"], ["Best of three"], "single best-of variant kept")

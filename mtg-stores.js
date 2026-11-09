@@ -10,8 +10,8 @@
   var K = window.SunnyKit, L = window.SunnyLayers;
   if (!K || !L) return;
   var SRC = "mtg-src", DOT = "mtg-dot", STAR = "mtg-star";
-  var DATA = "data/mtg-stores.json?v=4be140c0";
-  var SETS = "data/mtg-sets.json?v=91fc2e44";
+  var DATA = "data/mtg-stores.json?v=8632afbb";
+  var SETS = "data/mtg-sets.json?v=e1fa40d6";
   var meta = null, setCat = null, pMap = null, filterSet = "";
   var panelEl = null, scheduleBtn = null;
   var KIDS = [

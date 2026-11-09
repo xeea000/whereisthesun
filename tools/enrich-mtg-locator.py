@@ -99,6 +99,8 @@ def classify(e: dict) -> dict:
     notes.append("Take-home kit")
   if re.search(r"\bdraft\b", title, re.I) and fmt and fmt != "Booster Draft":
     notes.append("Title says Draft · listed as " + fmt)
+  if re.search(r"\bcommander\b", title, re.I) and not re.search(r"\bsealed\b", title, re.I) and fmt and fmt != "Commander":
+    notes.append("Title says Commander · listed as " + fmt)
   return {"teams": teams, "teamEv": ev[:120], "notes": notes[:3]}
 
 def decode(arr):
