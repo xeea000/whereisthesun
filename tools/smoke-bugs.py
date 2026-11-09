@@ -433,9 +433,28 @@ async def smoke_aq(b):
     check("Weather card air row spells out PM2.5 units and the air quality index", "micrograms per cubic metre" in r["row"] and "air quality index" in r["row"], r)
     check("Wildfires & smoke off clears both", r["allOff"] and not errs, [r, errs])
     await ctx.close()
+CURRENTS = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:[-65,40],zoom:4});await s(800);
+  const vis=(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';
+  const n=()=>map.getSource('cur-line')?map.getSource('cur-line')._data.features.length:-1;
+  SunnyLayers.set('watertemp',true);for(let i=0;i<40&&!(n()>0&&vis('sst'));i++)await s(500);
+  const a={sst:vis('sst'),cur:vis('cur-line'),n:n()};map.jumpTo({center:[0,20],zoom:1});await s(500);for(let i=0;i<20&&n()<a.n+1;i++)await s(500);a.nWorld=n();
+  SunnyLayers.kidSet('watertemp-sst',false);await s(400);a.sstOff=!vis('sst')&&vis('cur-line');
+  SunnyLayers.kidSet('watertemp-cur',false);await s(400);a.curOff=!vis('cur-line')&&!SunnyCurrents.on();
+  SunnyLayers.kidSet('watertemp-sst',true);SunnyLayers.kidSet('watertemp-cur',true);await s(300);
+  SunnyLayers.set('watertemp',false);await s(400);a.allOff=!vis('cur-line')&&!vis('sst');return a}"""
+async def currents(b):
+    """t388u: Water temperature & currents holds two kids, Surface temperature and Currents (arrows at every zoom from
+    Open-Meteo Marine); each kid switches only its own part (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(CURRENTS)
+    check("Water temperature & currents draws the temperature and current arrows", r["sst"] and r["cur"] and r["n"] > 5, r)
+    check("current arrows show on the whole-world view too", r["nWorld"] > 5, r)
+    check("each kid hides only its own part", r["sstOff"] and r["curOff"], r)
+    check("Water temperature & currents off clears both", r["allOff"] and not errs, [r, errs])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

@@ -17,7 +17,8 @@
   function marine(lat, lon) {
     var k = lat.toFixed(2) + "," + lon.toFixed(2);
     if (!mcache[k]) mcache[k] = fetch(MARINE + "?latitude=" + lat.toFixed(3) + "&longitude=" + lon.toFixed(3) +
-      "&current=sea_surface_temperature,wave_height,wave_period,wave_direction").then(readJson).catch(() => { delete mcache[k]; return null; });
+      "&current=sea_surface_temperature,wave_height,wave_period,wave_direction,ocean_current_velocity,ocean_current_direction")
+      .then(readJson).catch(() => { delete mcache[k]; return null; });
     return mcache[k];
   }
   function seaRow(m) {
@@ -33,6 +34,8 @@
       out.push("Waves " + wh +
         (c.wave_period != null ? " every " + Math.round(c.wave_period) + " s" : "") + (c.wave_direction != null ? " from " + compass(c.wave_direction) : ""));
     }
+    var C = window.SunnyCurrents; /* the current only while Currents is on */
+    if (C && C.on() && c.ocean_current_velocity != null) out.push(C.text({ v: c.ocean_current_velocity, dir: c.ocean_current_direction }));
     var src = ' <span class="pf-src">(<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener">Open-Meteo Marine</a>)</span>';
     return out.length ? '<div class="pf-sea">' + esc(out.join(" · ")) + src + "</div>" : "";
   }

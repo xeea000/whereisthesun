@@ -14,7 +14,9 @@
     var i = ls.findIndex((l) => l.id === "sst"), nxt = ls[top + 1] && ls[top + 1].id;
     if (top >= 0 && i > top + 1 && nxt) { try { map.moveLayer("sst", nxt); } catch (e) {} } /* above clouds, under every dot and line */
   };
-  var apply = (map, on) => {
+  var apply = (map, parentOn) => {
+    if (window.SunnyCurrents) window.SunnyCurrents.draw();
+    var on = K.kids.layerOn(parentOn, "watertemp-sst", true);
     if (on && !map.getLayer("sst")) {
       try {
         map.addSource("sst", K.overzoom({ type: "raster", tileSize: 256,
@@ -27,11 +29,24 @@
     if (on) low(map);
     K.vis(map, ["sst"], on);
   };
-  L.add({ id: "watertemp", name: "Water temperature", icon: "🌡️", group: "Ocean", dflt: true, apply: apply,
-    legend: K.legRamp(STOPS.map((s) => { return s[0]; }).join(","), "0°C (32°F)", "18°C (64°F)", "32°C (90°F)"),
-    tip: "Sea and large-lake surface temperature, NASA MUR, two days back. Tap a spot at sea, then Weather, for the number there (Open-Meteo Marine gives no lake temperatures, so lakes show the colour only)",
+  var curLeg = () => {
+    var C = window.SunnyCurrents;
+    return C ? K.legRamp(C.stops.map((x) => { return x[1]; }).join(","), "still", "1.5 km/h", "3+ kilometres per hour") +
+      '<div class="ls-row"><small>Current arrows point the way the surface water flows (Open-Meteo Marine model, now)</small></div>' : "";
+  };
+  var wmap = null;
+  L.add({ id: "watertemp", name: "Water temperature & currents", icon: "🌡️", group: "Ocean", dflt: true, apply: apply,
+    kids: [{ id: "watertemp-sst", name: "Surface temperature", dflt: true }, { id: "watertemp-cur", name: "Currents", dflt: true }],
+    kidSet: () => { if (wmap) apply(wmap, L.isOn("watertemp")); },
+    legend: K.legRamp(STOPS.map((s) => { return s[0]; }).join(","), "0°C (32°F)", "18°C (64°F)", "32°C (90°F)") + curLeg(),
+    tip: "Sea and large-lake surface temperature, NASA MUR, two days back, and surface current arrows (Open-Meteo Marine, now). " +
+      "Tap a spot at sea, then Weather, for the numbers there (Open-Meteo Marine gives no lake temperatures, so lakes show the colour only)",
     attach: (map, on) => {
-      map.on("idle", () => { if (!L.isOn("watertemp")) return; if (!map.getLayer("sst")) apply(map, true); else low(map); });
+      wmap = map;
+      map.on("idle", () => {
+        if (!K.kids.layerOn(L.isOn("watertemp"), "watertemp-sst", true)) return;
+        if (!map.getLayer("sst")) apply(map, true); else low(map);
+      });
       apply(map, on);
     } });
 })();
