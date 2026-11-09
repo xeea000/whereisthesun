@@ -237,21 +237,6 @@ html, body {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.ctrl-sun {
-  min-width: 156px;
-  min-height: 148px;
-  padding: 10px 12px 14px;
-  flex-direction: column;
-  background: var(--sun);
-  color: var(--sun-ink);
-  border-color: #d7a72e;
-  gap: 2px;
-}
-.beach-emoji {
-  font-size: 84px;
-  line-height: 1;
-  filter: drop-shadow(0 4px 0 rgba(0,0,0,0.12));
-}
 .ctrl-label {
   font-size: 0.82rem;
   text-align: center;
@@ -879,13 +864,6 @@ html, body {
   }
   .sun-stack {
     max-width: 144px;
-  }
-  .ctrl-sun {
-    min-width: 132px;
-    min-height: 132px;
-  }
-  .beach-emoji {
-    font-size: 68px;
   }
   .sun-opt {
     padding: 5px 8px;

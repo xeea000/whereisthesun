@@ -297,13 +297,10 @@
       var row = [].slice.call(document.querySelectorAll("#layers-panel .lp-row")).filter((r) => { return /Beaches/.test(r.textContent); })[0];
       host = row && row.closest(".lp-fold") && row.closest(".lp-fold").querySelector(".lp-ctrls");
     }
-    var sun = document.getElementById("toggle-sunny");
-    if (!host || !sun) { setTimeout(buildSwitch, 800); return; }
+    if (!host) { setTimeout(buildSwitch, 800); return; }
     if (boxes.length) return;
     addBox(host, null, "lp-bicon");
     addScale(host, null, "lp-bscale");
-    addBox(sun.closest(".set-row"), null, "sun-opt");
-    addScale(sun.closest(".set-row"), null, "lp-bscale sun-opt");
   };
   var credit = () => {
     var b = document.getElementById("set-build");

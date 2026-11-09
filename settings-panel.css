@@ -82,20 +82,10 @@ body.settings-open .update-banner { display: none; }
 .settings-pop .tbtn-loop { border: 0; border-radius: 50%; }
 .settings-pop .set-btn { min-height: 36px; padding: 0 12px; border-radius: 10px; font-size: 0.82rem; }
 .settings-pop .sun-opt { border: 0; background: transparent; padding: 0; font-size: 0.86rem; }
-/* Compact controls on the right: Locate me icon and a small Beaches pill. */
+/* Compact controls on the right: Locate me icon and the share button. */
 .controls { flex-direction: row; align-items: center; gap: 8px; }
 .ctrl { min-height: 44px; border-color: rgba(255, 255, 255, 0.08); }
 .ctrl-icon { width: 44px; padding: 0; border-radius: 50%; }
-.ctrl-sun {
-  min-width: 0;
-  min-height: 44px;
-  padding: 0 14px 0 10px;
-  flex-direction: row;
-  gap: 6px;
-  border-radius: 22px;
-}
-.ctrl-sun .beach-emoji { font-size: 22px; filter: none; }
-.ctrl-sun .ctrl-label { font-size: 0.86rem; max-width: none; }
 @media (max-width: 640px) {
   .timeline {
     top: auto;
@@ -114,10 +104,8 @@ body.settings-open .update-banner { display: none; }
   .timeline .bar-chk { flex-direction: column; gap: 1px; font-size: 0.6rem; margin: 0; }
   .timeline .seg-btn { min-height: 34px; padding: 0 9px; }
   .controls { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 64px); right: max(10px, env(safe-area-inset-right)); }
-  .ctrl,
-  .ctrl-sun { min-height: 40px; }
+  .ctrl { min-height: 40px; }
   .ctrl-icon { width: 40px; }
-  .ctrl-sun .beach-emoji { font-size: 19px; }
   .settings-pop { left: 10px; right: 10px; width: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 62px); }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 116px); max-width: calc(100vw - 24px); }
 }
@@ -166,17 +154,11 @@ body.settings-open .update-banner { display: none; }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 190px); }
   #map .maplibregl-ctrl-bottom-right { top: calc(env(safe-area-inset-top, 0px) + 52px); }
 }
-/* opt73: Locate above the zoom buttons (bottom left); round stacked Beaches button (bottom right) */
+/* opt73: Locate above the zoom buttons (bottom left) */
 #btn-locate { position: fixed; left: max(16px, calc(env(safe-area-inset-left) + 10px)); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 184px); width: 29px; height: 29px; min-height: 29px; border-radius: 4px; z-index: 7; }
 #btn-locate svg { width: 17px; height: 17px; }
-.ctrl-sun { width: 64px; height: 64px; min-height: 64px; padding: 0; border-radius: 50%; flex-direction: column; justify-content: center; align-items: center; gap: 1px; }
-.ctrl-sun .beach-emoji { font-size: 20px; line-height: 1; }
-.ctrl-sun .ctrl-label { display: flex; flex-direction: column; align-items: center; font-size: 9px; font-weight: 800; letter-spacing: 0.04em; line-height: 1.1; text-transform: uppercase; }
 @media (max-width: 700px) {
   #btn-locate { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 176px); width: 29px; min-height: 29px; }
-  .ctrl-sun { width: 56px; height: 56px; min-height: 56px; }
-  .ctrl-sun .beach-emoji { font-size: 17px; }
-  .ctrl-sun .ctrl-label { font-size: 8px; }
   .update-banner { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 236px); }
 }
 .set-adv-btn{display:block;margin:6px 0 2px;border:0;background:transparent;color:inherit;opacity:.75;font:600 11px system-ui,sans-serif;padding:2px 0;cursor:pointer}.set-adv[hidden]{display:none}.set-adv #hover-delay{width:110px;vertical-align:middle}

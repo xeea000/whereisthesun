@@ -202,3 +202,8 @@
 .mtg-chip-team.mtg-chip-unsure{background:transparent;border:1px dashed #b98ad0;color:#e6d2f2}
 .mtg-src{font-size:10px;color:#8fc4ff;margin-left:auto;white-space:nowrap;text-decoration:none}
 .mtg-src:hover{text-decoration:underline}
+/* t384u: Find beaches, All beaches and Sunny only inside the Beaches layer's controls */
+.beach-find{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:4px 0 6px}.beach-find[hidden]{display:none}
+.beach-find .set-btn{min-height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:700 0.82rem system-ui,sans-serif;cursor:pointer}
+.beach-find #btn-sun{background:var(--sun);color:var(--sun-ink);border-color:#d7a72e}.beach-find .is-on{box-shadow:0 0 0 2px #ffd34d inset}.beach-find .is-busy{opacity:.7;cursor:progress}
+.beach-find .sun-opt{flex-basis:100%;display:flex;align-items:center;gap:6px;font-size:12.5px;padding:0;border:0;background:transparent}

@@ -219,9 +219,29 @@ async def labels_base(b):
         r = await pg.evaluate(BASE_SYM, mode)
         check("Labels off hides the %s base map's own names" % mode, r["off"] == 0 and r["on"] > 0, r)
     await ctx.close()
+BEACH_BLADE = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const n=[...document.querySelectorAll('button')].find(x=>/not now/i.test(x.textContent||''));if(n)n.click();
+  map.jumpTo({center:[-79.4,43.65],zoom:10});document.getElementById('lp-tab').click();await s(1500);
+  const g=[...document.querySelectorAll('#layers-panel .lp-head')].find(h=>/Outdoors/.test(h.textContent));if(g&&g.getAttribute('aria-expanded')!=='true')g.click();await s(300);
+  const f=document.getElementById('beach-find'),b=document.getElementById('btn-sun'),sun=document.getElementById('toggle-sunny');
+  const r={inControls:!!b.closest('.controls'),inBlade:!!(f&&f.closest('.lp-fold[data-layer="beaches"]')),seen:!!(b.offsetWidth&&b.offsetHeight),sunny:sun.checked,
+    sunInBlade:!!sun.closest('.lp-fold[data-layer="beaches"]'),settingsRow:!!document.querySelector('#settings-pop #btn-all')};
+  document.getElementById('status').textContent='';b.click();await s(2500);
+  r.status=document.getElementById('status').textContent;r.shown=SunnyBeachToggle.isShown();r.rowOn=SunnyLayers.isOn('beaches');
+  SunnyLayers.set('beaches',false);await s(500);r.off=!SunnyBeachToggle.isShown()&&document.body.classList.contains('beaches-hidden');return r}"""
+async def beach_blade(b):
+    """t384u: the legacy bottom-right Find Beaches button moved into the Beaches layer's controls (390 px phone)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(BEACH_BLADE)
+    check("no Find Beaches button in the map's side controls", not r["inControls"], r)
+    check("Find beaches, All beaches and Sunny only sit in the Beaches controls", r["inBlade"] and r["sunInBlade"] and r["seen"] and not r["settingsRow"], r)
+    check("Sunny only starts on", r["sunny"], r)
+    check("Find beaches runs the search, says so and turns the Beaches row on", bool(r["status"]) and r["shown"] and r["rowOn"], r)
+    check("Beaches row off hides them again", r["off"], r)
+    check("beach blade no page errors", not errs, errs)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

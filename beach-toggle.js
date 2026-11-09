@@ -1,8 +1,7 @@
 // workspace/whereisthesun/beach-toggle.js
-/* SUNNY Find Beaches toggle (opt91): first tap runs the normal beach search and shows
- * beaches (button pressed); next tap hides beach markers, the chosen-beach dot and the
- * results sheet (button released). Runs in the capture phase so a "hide" tap never
- * reaches the search handler. */
+/* SUNNY beaches shown or hidden (opt91, t384u). Find beaches and All beaches (in the Beaches layer's controls)
+ * run the normal search and show the beach markers; switching the Beaches layer off hides the markers,
+ * the chosen-beach dot and the results sheet. */
 (function () {
   "use strict";
   var LAYERS = ["beaches-fill", "beaches-line", "beaches-dot", "beaches-sun"];
@@ -10,37 +9,24 @@
   function setLayers(on) {
     var m = window.map;
     if (!m || !m.getLayer) return;
-    function one(id) {
-      var want = on ? "visible" : "none";
+    var want = on ? "visible" : "none";
+    LAYERS.forEach((id) => {
       if (m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== want) m.setLayoutProperty(id, "visibility", want);
-    }
-    LAYERS.forEach(one);
+    });
   }
-  function mark(b) {
-    b.setAttribute("aria-pressed", shown ? "true" : "false");
-    b.classList.toggle("is-on", shown);
-    document.body.classList.toggle("beaches-hidden", !shown);
+  function mark(on) {
+    shown = on;
+    setLayers(on);
+    document.body.classList.toggle("beaches-hidden", !on);
+    if (window.SunnyLayers && window.SunnyLayers.refresh) window.SunnyLayers.refresh();
   }
-  function onTap(e) {
-    var b = e.currentTarget;
-    if (shown) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      shown = false;
-      setLayers(false);
-      var sheet = document.getElementById("sunny-sheet");
-      if (sheet) sheet.hidden = true;
-    } else {
-      shown = true;
-      setLayers(true);
-    }
-    mark(b);
+  function show() {
+    mark(true);
   }
-  function onAll() {
-    var b = document.getElementById("btn-sun");
-    shown = true;
-    setLayers(true);
-    if (b) mark(b);
+  function hide() {
+    mark(false);
+    var sheet = document.getElementById("sunny-sheet");
+    if (sheet) sheet.hidden = true;
   }
   function enforce() {
     if (!shown) setLayers(false);
@@ -51,19 +37,14 @@
     enforce();
   }
   function init() {
-    var b = document.getElementById("btn-sun");
-    if (!b) return;
-    b.addEventListener("click", onTap, true);
-    var all = document.getElementById("btn-all");
-    if (all) all.addEventListener("click", onAll, true);
+    ["btn-sun", "btn-all"].forEach((id) => {
+      var b = document.getElementById(id);
+      if (b) b.addEventListener("click", show, true);
+    });
     hook();
     document.body.classList.add("beaches-hidden");
-    b.setAttribute("aria-pressed", "false");
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
-  function isShown() {
-    return shown;
-  }
-  window.SunnyBeachToggle = { isShown: isShown };
+  window.SunnyBeachToggle = { isShown: () => { return shown; }, hide: hide };
 })();

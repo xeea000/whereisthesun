@@ -52,11 +52,23 @@
       return { id: "observatories-" + k[0], name: k[1], dflt: true }; }),
     kidSet: () => { if (window.SunnyObservatories) window.SunnyObservatories.refresh(); } }, checkbox("toggle-observatories"));
   row({ id: "craters", name: "Impact craters", icon: "☄️", group: "Earth", tip: "Confirmed impact structures at true size" }, checkbox("toggle-craters"));
-  row({ id: "beaches", name: "Beaches", icon: "🏖️", group: "Outdoors", tip: "Find beaches near you (same as the Find Beaches button)" }, {
+  /* t384u: Find beaches, All beaches and Sunny only are the same elements the search code wires up (app-core.js),
+   * moved from their hidden holder into this row's controls. The panel rebuilds every row when layers
+   * register, so the block is held here and put into each new row. */
+  var finder = null;
+  row({ id: "beaches", name: "Beaches", icon: "🏖️", group: "Outdoors", tip: "Find beaches near you, sunny ones first unless Sunny only is off", open: true,
+    controls: (host) => {
+      var f = finder = finder || box("beach-find");
+      if (!f) return;
+      host.insertBefore(f, host.firstChild);
+      f.hidden = false;
+    } }, {
     get: () => { return !!(window.SunnyBeachToggle && window.SunnyBeachToggle.isShown()); },
     set: (on) => {
-      var b = box("btn-sun");
-      if (b && window.SunnyBeachToggle && window.SunnyBeachToggle.isShown() !== on) b.click();
+      var t = window.SunnyBeachToggle, b = box("btn-sun");
+      if (!t || t.isShown() === on) return;
+      if (on && b) b.click();
+      else t.hide();
     }
   });
   row({ id: "crown", name: "Crown Land (Ontario)", icon: "🌲", group: "Outdoors", tip: "Ontario Crown land, LIO open data" }, {

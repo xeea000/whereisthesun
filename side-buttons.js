@@ -1,7 +1,7 @@
 // workspace/whereisthesun/side-buttons.js
 /* SUNNY side controls (opt75). Find Beaches is never disabled: app.js still writes btn.disabled
- * while busy, and that property is redirected to a visual "busy" class here. The round layer
- * buttons that used to sit here were removed in t382u; those layers switch in the Layers panel. */
+ * while busy, and that property is redirected to a visual "busy" class here. Layer switches live
+ * in the Layers panel only. */
 (function () {
   "use strict";
   function keepBeachesEnabled() {

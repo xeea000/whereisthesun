@@ -109,7 +109,7 @@
     tw.type = "button";
     tw.setAttribute("aria-label", "Show " + d.name + " options");
     var box = el("div", d.kids ? "lp-ctrls lp-kids" : "lp-ctrls");
-    var open = saved(d.id + "-open", false);
+    var open = saved(d.id + "-open", !!d.open);
     var show = (o) => { box.hidden = !o; tw.textContent = o ? "▾" : "▸"; tw.setAttribute("aria-expanded", o ? "true" : "false"); };
     show(open);
     var flip = (ev) => { ev.preventDefault(); ev.stopPropagation(); open = !open; show(open);

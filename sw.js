@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt253"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt254"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -32,10 +32,10 @@ var PRECACHE = [
   "index.html",
   "vendor/lag-o-meter-1.7.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
-  "styles.css?h=abe35cdd07",
-  "settings-panel.css?h=a69b785b77",
-  "side-buttons.css?h=f497fe7b86",
-  "layers-panel.css?h=5f6f39b22e",
+  "styles.css?h=64f8fad1bf",
+  "settings-panel.css?h=8d1ff4415e",
+  "side-buttons.css?h=629d800453",
+  "layers-panel.css?h=217dac85f7",
   "info-panel.css?h=f8b872b3fa",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
@@ -46,7 +46,7 @@ var PRECACHE = [
   "plus-code.js?h=2de5aed8e0",
   "info-panel.js?h=fef315bb15",
   "beach-card.js?h=0237ca65e1",
-  "beach-icons.js?h=75dc98510f",
+  "beach-icons.js?h=0d1a2646fa",
   "data-saver.js?h=b5f6ab6d25",
   "vector-base.js?h=72f4b92260",
   "light-clouds.js?h=3eec306776",
@@ -61,17 +61,17 @@ var PRECACHE = [
   "wind-field.js?h=e5e0fb680c",
   "wind-gl.js?h=09b3941c63",
   "point-forecast.js?h=3a2a36247e",
-  "beach-toggle.js?h=6ed1375f1c",
-  "side-buttons.js?h=992e0af19b",
+  "beach-toggle.js?h=6f8bbe8fdf",
+  "side-buttons.js?h=b0ec3429d6",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "layer-kit.js?h=34c4c7777b",
   "frame-kit.js?h=483b24432b",
   "layer-lazy.js?h=26794f51c2",
-  "layers-panel.js?h=5151e2a58c",
+  "layers-panel.js?h=485d49aa5f",
   "share-link.js?h=770348876e",
   "bar-toggles.js?h=68ff6400e3",
   "legend-stack.js?h=4554a57966",
-  "existing-layers.js?h=db06caf7a1",
+  "existing-layers.js?h=4f613f947d",
   "advanced.js?h=ef030f80f5",
   "hover-box.js?h=32cdb130cf",
   "offline.js?h=f591704655",
