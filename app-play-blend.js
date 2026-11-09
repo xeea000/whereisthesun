@@ -529,8 +529,7 @@ var steerState, STEER_TTL_MS, STEER_FAIL_TTL_MS, omPlayGrid, omPlayPromise;
           ctx.fillRect(x0, y0, bw, bh);
         }
       }
-      var dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      return crossfadePlayImage(dataUrl);
+      return window.SunnyKit.frameImage(canvas, "image/jpeg", 0.85).then(crossfadePlayImage);
     });
   }
   function presentPlayFrame(iso) {

@@ -6,11 +6,18 @@
  * same one the Labels overlay uses, so both share one set of tiles. Satellite stays a picture map. */
 (function () {
   "use strict";
+  /* opt246: one table of base themes. Their style files start downloading when this script runs, and only the
+   * theme on screen gets its layers; another theme's layers are added the first time it is picked. */
   var STYLES = { roads: "https://tiles.openfreemap.org/styles/liberty", dark: "https://tiles.openfreemap.org/styles/dark" };
   var GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
-  var ids = { roads: [], dark: [] };
+  var CHUNK = 20;
+  var ids = {};
+  var styleJson = {};
+  var added = {};
+  var done = {};
   var ready = false;
   var wanted = "roads";
+  Object.keys(STYLES).forEach((m) => { ids[m] = []; });
   function enabled() {
     return !!(window.SunnyDataSaver && window.SunnyDataSaver.on("vector"));
   }
@@ -24,25 +31,57 @@
     if (lay["icon-image"] || paint["fill-pattern"] || paint["line-pattern"]) return false;
     return true;
   }
+  function styleOf(mode) {
+    if (!styleJson[mode]) {
+      styleJson[mode] = getJson(STYLES[mode]);
+      styleJson[mode].catch(() => { delete styleJson[mode]; });
+    }
+    return styleJson[mode];
+  }
+  function nextTurn(fn) {
+    if (window.requestIdleCallback) window.requestIdleCallback(fn, { timeout: 200 });
+    else setTimeout(fn, 0);
+  }
+  /* A theme's layers go in CHUNK at a time, hidden, so no single task is long; apply() shows them when all are in */
   function addLayers(map, mode, style) {
     var before = map.getLayer("osm") ? "osm" : undefined;
-    style.layers.filter(usable).forEach((layer) => {
-      var copy = JSON.parse(JSON.stringify(layer));
-      copy.id = "vb-" + mode + "-" + layer.id;
-      if (copy.source) copy.source = "ofm";
-      copy.layout = copy.layout || {};
-      copy.layout.visibility = "none";
-      try {
-        map.addLayer(copy, before);
-        ids[mode].push(copy.id);
-      } catch (e) {}
+    var list = style.layers.filter(usable);
+    return new Promise((resolve) => {
+      var i = 0;
+      function some() {
+        var end = Math.min(list.length, i + CHUNK);
+        for (; i < end; i++) {
+          var copy = Object.assign({}, list[i], { id: "vb-" + mode + "-" + list[i].id });
+          if (copy.source) copy.source = "ofm";
+          copy.layout = Object.assign({}, copy.layout, { visibility: "none" });
+          try {
+            map.addLayer(copy, before);
+            ids[mode].push(copy.id);
+          } catch (e) {}
+        }
+        if (i < list.length) nextTurn(some);
+        else resolve();
+      }
+      some();
     });
+  }
+  function ensureTheme(map, mode) {
+    if (!STYLES[mode]) return Promise.resolve();
+    if (!added[mode]) {
+      added[mode] = styleOf(mode).then((style) => addLayers(map, mode, style)).then(() => { done[mode] = true; });
+      added[mode].catch(() => { delete added[mode]; });
+    }
+    return added[mode];
   }
   function apply(mode) {
     wanted = mode;
     var map = window.map;
     if (!ready || !map) return;
-    ["roads", "dark"].forEach((m) => {
+    if (active(mode) && !done[mode]) {
+      ensureTheme(map, mode).then(() => { if (wanted === mode) apply(mode); }).catch(fallback);
+      return;
+    }
+    Object.keys(STYLES).forEach((m) => {
       var vis = active(mode) && m === mode ? "visible" : "none";
       ids[m].forEach((id) => {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
@@ -61,9 +100,7 @@
     /* Low data: tiles stop at zoom 12 and are drawn larger beyond it */
     var src = low ? getJson(OFM).then((j) => { return { type: "vector", tiles: j.tiles, minzoom: 0, maxzoom: 12, attribution: "OpenFreeMap · OSM" }; })
       .catch(() => { return { type: "vector", url: OFM, attribution: "OpenFreeMap · OSM" }; }) : Promise.resolve({ type: "vector", url: OFM, attribution: "OpenFreeMap · OSM" });
-    return src.then((o) => { if (!map.getSource("ofm")) map.addSource("ofm", o); return Promise.all([getJson(STYLES.roads), getJson(STYLES.dark)]); }).then((styles) => {
-      addLayers(map, "roads", styles[0]);
-      addLayers(map, "dark", styles[1]);
+    return src.then((o) => { if (!map.getSource("ofm")) map.addSource("ofm", o); return ensureTheme(map, wanted); }).then(() => {
       ready = true;
       apply(wanted);
     });
@@ -81,5 +118,6 @@
       window.applyBaseMap();
     } catch (e) {}
   }
+  if (enabled()) Object.keys(STYLES).forEach(styleOf);
   window.SunnyVectorBase = { start: start, apply: apply, active: active };
 })();

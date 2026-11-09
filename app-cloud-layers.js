@@ -296,6 +296,13 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     if (i >= 0) playLruOrder.splice(i, 1);
     playLruOrder.push(key);
   }
+  /* opt245: a dropped frame also gives back its in-memory picture address (SunnyKit.frameImage) */
+  function playLruDrop(key) {
+    var rec = key && playImgCache[key];
+    if (!rec) return;
+    delete playImgCache[key];
+    if (window.SunnyKit && window.SunnyKit.frameImage) window.SunnyKit.frameImage.release(rec.url);
+  }
   function playLruEvictOne() {
     var i, key;
     if (playMode) {
@@ -303,13 +310,13 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
         key = playLruOrder[i];
         if (!playKeyIsPinned(key)) {
           playLruOrder.splice(i, 1);
-          if (key && playImgCache[key]) delete playImgCache[key];
+          playLruDrop(key);
           return true;
         }
       }
     }
     key = playLruOrder.shift();
-    if (key && playImgCache[key]) delete playImgCache[key];
+    playLruDrop(key);
     return !!key;
   }
   function playLruGet(key) {
@@ -322,6 +329,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
     if (!rec || !rec.ok) return;
     rec.key = key;
     if (playImgCache[key]) {
+      if (playImgCache[key].url !== rec.url && window.SunnyKit && window.SunnyKit.frameImage) window.SunnyKit.frameImage.release(playImgCache[key].url);
       playImgCache[key] = rec;
       playLruTouch(key);
       return;
@@ -499,6 +507,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
   function playLruClear() {
     cancelPlayTimelineWarm();
     playTimelineWarmed = false;
+    if (window.SunnyKit && window.SunnyKit.frameImage) Object.keys(playImgCache).forEach((k) => { window.SunnyKit.frameImage.release(playImgCache[k].url); });
     playImgCache = Object.create(null);
     playLruOrder = [];
     playLoadPending = Object.create(null);

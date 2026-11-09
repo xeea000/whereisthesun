@@ -414,6 +414,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
         delete playLoadPending[key];
         var rec = { ok: !!ok, url: url, img: img, key: key, cached: false };
         if (ok) playLruSet(key, rec);
+        else if (window.SunnyKit && window.SunnyKit.frameImage) window.SunnyKit.frameImage.release(url);
         resolve(rec);
       }
       var retried = false;

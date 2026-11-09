@@ -6,7 +6,8 @@
  *   viewSize(el)    an element's client size kept from a ResizeObserver, so a frame never forces layout to read it
  *   fmt.frameTime   one reused date formatter for frame labels
  *   setText(el, s)  writes only when the text changes
- *   narrow()        one shared phone-width media query */
+ *   narrow()        one shared phone-width media query
+ *   frameImage(c)   a canvas as an in-memory image address, encoded off the main thread (release() when dropped) */
 (function () {
   "use strict";
   var K = window.SunnyKit = window.SunnyKit || {};
@@ -54,6 +55,35 @@
     if (!narrowMq && typeof window.matchMedia === "function") narrowMq = window.matchMedia("(max-width:700px)");
     return !!(narrowMq && narrowMq.matches);
   }
+  /* opt245: a drawn frame as an image address without stalling the page. toBlob encodes off the main thread
+   * (same encoder and quality as toDataURL, so the same pixels) and the picture is read from memory instead of
+   * decoding a long data: string. Whoever keeps the address calls frameImage.release(url) when dropping it. */
+  var frameUrls = typeof Set === "function" ? new Set() : null;
+  function frameImage(canvas, type, quality) {
+    return new Promise((resolve) => {
+      function fallback() {
+        resolve(canvas.toDataURL(type, quality));
+      }
+      if (!canvas.toBlob || !frameUrls || !window.URL || !URL.createObjectURL) return fallback();
+      try {
+        canvas.toBlob((blob) => {
+          if (!blob) return fallback();
+          var u = URL.createObjectURL(blob);
+          frameUrls.add(u);
+          resolve(u);
+        }, type, quality);
+      } catch (e) { fallback(); }
+    });
+  }
+  function release(u) {
+    if (u && frameUrls && frameUrls.has(u)) {
+      frameUrls.delete(u);
+      URL.revokeObjectURL(u);
+    }
+  }
+  frameImage.release = release;
+  frameImage.live = () => { return frameUrls ? frameUrls.size : 0; };
+  K.frameImage = frameImage;
   K.once = once;
   K.viewSize = viewSize;
   K.fmt = { frameTime: frameTime };

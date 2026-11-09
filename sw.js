@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt244"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt245"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -48,8 +48,8 @@ var PRECACHE = [
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=75dc98510f",
   "data-saver.js?h=b5f6ab6d25",
-  "vector-base.js?h=c9dffc1e3d",
-  "light-clouds.js?h=b3980fe855",
+  "vector-base.js?h=dd67551496",
+  "light-clouds.js?h=3eec306776",
   "cloud-key.js?h=5d5b626b3c",
   "msg-clouds.js?h=64a9d75088",
   "play-handoff.js?h=b695a52a77",
@@ -65,7 +65,7 @@ var PRECACHE = [
   "side-buttons.js?h=6e117a70f1",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
   "layer-kit.js?h=34c4c7777b",
-  "frame-kit.js?h=c3f27174ed",
+  "frame-kit.js?h=332b6c6dd0",
   "layer-lazy.js?h=26794f51c2",
   "layers-panel.js?h=49f0769467",
   "share-link.js?h=770348876e",
@@ -83,9 +83,9 @@ var PRECACHE = [
   "play-pin.js?h=d91f012835",
   "app-core.js?h=28f47cd4f5",
   "app-timeline.js?h=cfc2a3086a",
-  "app-cloud-layers.js?h=da936274ca",
-  "app-play-buffers.js?h=8c4417d046",
-  "app-play-blend.js?h=a61300b670",
+  "app-cloud-layers.js?h=044f396d25",
+  "app-play-buffers.js?h=51e67254eb",
+  "app-play-blend.js?h=2d35ed038e",
   "app-cloud-frames.js?h=25152c66fd",
   "app-beach-store.js?h=2f443c94e4",
   "app-beach-fetch.js?h=2b9c93ee7a",

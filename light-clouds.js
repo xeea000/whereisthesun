@@ -100,13 +100,14 @@
     var out = document.createElement("canvas");
     out.width = w;
     out.height = h;
-    var ctx = out.getContext("2d");
+    /* pixels kept on the CPU, so encoding the frame needs no read back from the GPU */
+    var ctx = out.getContext("2d", { willReadFrequently: true });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(small, 0, 0, w, h);
-    return out.toDataURL("image/jpeg", 0.8);
+    return window.SunnyKit.frameImage(out, "image/jpeg", 0.8);
   }
-  /* A GIBS WMS frame address in, the same frame drawn from cloud cover numbers out (data: URL) */
+  /* A GIBS WMS frame address in, the same frame drawn from cloud cover numbers out (an image address from SunnyKit.frameImage) */
   function frameUrl(url) {
     var boxText = param(url, "BBOX");
     var ms = Date.parse(param(url, "TIME"));
