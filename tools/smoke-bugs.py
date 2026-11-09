@@ -380,9 +380,25 @@ async def beach_size(b):
     v = await pg.evaluate("()=>SunnyBeachIcons.getScale()")
     check("a size saved before keeps its on-screen size (1.5 → 2 on the new scale)", v == 2, v)
     await ctx.close()
+SUN_CARD = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:[-79.38,43.65],zoom:6});await s(800);
+  const sec=()=>[...document.querySelectorAll('.ip-sec')].map(x=>x.innerText).join(' | ');const vis=(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';
+  SunnyLayers.set('goldenhour',true);for(let i=0;i<30&&!/Sunset score \\d/.test(sec());i++)await s(500);
+  const a={sec:sec(),path:vis('sun-path-line'),kinds:[...new Set(map.querySourceFeatures('sun-path').map(f=>f.properties.k))].sort().join()};
+  SunnyLayers.kidSet('goldenhour-path',false);await s(400);a.pathOff=vis('sun-path-line');a.secOff=sec();SunnyLayers.kidSet('goldenhour-path',true);
+  SunnyLayers.set('goldenhour',false);await s(400);a.gone=!/Sun here/.test(sec())&&!vis('sun-path-line')&&!vis('gold-fill');return a}"""
+async def sun_card(b):
+    """t388u: one Sun row holds the golden hour bands, the sun path and shadow, the sunset score and the UV burn timer;
+    each kid switches its own part, and switching the row off clears the map and the info panel (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(SUN_CARD)
+    check("Sun block lists golden hour, sunset score and UV burn timer", all(w in r["sec"] for w in ["Golden hour", "Sunset score", "UV"]), r)
+    check("sun path draws the path and the rise and set directions", r["path"] and "path" in r["kinds"] and "rise" in r["kinds"], r)
+    check("Sun path kid off hides the drawing and its line", not r["pathOff"] and "shadows point" not in r["secOff"] and "below the horizon" not in r["secOff"], r)
+    check("Sun row off clears the map and the panel", r["gone"] and not errs, [r, errs])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

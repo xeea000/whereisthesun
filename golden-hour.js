@@ -6,7 +6,7 @@
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
   var IDS = ["gold-fill"], BANDS = [[-6, -4, "#4a6fd1", "Blue hour"], [-4, 6, "#ffb347", "Golden hour"]];
-  var R = Math.PI / 180, timer = null;
+  var R = Math.PI / 180, timer = null, gmap = null;
   var sunAt = (t) => {
     var d = t / 864e5 - 10957.5, g = (357.529 + 0.98560028 * d) * R, q = 280.459 + 0.98564736 * d;
     var lam = (q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * R, e = (23.439 - 3.6e-7 * d) * R;
@@ -48,8 +48,11 @@
     var i = ls.findIndex((l) => l.id === "gold-fill"), nxt = ls[top + 1] && ls[top + 1].id;
     if (top >= 0 && i > top + 1 && nxt) { try { map.moveLayer("gold-fill", nxt); } catch (e) {} }
   };
+  var bandsOn = (on) => { return K.kids.layerOn(on, "goldenhour-bands", true); };
   var apply = (map, on) => {
     clearInterval(timer); timer = null;
+    if (window.SunnySun) window.SunnySun.refresh();
+    on = bandsOn(on);
     if (on) {
       try { draw(map); low(map); } catch (e) { setTimeout(() => { if (L.isOn("goldenhour")) apply(map, true); }, 2000); return; } /* style not ready yet */
       timer = setInterval(() => { try { draw(map); } catch (e) {} }, 60000);
@@ -60,15 +63,26 @@
     var b = BANDS[f.properties.b];
     return Promise.resolve([b[3] + " now", "sun " + b[0] + "° to " + b[1] + "°"]);
   };
-  L.add({ id: "goldenhour", name: "Golden hour", icon: "🌅", group: "Sky & Space", taps: ["gold-fill"], dflt: true, apply: apply,
-    legend: K.legKeys(BANDS.slice().reverse().map((c) => { return [c[2], "area", c[3] + " (sun " + c[0] + "° to " + c[1] + "°)"]; })),
-    tip: "Where the sun is low right now: golden hour (sun 4° below to 6° above the horizon) and blue hour (6° to 4° below). Computed, no download",
+  var KIDS = [["bands", "Golden & blue hour bands"], ["path", "Sun path & shadow"], ["sunset", "Sunset score"], ["uv", "UV burn timer"]];
+  var SC = window.SunnySunCol = { path: "#ffd34d", now: "#ffb000", shadow: "#37474f", rise: "#ff8a3d" };
+  L.add({ id: "goldenhour", name: "Sun & golden hour", icon: "🌅", group: "Sky & Space", taps: ["gold-fill"], dflt: true, apply: apply,
+    kids: KIDS.map((k) => { return { id: "goldenhour-" + k[0], name: k[1], dflt: true }; }),
+    kidSet: () => { if (gmap) apply(gmap, L.isOn("goldenhour")); },
+    legend: K.legKeys(BANDS.slice().reverse().map((c) => { return [c[2], "area", c[3] + " (sun " + c[0] + "° to " + c[1] + "°)"]; })
+      .concat([[SC.path, "line", "Sun path (further from the map centre = lower)"], [SC.now, "line", "Sun direction now"],
+        [SC.shadow, "line", "Shadow direction now"], [SC.rise, "line", "Sunrise and sunset directions"]])) +
+      '<div class="ls-row"><small>Sunset score = 10 × (1 − low cloud) × (0.4 + 0.6 × closeness of mid or high cloud to 50 %). ' +
+      "UV burn minutes = skin MED ÷ (1.5 × UV index), MED 250 J/m² fair, 300 J/m² medium. Rough guides</small></div>",
+    tip: "The sun at the map centre: golden and blue hour bands on the map, the sun path and shadow direction, a sunset score " +
+      "(10 × (1 − low cloud) × (0.4 + 0.6 × closeness of mid or high cloud to 50 %), Open-Meteo) and a UV burn timer " +
+      "(minutes = skin MED ÷ (1.5 × UV index), Open-Meteo UV). Times and numbers in the info panel",
     attach: (map, on) => {
+      gmap = map;
       (window.SunnyHoverName = window.SunnyHoverName || {})["gold-fill"] = hoverName;
       map.on("click", "gold-fill", (e) => { var b = BANDS[e.features[0].properties.b];
         K.show(map, e.lngLat, b[3] + " here now", ["Sun " + b[0] + "° to " + b[1] + "° above the horizon", "Computed from the sun's position; updates each minute"],
           ["Computed from the sun position", ""]); });
-      map.on("idle", () => { if (!L.isOn("goldenhour")) return; if (!map.getLayer("gold-fill")) apply(map, true); else low(map); });
+      map.on("idle", () => { if (!bandsOn(L.isOn("goldenhour"))) return; if (!map.getLayer("gold-fill")) apply(map, true); else low(map); });
       apply(map, on);
     } });
 })();
