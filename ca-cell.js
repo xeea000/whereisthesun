@@ -8,7 +8,7 @@
   var K = window.SunnyKit, BASE = "data/ca-cell/", man = null, feats = {}, asked = {}, map = null, hooked = false;
   var ov = null, ovLoading = false, band = null, pending = 0;
   var ST = { T: "Purpose-built tower", R: "Rooftop", P: "Pole", O: "Other (e.g. indoor)", S: "Water tower or silo", F: "Street furniture", M: "Transportable" };
-  var BR = [["Bell", "#1f6fe0"], ["Rogers", "#e0301e"], ["TELUS", "#4b286d"], ["Freedom (filed as Freedom)", "#ff7a00"], ["Vidéotron (incl. Freedom)", "#ffd400"], ["SaskTel", "#00a650"],
+  var BR = [["Bell", "#1f6fe0"], ["Rogers", "#e0301e"], ["TELUS", "#4b286d"], ["Freedom", "#ff7a00"], ["Vidéotron", "#ffd400"], ["SaskTel", "#00a650"],
     ["Eastlink", "#00b5e2"], ["Xplore", "#8bc34a"], ["TBayTel", "#795548"], ["Ice Wireless", "#9fd8ff"], ["Other", "#9e9e9e"]];
   /* opt199: towers-ca is a subset kid of Towers (SunnyKit.kids) */
   var on = () => {

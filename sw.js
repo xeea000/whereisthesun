@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt257"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt258"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -71,7 +71,7 @@ var PRECACHE = [
   "share-link.js?h=0eeccab808",
   "bar-toggles.js?h=68ff6400e3",
   "legend-stack.js?h=4554a57966",
-  "existing-layers.js?h=4f613f947d",
+  "existing-layers.js?h=2a21aa0722",
   "advanced.js?h=ef030f80f5",
   "hover-box.js?h=32cdb130cf",
   "offline.js?h=f591704655",
@@ -101,7 +101,7 @@ var PRECACHE = [
   "settings-panel.js?h=0e2b6b8551",
   "lagmeter.js?h=1da2e674c3",
   "craters.js?h=d099c3bfa6",
-  "sky-glow.js?h=4d42b38488",
+  "sky-glow.js?h=e40dbd832b",
   "observatories.js?h=e93293e879",
   "crown-land.js?h=34bb143216",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
@@ -128,7 +128,7 @@ var PRECACHE = [
   "coord-grid.js?h=a8528bd13f",
   "water-temp.js?h=9652d168a0",
   "waves.js?h=c1631fca41",
-  "ca-cell.js?h=ec413b0157",
+  "ca-cell.js?h=f203aa492e",
   "fire-lookout.js?h=3a7c53c59c",
   "ca-cover.js?h=c5dd186c2a",
   "world-layers.js?h=9a3dc33d0b",

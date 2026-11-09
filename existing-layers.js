@@ -46,7 +46,7 @@
     L.add(def);
   }
   row({ id: "wind", name: "Wind", icon: "💨", group: "Weather", tip: "Wind lines from Open-Meteo, current wind only: they hide while Play runs and do not follow the timeline" }, checkbox("toggle-wind"));
-  row({ id: "skyglow", name: "Dark sky", icon: "🌌", group: "Sky & Space", tip: "NASA Black Marble night lights: dark = dark sky" }, checkbox("toggle-skyglow"));
+  row({ id: "skyglow", name: "Dark sky", icon: "🌌", group: "Sky & Space", tip: "NASA Black Marble night lights from 2016 (VIIRS): dark = dark sky" }, checkbox("toggle-skyglow"));
   row({ id: "observatories", name: "Observatories", icon: "🔭", group: "Sky & Space", tip: "Telescopes, detectors, dark-sky places and stargazing sites",
     kids: [["scope", "Telescopes"], ["detector", "Detectors"], ["darksky", "Dark Sky Reserves & Parks"], ["stargaze", "Stargazing sites"]].map((k) => {
       return { id: "observatories-" + k[0], name: k[1], dflt: true }; }),

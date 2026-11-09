@@ -1,8 +1,8 @@
 // workspace/whereisthesun/sky-glow.js
 /* SUNNY light pollution layer (opt91): NASA GIBS VIIRS Black Marble 2016 night lights,
  * public domain, keyless, CORS open. Bright = light-polluted sky, black = dark sky.
- * Raster at 70 % opacity under beaches, with a small legend. Off by default; the Settings
- * switch #toggle-skyglow saves the choice and the side button mirrors it. */
+ * Raster at 70 % opacity under beaches, with a small legend. Off by default; the Dark sky
+ * layer row drives the hidden #toggle-skyglow switch, which saves the choice. */
 (function () {
   "use strict";
   var K = window.SunnyKit;
