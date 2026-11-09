@@ -1,7 +1,8 @@
 // workspace/whereisthesun/water-temp.js
 /* SUNNY water temperature: NASA GIBS GHRSST MUR sea surface temperature (free, no key), daily at 1 km, oceans plus the
  * Great Lakes and other large lakes it covers. Tiles from two days back, the newest day GIBS reliably has.
- * The value at one spot comes from the Weather button (Open-Meteo Marine). Gap: small lakes are not in MUR. */
+ * The value at one spot comes from the Weather button (Open-Meteo Marine).
+ * Gaps: small lakes are not in MUR; Open-Meteo Marine has no lake temperature (null on the Great Lakes). */
 (() => {
   "use strict";
   var L = window.SunnyLayers, K = window.SunnyKit;
@@ -28,7 +29,7 @@
   };
   L.add({ id: "watertemp", name: "Water temperature", icon: "🌡️", group: "Ocean", dflt: true, apply: apply,
     legend: K.legRamp(STOPS.map((s) => { return s[0]; }).join(","), "0°C (32°F)", "18°C (64°F)", "32°C (90°F)"),
-    tip: "Sea and large-lake surface temperature, NASA MUR, two days back. Tap a spot, then Weather, for the number there",
+    tip: "Sea and large-lake surface temperature, NASA MUR, two days back. Tap a spot at sea, then Weather, for the number there (Open-Meteo Marine gives no lake temperatures, so lakes show the colour only)",
     attach: (map, on) => {
       map.on("idle", () => { if (!L.isOn("watertemp")) return; if (!map.getLayer("sst")) apply(map, true); else low(map); });
       apply(map, on);
