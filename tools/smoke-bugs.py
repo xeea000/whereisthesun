@@ -314,9 +314,33 @@ async def obs_kids(b):
     r = await pg.evaluate(OBS_KIDS)
     check("Observatories bubbles count only the classes switched on", 0 < r["dark"] <= 40 and r["all"] > 1000 and r["back"] == r["all"], r)
     await ctx.close()
+FOREST_VIEWS = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));document.getElementById('lp-tab').click();await SunnyLayerLazy.load();
+  const d=SunnyLayers.defs().find(d=>d.id==='forest');d.kids.forEach(k=>SunnyLayers.kidSet(k.id,true));SunnyLayers.set('forest',true);
+  for(const v of [[-79.5,44,7],[-75,52,7]]){map.jumpTo({center:[v[0],v[1]],zoom:v[2]});await s(6000)}}"""
+async def forest_404(b):
+    """t385u: forest Intact-forest tiles were asked for where none exist (8+ 404s around Toronto); the manifest now lists what exists."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+    seen = []
+    pg.on("response", lambda r: seen.append(r.status) if "/forest-pack/" in r.url and r.url.endswith(".webp") else None)
+    await pg.evaluate(FOREST_VIEWS)
+    check("forest asks only for tiles that exist and still draws them", seen.count(200) > 0 and not [x for x in seen if x >= 400],
+          {"ok": seen.count(200), "bad": [x for x in seen if x >= 400][:5]})
+    await ctx.close()
+UNDERSEA = """async(mode)=>{const s=t=>new Promise(r=>setTimeout(r,t));document.getElementById('lp-tab').click();await SunnyLayerLazy.load();
+  SunnyKit.overpass=()=>mode==='slow'?new Promise(()=>{}):Promise.reject(new Error('overpass 504'));
+  map.jumpTo({center:[-90.9,28.2],zoom:10});SunnyLayers.set('osm-undersea',true);await s(9000);
+  const note=(document.querySelector('.lp-row[data-id="osm-undersea"] .lp-note')||{}).textContent||'';
+  return {note:note,pipes:map.queryRenderedFeatures({layers:['osm-pipe']}).length}}"""
+async def undersea_state(b):
+    """t385u: zoomed in, Undersea pipelines went blank and silent while Overpass took about 30 s, and said nothing when it failed."""
+    for mode, want in (("slow", "Loading OpenStreetMap detail"), ("fail", "did not answer")):
+        ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+        r = await pg.evaluate(UNDERSEA, mode)
+        check("Undersea row says %s and keeps the overview pipelines" % mode, want in r["note"] and r["pipes"] > 0, r)
+        await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

@@ -3,7 +3,8 @@
 Output: data/human/forest-pack/{z}/{x}/{y}.webp  (LA: L=year|(drv<<5), A=255 on loss)
          data/human/forest-pack/ifl/{z}/{x}/{y}.webp (LA: L=1, A=255 on intact)
          data/human/forest-pack/manifest.json
-Empty loss tiles are omitted (404 = no loss inside coverage).
+Empty loss tiles are omitted; manifest "have" lists the tiles that exist so the app never asks for a missing one.
+--index-only rewrites "have" in the existing manifest from the files on disk.
 """
 from __future__ import annotations
 import io, json, math, os, sys, time, urllib.request
@@ -138,7 +139,35 @@ def dir_bytes(path: Path) -> int:
       total += p.stat().st_size
   return total
 
+def tile_index(base: Path) -> dict:
+  """{z: {x: [y or [y0, y1], ...]}} for every .webp under base/z/x/ (runs of y kept as ranges)."""
+  out: dict = {}
+  for zd in sorted(base.iterdir()):
+    if not (zd.is_dir() and zd.name.isdigit()):
+      continue
+    for xd in sorted(zd.iterdir(), key=lambda d: int(d.name)):
+      ys = sorted(int(f.stem) for f in xd.glob("*.webp"))
+      runs: list = []
+      for y in ys:
+        if runs and runs[-1][1] == y - 1:
+          runs[-1][1] = y
+        else:
+          runs.append([y, y])
+      if runs:
+        out.setdefault(zd.name, {})[xd.name] = [a if a == b else [a, b] for a, b in runs]
+  return out
+
+def have_index() -> dict:
+  return {"loss": tile_index(OUT), "ifl": tile_index(OUT / "ifl")}
+
 def main():
+  if "--index-only" in sys.argv:
+    path = OUT / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["have"] = have_index()
+    path.write_text(json.dumps(manifest, separators=(",", ":")) + "\n")
+    print("INDEX", {k: sum(len(v) for v in manifest["have"][k].values()) for k in manifest["have"]}, flush=True)
+    return 0
   OUT.mkdir(parents=True, exist_ok=True)
   jobs = []
   seen = set()
@@ -202,10 +231,11 @@ def main():
     "regions": REGIONS,
     "packMaxZoom": 9,
     "stats": stats,
+    "have": have_index(),
     "bytesOnDisk": dir_bytes(OUT),
     "builtAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
   }
-  (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+  (OUT / "manifest.json").write_text(json.dumps(manifest, separators=(",", ":")) + "\n")
   readme = OUT / "README.txt"
   readme.write_text(
     "Prebuilt forest loss+driver index tiles for SUNNY.\n"

@@ -24,7 +24,7 @@
   var OV_RAW_URL = "data/human/forest-ov/ov-raw.png?v=6848514b";
   var OV_IFL_URL = "data/human/forest-ov/ov-ifl.png?v=61c99620";
   var PACK_BASE = "data/human/forest-pack";
-  var PACK_MANIFEST_URL = PACK_BASE + "/manifest.json";
+  var PACK_MANIFEST_URL = PACK_BASE + "/manifest.json?v=df2b2708";
   var OV_LOSS_SRC = "forest-ov-loss-src", OV_LOSS_LYR = "forest-ov-loss-lyr";
   var OV_DRV_SRC = "forest-ov-drv-src", OV_DRV_LYR = "forest-ov-drv-lyr";
   var OV_IFL_SRC = "forest-ov-ifl-src", OV_IFL_LYR = "forest-ov-ifl-lyr";
@@ -203,10 +203,26 @@
       return { w: c.width, h: c.height, L: L, A: A };
     });
   }
+  /* manifest "have" lists every tile on disk (tools/build-forest-pack.py); a tile not listed is empty, so it is never fetched */
+  function packHas(kind, z, x, y) {
+    var have = packManifest && packManifest.have && packManifest.have[kind === "ifl" ? "ifl" : "loss"];
+    if (!have) return true;
+    var runs = (have[z] || {})[x] || [];
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (typeof r === "number" ? r === y : (y >= r[0] && y <= r[1])) return true;
+    }
+    return false;
+  }
   function getPackedRaw(z, x, y, kind, signal) {
     var key = "raw:" + kind + ":" + z + "/" + x + "/" + y;
     var hit = memGet(key);
     if (hit) return Promise.resolve(hit);
+    if (!packHas(kind, z, x, y)) {
+      hit = { w: TILE_SIZE, h: TILE_SIZE, L: new Uint8Array(TILE_SIZE * TILE_SIZE), A: new Uint8Array(TILE_SIZE * TILE_SIZE) };
+      memSet(key, hit);
+      return Promise.resolve(hit);
+    }
     var url = (kind === "ifl")
       ? (PACK_BASE + "/ifl/" + z + "/" + x + "/" + y + ".webp")
       : (PACK_BASE + "/" + z + "/" + x + "/" + y + ".webp");
