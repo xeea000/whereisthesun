@@ -18,7 +18,7 @@
   ];
   var PREFIX = "sunny-ds-";
   var CLOUD_STEP_MS = 20 * 60000;
-  var RADAR_STEP_MS = 15 * 60000;
+  var RADAR_STEP_MS = 30 * 60000; /* radar frames are 10 minutes apart: every 3rd */
   /* opt244: switches are read once per page; changing one reloads the page, so a memory copy is always current */
   var memo = {};
   function on(id) {
@@ -35,7 +35,7 @@
     memo[id] = !!value;
   }
   /* Frame times kept by Fewer frames: a fixed clock grid, so the same frames stay kept as time moves on */
-  /* Low data (bottom bar): Play keeps hourly cloud and half-hourly radar frames, base maps stop at zoom 12,
+  /* Low data (bottom bar): Play keeps hourly cloud and hourly radar frames, base maps stop at zoom 12,
    * cloud pictures are half size and stop at zoom 5, night-sky squares read zoom-4 light tiles,
    * live layers refresh 4 times slower and the aurora forecast is kept 4 hours */
   var lowMemo = null;

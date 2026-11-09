@@ -50,14 +50,17 @@
   function isoOf(ms) {
     return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
   }
-  /* Latest valid time from IEM, then every 10 minutes back over the last 24 hours */
+  /* Latest valid time from IEM, then every 10 minutes back over the last 24 hours. The 10-minute slots sit on the
+   * clock grid (:00, :10, ...) so Fewer frames keeps the same ones as time moves on; an off-grid latest is added at the end. */
   function framesFromLatest(d) {
     var end = Date.parse(d && d.meta && d.meta.valid);
     if (!isFinite(end)) end = Math.floor((Date.now() - 10 * 60000) / STEP_MS) * STEP_MS;
     var past = [];
-    for (var t = end - SPAN_MS; t <= end; t += FRAME_MS) {
+    var grid = Math.floor(end / FRAME_MS) * FRAME_MS;
+    for (var t = grid - SPAN_MS; t <= grid; t += FRAME_MS) {
       past.push({ time: Math.round(t / 1000), path: isoOf(t) });
     }
+    if (grid < end) past.push({ time: Math.round(end / 1000), path: isoOf(end) });
     latestIso = past[past.length - 1].path;
     syncCoverage();
     return { host: "iem", radar: { past: past, nowcast: [] } };

@@ -202,7 +202,7 @@ RADAR_SPAN = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));document.qu
   for(let i=0;i<60&&!(window.radarPast&&radarPast.length);i++)await s(1000);const out={};
   for(const h of ["6","12","24"]){document.querySelector('#range-seg [data-range="'+h+'"]').click();await s(1500);
     const p=window.radarPast||[];out[h]=[p.length,p.length?(p[p.length-1].time-p[0].time)/3600:0,document.querySelector('#range-seg [data-range="'+h+'"]').disabled]}
-  return out}"""
+  out.kept=(window.radarPast||[]).filter((f,i)=>SunnyDataSaver.keepRadar(i)).length;return out}"""
 async def radar_span(b):
     """t382u: Time span 24h/12h/6h changed nothing on Radar (frames were always the last 3 hours). Owner: radar follows the span
     at 10-minute steps from the IEM archive, and a Play loop over it fetches no missing frame."""
@@ -211,11 +211,17 @@ async def radar_span(b):
     pg.on("response", lambda r: bad.append(r.status) if "mesonet.agron.iastate.edu" in r.url and r.status >= 400 else None)
     r = await pg.evaluate(RADAR_SPAN)
     for h, n in (("6", 37), ("12", 73), ("24", 145)):
-        check("radar shows the %s h span at 10-minute steps" % h, r[h][0] == n and abs(r[h][1] - int(h)) < 0.01 and not r[h][2], r)
+        span_ok = r[h][0] in (n, n + 1) and abs(r[h][1] - int(h)) < 0.09
+        check("radar shows the %s h span at 10-minute steps" % h, span_ok and not r[h][2], r)
     await pg.evaluate("()=>document.getElementById('btn-play').click()")
     await pg.wait_for_timeout(20000)
     played = await pg.evaluate("()=>document.getElementById('btn-play').getAttribute('aria-pressed')")
     check("radar Play over 24 h fetches no missing frame", played == "true" and not bad, {"pressed": played, "http": bad[:5]})
+    check("Fewer frames keeps every 3rd radar frame", 47 <= r["kept"] <= 51, r["kept"])
+    await ctx.close()
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-lowdata": "1"})
+    r = await pg.evaluate(RADAR_SPAN)
+    check("Low data keeps hourly radar frames", r["24"][0] in (145, 146) and 23 <= r["kept"] <= 27, r)
     await ctx.close()
 BASE_SYM = """async(mode)=>{const s=t=>new Promise(r=>setTimeout(r,t));map.jumpTo({center:[-79.4,43.7],zoom:9});
   [...document.querySelectorAll('#basemap-seg .seg-btn')].find(b=>b.getAttribute('data-basemap')===mode).click();await s(6000);
@@ -289,9 +295,17 @@ async def share_more(b):
     check("link restores the airburst years on the map and the slider", r["yr"] == "2000–2015" and "2000" in r["f"] and "2015" in r["f"], r)
     check("share round trip no page errors", not errs and not errs2, errs + errs2)
     await ctx.close()
+async def maxdetail_boot(b):
+    """t382u: the Max detail notice and its Settings switch only existed after the Layers panel loaded its scripts."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+    r = await pg.evaluate("""async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await s(3000);const sw=!!document.getElementById('toggle-maxdetail');
+      map.jumpTo({center:[-79.38,43.65],zoom:19.8});await s(3000);const p=document.getElementById('max-detail');
+      return {sw:sw,pill:p?p.style.display:'none',lazy:SunnyLayerLazy.ready()}}""")
+    check("Max detail notice works without opening Layers", r["sw"] and r["pill"] == "block" and not r["lazy"], r)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
