@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""SUNNY focused regressions for provable bugs fixed in t378u (opt241+). Usage: smoke-bugs.py URL
+Each check prints PASS/FAIL; exit 1 on any FAIL. Headless Chromium, no network needed beyond the local server
+(map tiles may fail offline; checks read the map style, not pixels)."""
+import asyncio, json, os, sys
+from playwright.async_api import async_playwright
+EXE = os.environ.get("SUNNY_CHROME", "/home/box/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell")
+URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8765/"
+FAILS = []
+def check(name, ok, info=""):
+    print(("PASS " if ok else "FAIL ") + name + ("" if ok else "  " + str(info)[:400]), flush=True)
+    if not ok: FAILS.append(name)
+async def boot(b, store=None, w=1366):
+    ctx = await b.new_context(viewport={"width": w, "height": 800}, service_workers="block")
+    if store:
+        await ctx.add_init_script("(()=>{const s=%s;for(const k in s)localStorage.setItem(k,s[k]);})()" % json.dumps(store))
+    pg = await ctx.new_page()
+    errs = []
+    pg.on("pageerror", lambda e: errs.append(str(e)[:300]))
+    await pg.goto(URL, wait_until="load", timeout=120000)
+    await pg.wait_for_function("()=>window.map&&map.loaded&&map.loaded()&&window.SunnyLayers", timeout=90000)
+    return ctx, pg, errs
+LEGACY = {"craters": "craters-dot", "observatories": "obs-point", "skyglow": "skyglow-raster", "crown": "crown-land"}
+VIS = "(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none'"
+async def lazy_legacy(b):
+    """Bug 1: lazily loaded older layers (craters, observatories, light pollution, Crown land) drew nothing
+    when switched on from the Layers panel, and their saved on-state did not restore at boot."""
+    ctx, pg, errs = await boot(b)
+    await pg.evaluate("()=>document.getElementById('lp-tab').click()")
+    await pg.wait_for_function("()=>SunnyLayerLazy.ready()", timeout=60000)
+    await pg.evaluate("()=>map.jumpTo({center:[-79.4,45],zoom:5})")
+    for lid, mid in LEGACY.items():
+        await pg.evaluate("(id)=>SunnyLayers.set(id,true)", lid)
+        try:
+            await pg.wait_for_function("(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none'", arg=mid, timeout=45000)
+            ok = True
+        except Exception:
+            ok = False
+        check("lazy layer draws: " + lid, ok, await pg.evaluate("()=>map.getStyle().layers.map(l=>l.id).join(',')"))
+        await pg.evaluate("(id)=>SunnyLayers.set(id,false)", lid)
+        await pg.wait_for_timeout(400)
+        check("lazy layer hides: " + lid, not await pg.evaluate(VIS, mid))
+    check("lazy legacy no page errors", not errs, errs)
+    await ctx.close()
+    store = {"sunny-layers-off-v1": "1", "sunny-craters": "1", "sunny-skyglow": "1"}
+    ctx, pg, errs = await boot(b, store)
+    try:
+        await pg.wait_for_function("()=>map.getLayer('craters-dot')&&map.getLayer('skyglow-raster')", timeout=30000)
+        ok = True
+    except Exception:
+        ok = False
+    check("saved legacy layers restore at boot without opening the panel", ok)
+    check("saved legacy rows read on", await pg.evaluate("()=>SunnyLayers.isOn('craters')&&SunnyLayers.isOn('skyglow')"))
+    await ctx.close()
+async def main():
+    only = os.environ.get("SUNNY_BUGS_ONLY", "")
+    tests = [lazy_legacy]
+    async with async_playwright() as p:
+        b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
+        for t in tests:
+            if only and t.__name__ not in only.split(","): continue
+            try:
+                await t(b)
+            except Exception as e:
+                check(t.__name__ + " ran", False, e)
+        await b.close()
+    print("smoke-bugs: %d fail" % len(FAILS))
+    sys.exit(1 if FAILS else 0)
+asyncio.run(main())

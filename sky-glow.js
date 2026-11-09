@@ -9,7 +9,9 @@
   var KEY = "sunny-skyglow";
   var SRC = "skyglow";
   var ID = "skyglow-raster";
-  var URL = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png";
+  /* opt241: same NASA layer and date through GIBS WMS as JPEG (about 8 KB a tile instead of about 90 KB as PNG) */
+  var URL = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=VIIRS_Black_Marble" +
+    "&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/jpeg&TIME=2016-01-01";
   var ATTRIB = 'Night lights: <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener">NASA GIBS</a> VIIRS Black Marble 2016 (public domain)';
   var map = null;
   var legend = null;

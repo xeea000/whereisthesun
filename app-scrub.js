@@ -153,10 +153,8 @@ function sunnyStep14() {
     });
   });
   if (window.SunnyPoint) window.SunnyPoint.attach(map, pointSkip); /* opt67: tap for point forecast */
-  if (window.SunnyCraters) window.SunnyCraters.attach(map); /* opt74: impact craters (Settings, Sightseeing) */
-  if (window.SunnyObservatories) window.SunnyObservatories.attach(map); /* opt90 */
-  if (window.SunnySkyGlow) window.SunnySkyGlow.attach(map); /* opt91: light pollution */
-  if (window.SunnyCrownLand) window.SunnyCrownLand.attach(map); /* opt75: Ontario Crown land overlay */
+  /* opt241: craters, observatories, light pollution and Crown land load lazily; attach once, now or when they arrive */
+  if (window.SunnyLayerLazy) window.SunnyLayerLazy.attachMods(map);
   if (window.SunnyLayers) window.SunnyLayers.attach(map); /* opt94: layers sidebar and new layers */
   map.on("click", (e) => {
     if (!waitingForTap) return; /* opt154: a tap only sets the spot; beaches and weather load when asked (Find beaches, Weather) */

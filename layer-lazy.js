@@ -5,6 +5,21 @@
   "use strict";
   var loading = null;
   var ready = false;
+  var map = null;
+  /* opt241: older layer modules that live in the lazy template keep their own attach(map) and their own
+   * saved key. Attach each once, whichever comes last: the map (app-scrub) or the scripts (load). */
+  var MODS = [["SunnyCraters", "sunny-craters"], ["SunnyObservatories", "sunny-observatories"],
+    ["SunnySkyGlow", "sunny-skyglow"], ["SunnyCrownLand", "sunny-crown"]];
+  function attachMods(m) {
+    if (m) map = m;
+    if (!map) return;
+    MODS.forEach((x) => {
+      var mod = window[x[0]];
+      if (!mod || !mod.attach || mod._sunnyAttached) return;
+      mod._sunnyAttached = true;
+      try { mod.attach(map); } catch (eA) { console.warn(eA); }
+    });
+  }
   function needAtBoot() {
     try {
       if (location.hash && /[#&]s=/.test(location.hash)) return true;
@@ -14,6 +29,7 @@
         var k = localStorage.key(i);
         if (k && k.indexOf("sunny-L-") === 0 && localStorage.getItem(k) === "1") return true;
       }
+      if (MODS.some((x) => { return localStorage.getItem(x[1]) === "1"; })) return true;
     } catch (eL) {}
     return false;
   }
@@ -31,6 +47,7 @@
       if (i >= nodes.length) {
         ready = true;
         loading = null;
+        attachMods();
         try { document.dispatchEvent(new CustomEvent("sunny-layers-ready")); } catch (eE) {}
         return Promise.resolve();
       }
@@ -57,7 +74,7 @@
     tab.addEventListener("click", () => { load(); }, true);
     tab.addEventListener("pointerdown", () => { load(); }, true);
   }
-  window.SunnyLayerLazy = { load: load, ready: () => { return ready; } };
+  window.SunnyLayerLazy = { load: load, ready: () => { return ready; }, attachMods: attachMods, needAtBoot: needAtBoot };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       armPanel();
