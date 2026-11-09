@@ -18,7 +18,9 @@ var radarTweenSource;
     var k = radarCompOrder.indexOf(key);
     if (k >= 0) radarCompOrder.splice(k, 1);
     radarCompOrder.push(key);
-    while (radarCompOrder.length > RADAR_COMP_CAP) {
+    /* a Play loop keeps every frame of the chosen span (up to 24 h at 10 minutes) */
+    var cap = Math.max(RADAR_COMP_CAP, Math.min(160, radarPast.length + 8));
+    while (radarCompOrder.length > cap) {
       var drop = radarCompOrder.shift();
       delete radarComp[drop];
     }

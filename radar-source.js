@@ -12,7 +12,10 @@
   var LATEST = "https://mesonet.agron.iastate.edu/data/gis/images/4326/USCOMP/n0q_0.json";
   var LAYER = "nexrad-n0q-wmst";
   var STEP_MS = 5 * 60000;
-  var SPAN_MS = 3 * 3600000;
+  /* Frames every 10 minutes over the longest Time span (24 h); the timeline keeps the chosen 6, 12 or 24 h of them.
+   * IEM keeps every 5-minute composite in its archive, so each 10-minute slot back from the latest valid time exists. */
+  var FRAME_MS = 10 * 60000;
+  var SPAN_MS = 24 * 3600000;
   var COVER_OP = 0.45;
   var COVER_SRC = "radar-coverage";
   var ATTRIB = 'Radar: NOAA NEXRAD via <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>';
@@ -47,12 +50,12 @@
   function isoOf(ms) {
     return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
   }
-  /* Latest valid time from IEM, then every 5 minutes back over the last 3 hours */
+  /* Latest valid time from IEM, then every 10 minutes back over the last 24 hours */
   function framesFromLatest(d) {
     var end = Date.parse(d && d.meta && d.meta.valid);
     if (!isFinite(end)) end = Math.floor((Date.now() - 10 * 60000) / STEP_MS) * STEP_MS;
     var past = [];
-    for (var t = end - SPAN_MS; t <= end; t += STEP_MS) {
+    for (var t = end - SPAN_MS; t <= end; t += FRAME_MS) {
       past.push({ time: Math.round(t / 1000), path: isoOf(t) });
     }
     latestIso = past[past.length - 1].path;
@@ -99,29 +102,14 @@
       map.setPaintProperty(COVER_SRC, "raster-opacity", want);
     } catch (eSync) {}
   }
-  /* Radar frames cover the last 3 hours (SPAN_MS) whatever the Time span, so the span buttons are off and say why */
-  function syncSpan() {
-    var seg = document.getElementById("range-seg"), on = radarSelected();
-    if (!seg) return;
-    seg.querySelectorAll("[data-range]").forEach((b) => { b.disabled = on; });
-    var note = document.getElementById("range-radar-note");
-    if (!note) {
-      note = document.createElement("small");
-      note.id = "range-radar-note";
-      note.textContent = "Radar shows the last 3 hours";
-      seg.parentNode.appendChild(note);
-    }
-    note.hidden = !on;
-  }
   function attach(map) {
     if (!map || attachedMap === map) return;
     attachedMap = map;
     map.on("idle", syncCoverage);
     map.on("styledata", syncCoverage);
     var btn = document.querySelector('#overlay-seg [data-overlay="radar"]');
-    if (btn && window.MutationObserver) new MutationObserver(() => { syncCoverage(); syncSpan(); }).observe(btn, { attributes: true });
+    if (btn && window.MutationObserver) new MutationObserver(syncCoverage).observe(btn, { attributes: true });
     syncCoverage();
-    syncSpan();
   }
   function state() {
     return { latest: latestIso, coverOpacity: coverWant, attached: !!attachedMap };

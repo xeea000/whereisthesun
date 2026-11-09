@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt255"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt256"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -33,7 +33,7 @@ var PRECACHE = [
   "vendor/lag-o-meter-1.7.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
   "styles.css?h=64f8fad1bf",
-  "settings-panel.css?h=8d1ff4415e",
+  "settings-panel.css?h=1feb33de4a",
   "side-buttons.css?h=629d800453",
   "layers-panel.css?h=217dac85f7",
   "info-panel.css?h=f8b872b3fa",
@@ -54,7 +54,7 @@ var PRECACHE = [
   "msg-clouds.js?h=64a9d75088",
   "play-handoff.js?h=b695a52a77",
   "radar-key.js?h=f5fb81876e",
-  "radar-source.js?h=4437e90566",
+  "radar-source.js?h=53e38f1882",
   "radar-warm.js?h=3430fcf9a7",
   "radar-mask.js?h=801e09e7d5",
   "radar-legend.js?h=82ca8259a4",
@@ -92,7 +92,7 @@ var PRECACHE = [
   "app-beach-search.js?h=d42286ab71",
   "app-wind-data.js?h=2ae6af874a",
   "app-wind-draw.js?h=ad70f6723c",
-  "app-radar.js?h=27e2b0db41",
+  "app-radar.js?h=a70bdb5d8e",
   "geo-ask.js?h=3531b4d856",
   "app-play-clock.js?h=638b075435",
   "app-scrub.js?h=2f5017e5cb",

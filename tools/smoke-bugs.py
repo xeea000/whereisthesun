@@ -198,14 +198,24 @@ async def labels_bar(b):
     r = await pg.evaluate("()=>[document.getElementById('bar-labels').checked,document.getElementById('toggle-map').checked]")
     check("bar Labels box matches the saved Labels setting at load", r == [True, True], r)
     await ctx.close()
+RADAR_SPAN = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));document.querySelector('#overlay-seg [data-overlay="radar"]').click();
+  for(let i=0;i<60&&!(window.radarPast&&radarPast.length);i++)await s(1000);const out={};
+  for(const h of ["6","12","24"]){document.querySelector('#range-seg [data-range="'+h+'"]').click();await s(1500);
+    const p=window.radarPast||[];out[h]=[p.length,p.length?(p[p.length-1].time-p[0].time)/3600:0,document.querySelector('#range-seg [data-range="'+h+'"]').disabled]}
+  return out}"""
 async def radar_span(b):
-    """t382u missed promise: Time span 24h/12h/6h changed nothing on Radar (frames are always the last 3 hours)."""
+    """t382u: Time span 24h/12h/6h changed nothing on Radar (frames were always the last 3 hours). Owner: radar follows the span
+    at 10-minute steps from the IEM archive, and a Play loop over it fetches no missing frame."""
     ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
-    span = "()=>[[...document.querySelectorAll('#range-seg [data-range]')].every(x=>x.disabled),!(document.getElementById('range-radar-note')||{hidden:true}).hidden]"
-    check("time span buttons work while Clouds is on", await pg.evaluate(span) == [False, False])
-    await pg.evaluate("()=>document.querySelector('#overlay-seg [data-overlay=\"radar\"]').click()")
-    await pg.wait_for_timeout(800)
-    check("radar turns the time span off and says the last 3 hours", await pg.evaluate(span) == [True, True])
+    bad = []
+    pg.on("response", lambda r: bad.append(r.status) if "mesonet.agron.iastate.edu" in r.url and r.status >= 400 else None)
+    r = await pg.evaluate(RADAR_SPAN)
+    for h, n in (("6", 37), ("12", 73), ("24", 145)):
+        check("radar shows the %s h span at 10-minute steps" % h, r[h][0] == n and abs(r[h][1] - int(h)) < 0.01 and not r[h][2], r)
+    await pg.evaluate("()=>document.getElementById('btn-play').click()")
+    await pg.wait_for_timeout(20000)
+    played = await pg.evaluate("()=>document.getElementById('btn-play').getAttribute('aria-pressed')")
+    check("radar Play over 24 h fetches no missing frame", played == "true" and not bad, {"pressed": played, "http": bad[:5]})
     await ctx.close()
 BASE_SYM = """async(mode)=>{const s=t=>new Promise(r=>setTimeout(r,t));map.jumpTo({center:[-79.4,43.7],zoom:9});
   [...document.querySelectorAll('#basemap-seg .seg-btn')].find(b=>b.getAttribute('data-basemap')===mode).click();await s(6000);
@@ -221,10 +231,11 @@ async def labels_base(b):
     await ctx.close()
 BEACH_BLADE = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const n=[...document.querySelectorAll('button')].find(x=>/not now/i.test(x.textContent||''));if(n)n.click();
   map.jumpTo({center:[-79.4,43.65],zoom:10});document.getElementById('lp-tab').click();await s(1500);
-  const g=[...document.querySelectorAll('#layers-panel .lp-head')].find(h=>/Outdoors/.test(h.textContent));if(g&&g.getAttribute('aria-expanded')!=='true')g.click();await s(300);
+  const g=[...document.querySelectorAll('#layers-panel .lp-head')].find(h=>/Outdoors/.test(h.textContent));
+  const g0=g&&g.getAttribute('aria-expanded');if(g&&g.getAttribute('aria-expanded')!=='true')g.click();await s(300);
   const f=document.getElementById('beach-find'),b=document.getElementById('btn-sun'),sun=document.getElementById('toggle-sunny');
   const r={inControls:!!b.closest('.controls'),inBlade:!!(f&&f.closest('.lp-fold[data-layer="beaches"]')),seen:!!(b.offsetWidth&&b.offsetHeight),sunny:sun.checked,
-    sunInBlade:!!sun.closest('.lp-fold[data-layer="beaches"]'),settingsRow:!!document.querySelector('#settings-pop #btn-all')};
+    sunInBlade:!!sun.closest('.lp-fold[data-layer="beaches"]'),settingsRow:!!document.querySelector('#settings-pop #btn-all'),g0:g0};
   document.getElementById('status').textContent='';b.click();await s(2500);
   r.status=document.getElementById('status').textContent;r.shown=SunnyBeachToggle.isShown();r.rowOn=SunnyLayers.isOn('beaches');
   SunnyLayers.set('beaches',false);await s(500);r.off=!SunnyBeachToggle.isShown()&&document.body.classList.contains('beaches-hidden');return r}"""
@@ -234,14 +245,53 @@ async def beach_blade(b):
     r = await pg.evaluate(BEACH_BLADE)
     check("no Find Beaches button in the map's side controls", not r["inControls"], r)
     check("Find beaches, All beaches and Sunny only sit in the Beaches controls", r["inBlade"] and r["sunInBlade"] and r["seen"] and not r["settingsRow"], r)
+    check("Outdoors group starts open", r["g0"] == "true", r)
     check("Sunny only starts on", r["sunny"], r)
     check("Find beaches runs the search, says so and turns the Beaches row on", bool(r["status"]) and r["shown"] and r["rowOn"], r)
     check("Beaches row off hides them again", r["off"], r)
     check("beach blade no page errors", not errs, errs)
     await ctx.close()
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-lp-g2-Outdoors": "0"}, w=390)
+    g = await pg.evaluate("""async()=>{document.getElementById('lp-tab').click();await new Promise(r=>setTimeout(r,1500));
+      const g=[...document.querySelectorAll('#layers-panel .lp-head')].find(h=>/Outdoors/.test(h.textContent));return g&&g.getAttribute('aria-expanded')}""")
+    check("a saved folded Outdoors group stays folded", g == "false", g)
+    await ctx.close()
+SHARE_SET = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));
+  document.querySelector('#basemap-seg [data-basemap="dark"]').click();document.querySelector('#range-seg [data-range="12"]').click();
+  const op=document.getElementById('cloud-opacity');op.value='55';op.dispatchEvent(new Event('input'));
+  document.getElementById('lp-tab').click();await SunnyLayerLazy.load();SunnyLayers.set('airbursts',true);await s(3000);
+  const bx=document.querySelector('.air-year-range'),i=bx.querySelectorAll('input[type=range]');i[0].value='2000';i[1].value='2015';
+  i[1].dispatchEvent(new Event('input'));await s(500);return SunnyShare.build()}"""
+SHARE_GOT = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));for(let n=0;n<60&&!document.querySelector('.air-year-range');n++)await s(500);await s(3000);
+  const on=(id)=>{const b=document.querySelector('#'+id+' .seg-btn.is-on');return b&&(b.dataset.basemap||b.dataset.range)};
+  return {bm:on('basemap-seg'),h:on('range-seg'),op:document.getElementById('cloud-opacity').value,
+    yr:(document.querySelector('.air-year-range .hi-year-range-val')||{}).textContent,f:JSON.stringify(map.getLayer('airburst-dot')?map.getFilter('airburst-dot'):null)}}"""
+async def share_more(b):
+    """owner: share links carry base map, time span, cloud opacity and layer year filters (round trip)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+    st = await pg.evaluate(SHARE_SET)
+    check("share writes base map, span, opacity and year filter", st.get("bm") == "dark" and st.get("h") == 12 and st.get("op") == 55
+          and (st.get("y") or {}).get("airbursts") == "2000,2015", st)
+    await pg.evaluate("()=>document.getElementById('btn-share').click()")
+    await pg.wait_for_timeout(500)
+    h = await pg.evaluate("()=>location.hash")
+    await ctx.close()
+    ctx = await b.new_context(viewport={"width": 1366, "height": 800}, service_workers="block")
+    await ctx.add_init_script("(()=>{const s={'sunny-layers-off-v1':'1','sunny-air-year':'1990,1995','sunny-cloud-opacity':'90'};"
+                              "for(const k in s)localStorage.setItem(k,s[k]);})()")
+    pg = await ctx.new_page()
+    errs2 = []
+    pg.on("pageerror", lambda e: errs2.append(str(e)[:300]))
+    await pg.goto(URL.split("#")[0] + h, wait_until="load", timeout=120000)
+    await pg.wait_for_function("()=>window.map&&map.getStyle&&window.SunnyShare", timeout=90000)
+    r = await pg.evaluate(SHARE_GOT)
+    check("link restores Dark, 12 h and 55% clouds", r["bm"] == "dark" and r["h"] == "12" and r["op"] == "55", r)
+    check("link restores the airburst years on the map and the slider", r["yr"] == "2000–2015" and "2000" in r["f"] and "2015" in r["f"], r)
+    check("share round trip no page errors", not errs and not errs2, errs + errs2)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

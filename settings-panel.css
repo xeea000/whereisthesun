@@ -166,5 +166,3 @@ body.settings-open .update-banner { display: none; }
 .timeline .tl-col #time-label { margin-top: -3px; }
 .timeline .bar-chk { display: flex; align-items: center; gap: 3px; font-size: 0.7rem; color: var(--muted); cursor: pointer; white-space: nowrap; margin-top: 2px; }
 .timeline .bar-chk input { width: 13px; height: 13px; margin: 0; accent-color: #f5c84c; }
-#range-seg .seg-btn:disabled { opacity: 0.45; cursor: default; }
-#range-radar-note { display: block; font-size: 0.75rem; opacity: 0.8; margin-top: 4px; }
