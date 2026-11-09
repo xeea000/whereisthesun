@@ -29,6 +29,10 @@
       if (t) t.checked = on;
       if (map && d.apply) d.apply(map, on);
     }
+    if (!on && window.SunnyInfo && window.SunnyInfo.prune) { /* t382u: its open info card goes too (some layers hide a moment later) */
+      window.SunnyInfo.prune();
+      setTimeout(window.SunnyInfo.prune, 400);
+    }
     refresh();
   }
   function add(d) {

@@ -188,11 +188,37 @@
     }
     var hit = cards.filter((c) => { return c.p === p; })[0];
     if (hit) hit.html = p._sHtml;
-    else cards.push({ p: p, html: p._sHtml });
+    else cards.push({ p: p, html: p._sHtml, lids: layersAt(p) });
     renderCards();
     renderPeek();
     syncPin();
     if (!hit) news();
+  }
+  /* t382u: the map layers a card was opened from: overlay features drawn under its spot (base map excluded) */
+  var BASE_SRC = { ofm: 1, osm: 1, "base-sat": 1, "base-dark": 1 };
+  function layersAt(p) {
+    var m = p._map || window.map;
+    var ll = p.getLngLat();
+    if (!m || !ll || !m.queryRenderedFeatures) return [];
+    var pt = m.project(ll);
+    var out = [];
+    try {
+      m.queryRenderedFeatures([[pt.x - 4, pt.y - 4], [pt.x + 4, pt.y + 4]]).forEach((f) => {
+        if (f.layer && !BASE_SRC[f.source] && out.indexOf(f.layer.id) < 0) out.push(f.layer.id);
+      });
+    } catch (e) {}
+    return out;
+  }
+  function shown(m, id) {
+    return !!m.getLayer(id) && m.getLayoutProperty(id, "visibility") !== "none";
+  }
+  /* A card whose layers are all switched off or removed closes with them */
+  function prune() {
+    var m = window.map;
+    if (!m) return;
+    cards.slice().forEach((c) => {
+      if (c.lids && c.lids.length && !c.lids.some((id) => { return shown(m, id); })) c.p.remove();
+    });
   }
   function drop(p) {
     cards = cards.filter((c) => { return c.p !== p; });
@@ -288,5 +314,5 @@
     if (!ll) return null;
     return { lng: ll.lng, lat: ll.lat };
   }
-  window.SunnyInfo = { section: section, open: setOpen, isOpen: isOpen, src: srcLink, selection: selection };
+  window.SunnyInfo = { prune: prune, section: section, open: setOpen, isOpen: isOpen, src: srcLink, selection: selection };
 })();

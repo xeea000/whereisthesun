@@ -141,9 +141,40 @@ async def pixel_same(b):
     r = await pg.evaluate(PIXEL_JS)
     check("pixel worker matches the page radar filter", not r.get("skip") and r["diff"] == 0 and r["clear"] > 0, r)
     await ctx.close()
+PEEK_FIND = """async(id)=>{const s=t=>new Promise(r=>setTimeout(r,t));const d=SunnyLayers.defs().find(x=>x.id===id);
+  for(const v of [[-79.4,43.7,7],[-81,46,6],[-100,50,4]]){map.jumpTo({center:[v[0],v[1]],zoom:v[2]});await s(3500);
+    const taps=(d.taps||[]).filter(t=>map.getLayer(t));let fs=[];try{fs=map.queryRenderedFeatures({layers:taps})}catch(e){}
+    const W=map.getCanvas().clientWidth,H=map.getCanvas().clientHeight,r=map.getCanvas().getBoundingClientRect();
+    for(const f of fs){if(f.geometry.type!=='Point'||f.properties.point_count)continue;const p=map.project(f.geometry.coordinates);
+      if(p.x<200||p.x>W-200||p.y<150||p.y>H-150)continue;const e=document.elementFromPoint(r.left+p.x,r.top+p.y);
+      if(e===map.getCanvas())return {x:r.left+p.x,y:r.top+p.y}}}
+  return null}"""
+PEEK_SHOWN = "()=>{const p=document.getElementById('ip-peek');return !!p&&!p.hidden&&p.innerText.length>0}"
+async def peek_closes(b):
+    """t382u bug: the info peek from a layer stayed open after that layer was switched off."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done", "sunny-lp-open": "0"})
+    await pg.evaluate("()=>{const n=[...document.querySelectorAll('button')].find(x=>/not now/i.test(x.textContent||''));if(n)n.click();}")
+    await pg.evaluate("()=>SunnyLayerLazy.load()")
+    await pg.evaluate("()=>SunnyLayers.set('parks',true)")
+    await pg.wait_for_timeout(3000)
+    pt = await pg.evaluate(PEEK_FIND, "parks")
+    if not pt:
+        check("peek closes with its layer (found a park to tap)", False, "no tappable park")
+        return await ctx.close()
+    await pg.mouse.click(pt["x"], pt["y"])
+    await pg.wait_for_timeout(3000)
+    opened = await pg.evaluate(PEEK_SHOWN)
+    await pg.evaluate("()=>SunnyLayers.set('quakes',false)")
+    await pg.wait_for_timeout(800)
+    check("peek stays when another layer goes off", await pg.evaluate(PEEK_SHOWN))
+    await pg.evaluate("()=>SunnyLayers.set('parks',false)")
+    await pg.wait_for_timeout(1200)
+    still = await pg.evaluate(PEEK_SHOWN)
+    check("peek closes with its layer", opened and not still, {"opened": opened, "still": still})
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
