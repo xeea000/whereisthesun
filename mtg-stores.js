@@ -37,6 +37,25 @@
     if (rank < 0) return busyMin === 0 && busyMax === 4; /* unknown: only when full range */
     return rank >= busyMin && rank <= busyMax;
   }
+  /* t382u: a listed prerelease whose day has gone by is a past one. The snapshot's "next" list is split by the viewer's local
+   * date, so the Past switch and the card's Past row hold what already happened and Prerelease holds what is ahead. */
+  function localDay() {
+    var d = new Date();
+    var two = (n) => { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate());
+  }
+  function splitPre(s) {
+    var today = localDay();
+    var next = [];
+    var gone = [];
+    (s.prereleaseNext || []).forEach((e) => {
+      var day = String(e.iso || "").slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day < today) gone.push({ set: e.set, name: (setByCode(e.set) || {}).name, date: e.date, dateIso: day });
+      else next.push(e);
+    });
+    gone.sort((a, b) => { return a.dateIso < b.dateIso ? 1 : a.dateIso > b.dateIso ? -1 : 0; });
+    return { next: next, past: gone.concat(s.prereleasePast || []) };
+  }
   function want(s) {
     if (filterSet) {
       var sets = s.prereleaseSets || [];
@@ -47,7 +66,7 @@
     /* opt199: SunnyKit.kids — zero subset kids checked → show nothing (no partner fallback) */
     return K.kids.matchAny(KIDS, (k) => {
       if (k.kind === "pre") return !!s.partner;
-      if (k.kind === "past") return !!(s.prereleasePast && s.prereleasePast.length) || (s.pastCount > 0);
+      if (k.kind === "past") return splitPre(s).past.length > 0;
       if (k.kind === "fnm" && s.fnm) {
         if (k.fmt === "other") {
           return !list.length || list.every((f) => { return f !== "Commander" && f !== "Standard"; });
@@ -57,9 +76,14 @@
       return false;
     });
   }
+  /* t382u: the star key shows only when the snapshot has a Legendary store to star */
+  function anyLegendary() {
+    return !!(meta && (meta.stores || []).some((x) => { return x.legendary; }));
+  }
   function toFeats(stores) {
     return stores.filter(want).map((s) => {
       var sets = (s.prereleaseSets || []).join(",");
+      var pre = splitPre(s);
       return {
         type: "Feature",
         geometry: { type: "Point", coordinates: [s.lon, s.lat] },
@@ -69,12 +93,12 @@
           fnm: s.fnm ? 1 : 0, prerelease: s.prerelease ? 1 : 0,
           formats: (s.fnmFormats || []).join(", "),
           sets: sets,
-          pastCount: (s.prereleasePast || []).length,
+          pastCount: pre.past.length,
           busyLevel: (s.busy && s.busy.level) || "",
           busyRank: (s.busy && typeof s.busy.rank === "number") ? s.busy.rank : -1,
           busyJson: JSON.stringify(s.busy || null),
-          preJson: JSON.stringify(s.prereleaseNext || []),
-          pastJson: JSON.stringify(s.prereleasePast || []),
+          preJson: JSON.stringify(pre.next),
+          pastJson: JSON.stringify(pre.past),
           fnmJson: JSON.stringify(s.fnmNext || [])
         }
       };
@@ -231,7 +255,7 @@
         var label = ((e.name || e.set || "Set") + (e.date ? " · " + e.date : "")).trim();
         return chip(K.esc(label), "mtg-chip-host-past");
       });
-      blocks.push('<div class="mtg-past-row" title="Last prereleases this store hosted (from locator history)"><span class="mtg-past-label">Past</span>' + pastChips.join("") + "</div>");
+      blocks.push('<div class="mtg-past-row" title="Last prereleases this store hosted (from Wizards locator listings)"><span class="mtg-past-label">Past</span>' + pastChips.join("") + "</div>");
     }
     /* Group prerelease rows by set */
     var bySet = {};
@@ -257,7 +281,7 @@
         blocks.push("</div></div>");
       });
       blocks.push("</div></div>");
-    } else if (p.prerelease) {
+    } else if (p.prerelease && !past.length) {
       blocks.push('<div class="mtg-muted">Prerelease partner — set not named in the locator snapshot.</div>');
     }
     if (fnm.length || p.fnm) {
@@ -277,7 +301,7 @@
       blocks.join("") +
       '<div class="pf-src">Source: <a href="https://locator.wizards.com/" target="_blank" rel="noopener">Wizards locator</a>' +
       (built ? " · snapshot " + K.esc(built) : "") +
-      (past.length ? "; past from locator history snapshots" : "") +
+      (past.length ? "; past = listed prereleases whose day has gone by" : "") +
       (setCat && setCat.source ? '; sets <a href="https://scryfall.com/sets" target="_blank" rel="noopener">Scryfall</a>' : "") +
       "</div></div>";
   }
@@ -496,9 +520,8 @@
         ["#4a9bb8", "dot", "Steady"],
         ["#c9a227", "dot", "Lively"],
         ["#d4782e", "dot", "Busy"],
-        ["#d44545", "dot", "Packed"],
-        ["#ffd45a", "dot", "★ Legendary"]
-      ]);
+        ["#d44545", "dot", "Packed"]
+      ].concat(anyLegendary() ? [["#ffd45a", "dot", "★ Legendary"]] : []));
     },
     kidSet: () => { if (pMap) redraw(pMap); },
     apply: apply,

@@ -172,9 +172,35 @@ async def peek_closes(b):
     still = await pg.evaluate(PEEK_SHOWN)
     check("peek closes with its layer", opened and not still, {"opened": opened, "still": still})
     await ctx.close()
+MTG_JS = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();
+  map.jumpTo({center:[-90,52],zoom:3});await s(6000);
+  const d=SunnyLayers.defs().find(x=>x.id==='mtg');const leg=d&&d.legend?String(d.legend()):'';
+  const n=map.getLayer('mtg-dot')?map.queryRenderedFeatures({layers:['mtg-dot']}).length:-1;
+  const f=map.getLayer('mtg-dot')?map.queryRenderedFeatures({layers:['mtg-dot']})[0]:null;
+  const today=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+  const pre=f?JSON.parse(f.properties.preJson).filter(e=>String(e.iso||'').slice(0,10)<today&&/^\\d{4}/.test(e.iso||'')).length:-1;
+  return {leg:/Legendary/.test(leg),n,preGone:pre}}"""
+async def mtg_honest(b):
+    """t382u missed promises: the Past prerelease switch matched no store (snapshot "next" events never aged into past),
+    and the legend keyed a Legendary star no store in the data carries."""
+    store = {"sunny-layers-off-v1": "1", "sunny-L-mtg": "1", "sunny-L-mtg-pre": "0", "sunny-L-mtg-past": "1",
+             "sunny-L-mtg-fnm-cmd": "0", "sunny-L-mtg-fnm-std": "0", "sunny-L-mtg-fnm-oth": "0"}
+    ctx, pg, errs = await boot(b, store)
+    r = await pg.evaluate(MTG_JS)
+    check("mtg Past switch alone shows stores with a past prerelease", r["n"] > 0, r)
+    check("mtg cards list no gone-by day as an upcoming prerelease", r["preGone"] == 0, r)
+    leg = await pg.evaluate("()=>fetch('data/mtg-stores.json').then(r=>r.json()).then(d=>d.stores.some(x=>x.legendary))")
+    check("mtg legend keys Legendary only when the data has one", r["leg"] == leg, {"legend": r["leg"], "data": leg})
+    await ctx.close()
+async def labels_bar(b):
+    """t382u: with Labels saved on, the bottom-bar Labels box showed unchecked for the first seconds after load."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-labels": "1"})
+    r = await pg.evaluate("()=>[document.getElementById('bar-labels').checked,document.getElementById('toggle-map').checked]")
+    check("bar Labels box matches the saved Labels setting at load", r == [True, True], r)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
