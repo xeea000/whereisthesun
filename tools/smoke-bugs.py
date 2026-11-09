@@ -501,9 +501,34 @@ async def wrecks_ghost(b):
         check(id + " tap shows the place with a source link", ("wikidata.org/wiki/Q" in t[1] or "openstreetmap.org/" in t[1])
               and len(t[0]) > 10 and not errs, [t[0][:300], errs, {k: r[k] for k in ('np', 'at', 'x', 'y')}])
         await ctx.close()
+LBL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const idle=()=>new Promise(r=>{const t=setTimeout(r,15000);map.once('idle',()=>{clearTimeout(t);setTimeout(r,800)})});
+  const ids=SunnyLabelTiers.ids.filter(i=>map.getLayer(i));const cls=()=>[...new Set(map.queryRenderedFeatures({layers:ids}).map(f=>f.properties.class))].sort().join();
+  const names=()=>map.queryRenderedFeatures({layers:ids}).map(f=>f.properties.name_en||f.properties.name);
+  const a={n:ids.length};map.jumpTo({center:[-96,56],zoom:1});await idle();a.z1=cls();map.jumpTo({center:[-96,50],zoom:3});await idle();a.z3=cls();
+  map.jumpTo({center:[-79.4,43.7],zoom:4.5});await idle();a.z45=cls();map.jumpTo({center:[-79.4,43.7],zoom:9});await idle();a.z9=cls();
+  map.jumpTo({center:[-17,63.5],zoom:3});await idle();a.ice3=names().includes('Iceland');map.jumpTo({center:[-17,63.5],zoom:4.5});await idle();a.ice45=names().includes('Iceland');
+  const white=/^(#fff|#ffffff|white|rgb\\(255, ?255, ?255\\)|rgba\\(255, ?255, ?255, ?1\\))$/i;
+  a.white=map.getStyle().layers.filter(l=>l.type==='symbol'&&/^(ov-|vb-)/.test(l.id)&&l.layout&&l.layout.visibility!=='none').filter(l=>white.test(String((l.paint||{})['text-color']||''))).map(l=>l.id);
+  a.vbPlace=map.getStyle().layers.filter(l=>/^vb-/.test(l.id)&&l['source-layer']==='place').length;
+  SunnyKit.mapBrightness.set(0.5);await s(300);a.dim=map.getPaintProperty(ids[0],'text-opacity');SunnyKit.mapBrightness.set(1);
+  document.getElementById('toggle-map').click();await s(800);a.off=ids.every(i=>map.getLayoutProperty(i,'visibility')==='none');return a}"""
+async def label_tiers(b):
+    """t389u: base-map place names follow one tier table on Roads and Dark: continents far out, countries by size (Iceland
+    later than Canada), regions and national capitals, then cities and towns; no pure white text; Map brightness dims them;
+    the Labels switch hides them all (390 px)."""
+    for th in ["dark", "roads"]:
+        ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done", "sunny-basemap": th, "sunny-labels": "1"}, w=390)
+        r = await pg.evaluate(LBL)
+        check(th + " far out shows continents only, then countries", r["n"] == 14 and r["z1"] == "continent" and r["z3"] == "country", r)
+        check(th + " regions and capitals next, cities and towns closer, no villages at 9",
+              "village" not in r["z45"] and "town" not in r["z45"] and "state" in r["z45"] and "town" in r["z9"] and "village" not in r["z9"], r)
+        check(th + " Iceland waits until a closer zoom", (not r["ice3"]) and r["ice45"], r)
+        check(th + " no pure white text, no second set of place names", not r["white"] and r["vbPlace"] == 0, r)
+        check(th + " brightness dims labels and Labels off hides them", r["dim"] < 1 and r["off"] and not errs, [r, errs])
+        await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

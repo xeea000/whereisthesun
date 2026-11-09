@@ -477,7 +477,8 @@ function sunnyStep01() {
   }
   if (toggleLoop) toggleLoop.checked = !!playLoop;
   searchingSunny = false;
-  overlayIds = ["ov-road-casing", "ov-road", "ov-road-name", "ov-place"];
+  /* t389u: place names are the tier layers from label-tiers.js */
+  overlayIds = ["ov-road-casing", "ov-road", "ov-road-name"].concat(window.SunnyLabelTiers ? window.SunnyLabelTiers.ids : []);
   BASEMAP_KEY = "sunny-basemap";
   OPACITY_KEY = "sunny-cloud-opacity";
   LABELS_KEY = "sunny-labels";

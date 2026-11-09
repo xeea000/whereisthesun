@@ -532,34 +532,16 @@ var labelsIdleHealArmed, labelsHealBusy;
         "text-max-angle": 30
       },
       paint: {
-        "text-color": "#fff",
-        "text-halo-color": "rgba(0,0,0,0.85)",
+        "text-color": "#e5e1d7",
+        "text-halo-color": "rgba(8,10,14,0.86)",
         "text-halo-width": 1.2
       }
     }, before);
-    map.addLayer({
-      id: "ov-place",
-      type: "symbol",
-      source: "ofm",
-      "source-layer": "place",
-      minzoom: 3,
-      filter: ["match", ["get", "class"], ["city", "town", "village", "state", "country"], true, false],
-      layout: {
-        visibility: vis,
-        "text-field": nameField,
-        "text-font": ["Noto Sans Bold"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 3, 11, 8, 14, 12, 18],
-        "text-anchor": "bottom",
-        "text-padding": 6,
-        "text-optional": false
-      },
-      paint: {
-        "text-color": "#fff",
-        "text-halo-color": "rgba(8,10,14,0.92)",
-        "text-halo-width": 1.5,
-        "text-halo-blur": 0.3
-      }
-    }, before);
+    /* t389u: place names come from the shared tier table (continents, countries by size, regions, capitals, cities…) */
+    if (window.SunnyLabelTiers) {
+      window.SunnyLabelTiers.add(map, before, vis);
+      window.SunnyLabelTiers.repaint(map);
+    }
     restackCloudRasters();
     restackRadar();
   }

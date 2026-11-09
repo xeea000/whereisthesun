@@ -40,6 +40,8 @@
   }
   function usable(layer) {
     if (layer.source && layer.source !== "openmaptiles") return false;
+    /* t389u: place names come from label-tiers.js for every theme */
+    if (layer["source-layer"] === "place") return false;
     var lay = layer.layout || {};
     var paint = layer.paint || {};
     if (lay["icon-image"] || paint["fill-pattern"] || paint["line-pattern"]) return false;
@@ -69,6 +71,7 @@
           if (copy.source) copy.source = "ofm";
           copy.layout = Object.assign({}, copy.layout, { visibility: "none" });
           labelText(copy.layout);
+          if (window.SunnyLabelTiers) window.SunnyLabelTiers.restyle(copy, mode);
           try {
             map.addLayer(copy, before);
             ids[mode].push(copy.id);
@@ -92,6 +95,7 @@
   function apply(mode) {
     wanted = mode;
     var map = window.map;
+    if (map && window.SunnyLabelTiers) window.SunnyLabelTiers.theme(map, mode);
     if (!ready || !map) return;
     if (active(mode) && !done[mode]) {
       ensureTheme(map, mode).then(() => { if (wanted === mode) apply(mode); }).catch(fallback);
