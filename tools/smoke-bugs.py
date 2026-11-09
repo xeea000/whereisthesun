@@ -466,9 +466,21 @@ async def volc_recent(b):
     check("legend names the recent class and the build date", "erupting, or an eruption ended in the 12 months before 20" in r["leg"], r)
     check("no extra volcano switch", r["rows"] == "volcanoes,volcdue" and not errs, [r, errs])
     await ctx.close()
+SHIPS = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:[23,60.5],zoom:5});await s(800);
+  const vis=(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';
+  SunnyLayers.set('ships',true);for(let i=0;i<40&&!vis('ship-dot');i++)await s(500);
+  const n=map.getSource('ship-dot')?map.getSource('ship-dot')._data.features.length:-1;map.jumpTo({center:[0,30],zoom:1});await s(800);
+  const d=SunnyLayers.defs().find(d=>d.id==='ships');const a={n,world:vis('ship-dot'),tip:d.tip};SunnyLayers.set('ships',false);await s(300);a.off=!vis('ship-dot');return a}"""
+async def ships_live(b):
+    """t388u: Ships draws the live Digitraffic AIS feed (Finnish waters) at every zoom, and its tip says where it covers (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(SHIPS)
+    check("Ships draws live AIS positions", r["n"] > 50 and r["world"], r)
+    check("Ships tip names its coverage and turning it off hides it", "Finnish waters" in r["tip"] and r["off"] and not errs, [r, errs])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
