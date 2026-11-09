@@ -62,6 +62,7 @@
       if (!f) return;
       host.insertBefore(f, host.firstChild);
       f.hidden = false;
+      if (window.SunnyBeachIcons && window.SunnyBeachIcons.mount) window.SunnyBeachIcons.mount(host);
     } }, {
     get: () => { return !!(window.SunnyBeachToggle && window.SunnyBeachToggle.isShown()); },
     set: (on) => {

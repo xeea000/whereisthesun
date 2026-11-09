@@ -11,20 +11,25 @@
   var PX = 2;
   var TTL = 30 * 60 * 1000;
   var MODE_KEY = "sunny-beach-icon";
-  var SIZE_KEY = "sunny-beach-icon-scale";
+  var SIZE_KEY = "sunny-beach-icon-size"; /* 1× draws at 75 % of the size 1× drew under "sunny-beach-icon-scale" */
+  var OLD_SIZE_KEY = "sunny-beach-icon-scale";
+  var BASE = 0.75;
   var mode = "advanced";
   var scale = 1;
   try { mode = localStorage.getItem(MODE_KEY) === "simple" ? "simple" : "advanced"; } catch (e) {}
+  var snap = (n) => { return Math.max(0.5, Math.min(3, Math.round(n * 4) / 4)); };
   try {
     var _sc = parseFloat(localStorage.getItem(SIZE_KEY));
-    if (isFinite(_sc) && _sc >= 0.75 && _sc <= 3) scale = Math.round(_sc * 100) / 100;
+    var _old = parseFloat(localStorage.getItem(OLD_SIZE_KEY));
+    if (isFinite(_sc)) scale = snap(_sc);
+    else if (isFinite(_old)) { scale = snap(_old / BASE); localStorage.setItem(SIZE_KEY, String(scale)); } /* a size chosen before stays on screen */
   } catch (e) {}
   // MapLibre 4.x rejects ["*", n, zoom-interp] for icon-size; bake scale into stops.
   var SIZE_STOPS = [3, 0.38, 7, 0.46, 10, 0.6, 13, 0.72, 15, 0.8];
   var iconSizeExpr = () => {
     var g = (window.SunnyKit && window.SunnyKit.markerScale) ? window.SunnyKit.markerScale.get() : 1;
     var e = ["interpolate", ["linear"], ["zoom"]];
-    for (var i = 0; i < SIZE_STOPS.length; i += 2) e.push(SIZE_STOPS[i], SIZE_STOPS[i + 1] * scale * g);
+    for (var i = 0; i < SIZE_STOPS.length; i += 2) e.push(SIZE_STOPS[i], SIZE_STOPS[i + 1] * BASE * scale * g);
     return e;
   };
   var wx = {};
@@ -246,7 +251,7 @@
   var setScale = (v) => {
     var n = Number(v);
     if (!isFinite(n)) return scale;
-    scale = Math.max(0.75, Math.min(3, Math.round(n * 100) / 100));
+    scale = snap(n);
     try { localStorage.setItem(SIZE_KEY, String(scale)); } catch (e) {}
     applyScale();
     sliders.forEach((s) => {
@@ -280,8 +285,8 @@
   var addScale = (parent, before, cls) => {
     var wrap = document.createElement("div");
     wrap.className = cls || "lp-bscale";
-    wrap.innerHTML = '<span class="lp-bscale-h">Icon size</span>' +
-      '<input type="range" min="0.75" max="3" step="0.25" aria-label="Beach icon size">' +
+    wrap.innerHTML = '<span class="lp-bscale-h">Beach icon size</span>' +
+      '<input type="range" min="0.5" max="3" step="0.25" aria-label="Beach icon size">' +
       '<span class="lp-bscale-v">1×</span>';
     var inp = wrap.querySelector("input");
     var lab = wrap.querySelector(".lp-bscale-v");
@@ -298,9 +303,18 @@
       host = row && row.closest(".lp-fold") && row.closest(".lp-fold").querySelector(".lp-ctrls");
     }
     if (!host) { setTimeout(buildSwitch, 800); return; }
-    if (boxes.length) return;
-    addBox(host, null, "lp-bicon");
-    addScale(host, null, "lp-bscale");
+    mount(host);
+  };
+  /* the panel rebuilds its rows, so the two controls are made once and moved into each new Beaches row */
+  var held = null;
+  var mount = (host) => {
+    if (!held) {
+      held = document.createDocumentFragment();
+      addBox(held, null, "lp-bicon");
+      addScale(held, null, "lp-bscale");
+      held = [boxes[boxes.length - 1].closest("label"), sliders[sliders.length - 1].input.closest(".lp-bscale")];
+    }
+    held.forEach((el) => { if (el.parentNode !== host) host.appendChild(el); });
   };
   var credit = () => {
     var b = document.getElementById("set-build");
@@ -335,5 +349,6 @@
     return out;
   };
   var glyphUrl = (code, day) => { var im = ICONS[GLYPH(code, day)]; return im ? im.src : ""; };
-  window.SunnyBeachIcons = { paint: paint, setMode: setMode, setScale: setScale, getScale: getScale, state: state, draw: draw, hourly: hourly, glyphUrl: glyphUrl, light: light };
+  window.SunnyBeachIcons = { mount: mount,
+    paint: paint, setMode: setMode, setScale: setScale, getScale: getScale, state: state, draw: draw, hourly: hourly, glyphUrl: glyphUrl, light: light };
 })();

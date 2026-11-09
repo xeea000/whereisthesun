@@ -359,9 +359,30 @@ async def update_flow(b):
     await pg.wait_for_timeout(6000)
     check("coming back after 10 minutes on an older build updates by itself", len(loads) >= 2, {"loads": len(loads)})
     await ctx.close()
+BEACH_SIZE = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const n=document.querySelector('.geo-ask-deny');if(n)n.click();
+  map.jumpTo({center:[-80.3,26.4],zoom:8.6});await s(1500);document.getElementById('btn-all').click();
+  for(let i=0;i<40&&!map.getLayer('beaches-sun');i++)await s(500);await s(1500);
+  const sz=()=>JSON.stringify(map.getLayoutProperty('beaches-sun','icon-size'));const s0=sz();
+  document.getElementById('lp-tab').click();await s(800);SunnyLayers.refresh();await s(800);
+  const f=document.querySelector('.lp-fold[data-layer="beaches"] .lp-bscale input');const r={s0:s0,inBlade:!!f,seen:!!(f&&f.offsetHeight),val:f&&f.value};
+  if(f){f.value='2';f.dispatchEvent(new Event('input'));await s(500);}r.s2=sz();r.saved=localStorage.getItem('sunny-beach-icon-size');r.share=SunnyShare.build().bi;return r}"""
+async def beach_size(b):
+    """t386u: beach icons overlapped when crowded; 1× now draws at 75 %, a size picked before stays on screen,
+    and the Beach icon size slider stays in the Beaches controls after the panel rebuilds its rows (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"}, w=390)
+    r = await pg.evaluate(BEACH_SIZE)
+    first = lambda js: json.loads(js)[4]
+    check("beach icons start at 75 % of the earlier size", abs(first(r["s0"]) - 0.38 * 0.75) < 0.002, r)
+    check("Beach icon size slider sits in the Beaches controls after a rebuild", r["inBlade"] and r["seen"] and r["val"] == "1", r)
+    check("slider sizes the icons, is saved and shared", abs(first(r["s2"]) - 0.38 * 0.75 * 2) < 0.004 and r["saved"] == "2" and r["share"] == 2, r)
+    await ctx.close()
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-beach-icon-scale": "1.5"}, w=390)
+    v = await pg.evaluate("()=>SunnyBeachIcons.getScale()")
+    check("a size saved before keeps its on-screen size (1.5 → 2 on the new scale)", v == 2, v)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
