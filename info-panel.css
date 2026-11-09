@@ -151,6 +151,14 @@ body.sk-dragging, body.sk-dragging * { user-select: none; -webkit-user-select: n
 .ip-peek .pk-grip-e, .ip-peek .pk-grip-w { top: calc(50% - 22px); height: 44px; width: 8px; }
 .ip-peek .pk-grip-e { right: 0; } .ip-peek .pk-grip-w { left: 0; }
 .ip-peek .pk-grip-e::after, .ip-peek .pk-grip-w::after { width: 3px; height: 22px; background: repeating-linear-gradient(180deg, #cfe3ff 0 2px, transparent 2px 4px); }
+/* t386u: grips on the panel tabs, drawn like the card grips: short bars top and bottom (slide up/down), dotted lines on the sides (pull in/out) */
+.lp-tab::before, .ip-tab::before, .lp-tab::after, .ip-tab::after { content: ""; position: absolute; pointer-events: none; opacity: .45; }
+.lp-tab::before, .ip-tab::before { left: calc(50% - 6px); width: 12px; top: 5px; bottom: 5px;
+  background: repeating-linear-gradient(90deg, #cfe3ff 0 2px, transparent 2px 4px) top / 12px 2px no-repeat,
+    repeating-linear-gradient(90deg, #cfe3ff 0 2px, transparent 2px 4px) bottom / 12px 2px no-repeat; }
+.lp-tab::after, .ip-tab::after { top: calc(50% - 9px); height: 18px; left: 3px; right: 3px;
+  background: repeating-linear-gradient(180deg, #cfe3ff 0 2px, transparent 2px 4px) left / 2px 18px no-repeat,
+    repeating-linear-gradient(180deg, #cfe3ff 0 2px, transparent 2px 4px) right / 2px 18px no-repeat; }
 .lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: sknudge .9s ease-in-out 1; }
 @keyframes sknudge { 0%, 100% { text-indent: 0; letter-spacing: 0; } 25% { text-indent: 4px; } 50% { text-indent: -3px; } 75% { text-indent: 2px; } }
 @media (prefers-reduced-motion: reduce) { .lp-tab.sk-nudge, .ip-tab.sk-nudge { animation: none; } }
