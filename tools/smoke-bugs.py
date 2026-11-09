@@ -510,6 +510,7 @@ LBL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const idle=()=>new
   const white=/^(#fff|#ffffff|white|rgb\\(255, ?255, ?255\\)|rgba\\(255, ?255, ?255, ?1\\))$/i;
   a.white=map.getStyle().layers.filter(l=>l.type==='symbol'&&/^(ov-|vb-)/.test(l.id)&&l.layout&&l.layout.visibility!=='none').filter(l=>white.test(String((l.paint||{})['text-color']||''))).map(l=>l.id);
   a.vbPlace=map.getStyle().layers.filter(l=>/^vb-/.test(l.id)&&l['source-layer']==='place').length;
+  a.road=map.getLayer('ov-road')?map.getPaintProperty('ov-road','line-opacity'):null;
   SunnyKit.mapBrightness.set(0.5);await s(300);a.dim=map.getPaintProperty(ids[0],'text-opacity');SunnyKit.mapBrightness.set(1);
   document.getElementById('toggle-map').click();await s(800);a.off=ids.every(i=>map.getLayoutProperty(i,'visibility')==='none');return a}"""
 async def label_tiers(b):
@@ -524,11 +525,35 @@ async def label_tiers(b):
               "village" not in r["z45"] and "town" not in r["z45"] and "state" in r["z45"] and "town" in r["z9"] and "village" not in r["z9"], r)
         check(th + " Iceland waits until a closer zoom", (not r["ice3"]) and r["ice45"], r)
         check(th + " no pure white text, no second set of place names", not r["white"] and r["vbPlace"] == 0, r)
+        check(th + " roads drawn at the shared road dim", r["road"] is not None and r["road"] < 1, r)
         check(th + " brightness dims labels and Labels off hides them", r["dim"] < 1 and r["off"] and not errs, [r, errs])
+        await ctx.close()
+CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
+  const hit=(a,b)=>!!(a&&b&&a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3]);const at=document.querySelector('.maplibregl-ctrl-attrib');
+  const btn=R(at.querySelector('.maplibregl-ctrl-attrib-button'));const lag=R(document.querySelector('lag-o-meter'));const fps=document.getElementById('fps');
+  return {open:at.classList.contains('maplibregl-compact-show'),btn:!!btn,lagHit:hit(btn,lag),fpsHit:hit(btn,R(fps)),
+    fpsShown:getComputedStyle(fps).visibility!=='hidden',osm:!!at.querySelector('a[href*="openstreetmap.org/copyright"]'),
+    text:at.querySelector('.maplibregl-ctrl-attrib-inner').textContent}}"""
+async def credits(b):
+    """t390u: map credits sit behind one small "i" button, closed at load on phone and desktop, clear of the Lag-O-Meter and
+    FPS; a tap shows every credit with its links."""
+    for w in [390, 1366]:
+        ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=w)
+        await pg.wait_for_timeout(2500)
+        await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+        await pg.wait_for_timeout(500)
+        r = await pg.evaluate(CRED)
+        check("%d credits closed behind one i button, clear of the meters" % w, r["btn"] and not r["open"] and not r["lagHit"] and not r["fpsHit"]
+              and await pg.locator(".maplibregl-ctrl-attrib-button").count() == 1, r)
+        await pg.click(".maplibregl-ctrl-attrib-button")
+        await pg.wait_for_timeout(500)
+        o = await pg.evaluate(CRED)
+        check("%d tap shows all credits with links" % w, o["open"] and o["osm"] and "Open-Meteo" in o["text"] and "NASA GIBS" in o["text"]
+              and not o["fpsShown"] and not errs, [o, errs])
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

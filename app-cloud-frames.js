@@ -473,7 +473,7 @@ var labelsIdleHealArmed, labelsHealBusy;
       map.addSource("ofm", {
         type: "vector",
         url: "https://tiles.openfreemap.org/planet",
-        attribution: "OpenFreeMap · OSM"
+        attribution: window.SunnyLabelTiers ? window.SunnyLabelTiers.OFM_CREDIT : "OpenFreeMap · OSM"
       });
     }
     if (map.getLayer("ov-road-casing")) {

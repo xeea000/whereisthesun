@@ -57,14 +57,18 @@
       filter: ["!", cls(["continent", "country", "state", "province", "city", "town", "village"])] }
   ];
   /* One palette per theme. No pure white; Dark and Satellite get a soft dark halo, Roads a light one.
-   * roadLine tints the Labels overlay road lines, which on Dark sat bright over the dark roads. */
+   * roadLine tints the Labels overlay road lines. t390u: Roads and Dark are about 12% dimmer than t389u for a calmer map. */
+  /* t390u: one road dim for every vector theme (Roads and Dark): road lines, the overlay roads and their casing are drawn
+   * at this share of their style opacity. Satellite keeps full roads so they stay visible over photos. */
+  var ROAD_DIM = 0.6;
+  var VECTOR = { roads: true, dark: true };
   var PAL = {
-    dark: { major: "#e2ddd2", place: "#d2cdc3", minor: "#b2ada4", region: "#a29e96", halo: "rgba(12,14,18,0.82)", haloW: 1.2,
-      road: "#9b978f", water: "#7f9bb8", poi: "#a29e96", roadLine: "rgba(190,185,175,0.45)" },
+    dark: { major: "#c9c4ba", place: "#b9b4ab", minor: "#9e9a92", region: "#908c85", halo: "rgba(12,14,18,0.8)", haloW: 1.2,
+      road: "#8a867f", water: "#6f88a2", poi: "#8f8b84", roadLine: "rgb(112,109,104)" },
     satellite: { major: "#eeeae0", place: "#e5e1d7", minor: "#d3cfc5", region: "#d0cbc0", halo: "rgba(8,10,14,0.86)", haloW: 1.5,
       road: "#e5e1d7", water: "#cfe0f2", poi: "#d3cfc5", roadLine: "rgba(240,235,225,0.85)" },
-    roads: { major: "#2a2e34", place: "#33373d", minor: "#4e535a", region: "#6a645e", halo: "rgba(250,248,243,0.88)", haloW: 1.2,
-      road: "#55595f", water: "#3f5f8f", poi: "#5f6369", roadLine: "#f4efe4" }
+    roads: { major: "#3c4046", place: "#464a50", minor: "#5e636a", region: "#7a746e", halo: "rgba(248,246,241,0.82)", haloW: 1.2,
+      road: "#686c72", water: "#4f6d97", poi: "#6e7278", roadLine: "#efe9dd" }
   };
   var PREFIX = "ov-place-";
   /* Bottom tier first: a layer added or moved later sits on top, and the top layer wins collisions */
@@ -117,6 +121,10 @@
       } catch (e) {}
     }
     if (map.getLayer("ov-road")) try { map.setPaintProperty("ov-road", "line-color", r.roadLine); } catch (e) {}
+    var dim = VECTOR[mode] ? ROAD_DIM : 1;
+    ["ov-road", "ov-road-casing"].forEach((id) => {
+      if (map.getLayer(id)) try { map.setPaintProperty(id, "line-opacity", dim); } catch (e) {}
+    });
   }
   function theme(map, m) {
     mode = PAL[m] ? m : "roads";
@@ -127,6 +135,11 @@
     mountain_peak: "poi", park: "poi" };
   function restyle(layer, m) {
     var p = PAL[m];
+    if (p && VECTOR[m] && layer.type === "line" && layer["source-layer"] === "transportation") {
+      var o = (layer.paint || {})["line-opacity"];
+      if (o === undefined || typeof o === "number") layer.paint = Object.assign({}, layer.paint, { "line-opacity": (o === undefined ? 1 : o) * ROAD_DIM });
+      return layer;
+    }
     if (!p || layer.type !== "symbol" || !ROLE[layer["source-layer"]] || (layer.layout || {})["icon-image"]) return layer;
     layer.paint = Object.assign({}, layer.paint, { "text-color": p[ROLE[layer["source-layer"]]], "text-halo-color": p.halo,
       "text-halo-width": p.haloW });
@@ -139,6 +152,9 @@
     hooked = true;
     K.mapBrightness.onChange(() => { repaint(); });
   }
-  window.SunnyLabelTiers = { TIERS: TIERS, PAL: PAL, AREA: AREA, ids: ids, add: add, theme: theme, restyle: restyle, repaint: repaint,
+  /* t390u: one credit line for the OpenFreeMap tiles, with links, shown behind the map's "i" button */
+  var OFM_CREDIT = '<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
+  window.SunnyLabelTiers = { OFM_CREDIT: OFM_CREDIT, TIERS: TIERS, PAL: PAL, AREA: AREA, ROAD_DIM: ROAD_DIM, ids: ids, add: add, theme: theme, restyle: restyle, repaint: repaint,
     mode: () => { return mode; } };
 })();

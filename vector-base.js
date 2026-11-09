@@ -113,14 +113,17 @@
   function getJson(url) {
     return fetch(url).then((r) => r.json());
   }
+  function credit() {
+    return window.SunnyLabelTiers ? window.SunnyLabelTiers.OFM_CREDIT : "OpenFreeMap · OSM";
+  }
   function install(map) {
     try {
       map.setGlyphs(GLYPHS);
     } catch (e) {}
     var OFM = "https://tiles.openfreemap.org/planet", low = window.SunnyDataSaver && window.SunnyDataSaver.low();
     /* Low data: tiles stop at zoom 12 and are drawn larger beyond it */
-    var src = low ? getJson(OFM).then((j) => { return { type: "vector", tiles: j.tiles, minzoom: 0, maxzoom: 12, attribution: "OpenFreeMap · OSM" }; })
-      .catch(() => { return { type: "vector", url: OFM, attribution: "OpenFreeMap · OSM" }; }) : Promise.resolve({ type: "vector", url: OFM, attribution: "OpenFreeMap · OSM" });
+    var src = low ? getJson(OFM).then((j) => { return { type: "vector", tiles: j.tiles, minzoom: 0, maxzoom: 12, attribution: credit() }; })
+      .catch(() => { return { type: "vector", url: OFM, attribution: credit() }; }) : Promise.resolve({ type: "vector", url: OFM, attribution: credit() });
     return src.then((o) => { if (!map.getSource("ofm")) map.addSource("ofm", o); return ensureTheme(map, wanted); }).then(() => {
       ready = true;
       apply(wanted);

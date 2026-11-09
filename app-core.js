@@ -709,6 +709,13 @@ function sunnyStep01() {
     new maplibregl.AttributionControl({ compact: true, customAttribution: 'NASA GIBS / NOAA GOES · Open-Meteo · NOAA NEXRAD radar (IEM) · free tiles' }),
     "bottom-right"
   );
+  /* t390u: credits sit behind the small "i" button, closed at start on every screen size; tap it to read them */
+  (function () {
+    var at = map.getContainer().querySelector(".maplibregl-ctrl-attrib");
+    if (!at) return;
+    at.classList.remove("maplibregl-compact-show");
+    at.removeAttribute("open");
+  })();
   /*
    * opt15: GOES GeoColor time — snap to GIBS 10-min step, lag wall clock so NOW
    * never asks for an unpublished slot, probe last published tile, remember
