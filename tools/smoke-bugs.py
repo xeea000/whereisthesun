@@ -478,9 +478,32 @@ async def ships_live(b):
     check("Ships draws live AIS positions", r["n"] > 50 and r["world"], r)
     check("Ships tip names its coverage and turning it off hides it", "Finnish waters" in r["tip"] and r["off"] and not errs, [r, errs])
     await ctx.close()
+WG = """async(a)=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:a.c,zoom:a.z});await s(800);
+  const vis=(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';SunnyLayers.set(a.id,true);
+  for(let i=0;i<40&&!vis(a.l[0]);i++)await s(500);await s(2500);const f=map.queryRenderedFeatures({layers:a.l});
+  const d=SunnyLayers.defs().find(d=>d.id===a.id);const r=map.getContainer().getBoundingClientRect();
+  const ps=f.map(g=>map.project(g.geometry.coordinates)).filter(q=>document.elementFromPoint(r.left+q.x,r.top+q.y)===map.getCanvas());
+  const p=ps.sort((u,v)=>Math.hypot(u.x-r.width/2,u.y-r.height/2)-Math.hypot(v.x-r.width/2,v.y-r.height/2))[0]||{x:0,y:0};
+  const e=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+  return {n:f.length,np:ps.length,at:e.tagName+'.'+e.className,x:r.left+p.x,y:r.top+p.y,tip:d.tip,leg:typeof d.legend==='function'?d.legend():d.legend}}"""
+async def wrecks_ghost(b):
+    """t388u: Shipwrecks (Ocean) and Ghost towns & abandoned places (History) draw Wikidata worldwide plus OpenStreetMap in
+    Canada at every zoom, and a tap shows the place with its source link (390 px)."""
+    for id, c, z, l, word in [("wrecks", [-63.6, 44.6], 6, ["wreck-hist", "wreck-chart"], "Shipwreck"),
+                              ("ghost", [-110, 45], 4, ["ghost-town", "ghost-other"], "Ghost")]:
+        ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+        await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+        r = await pg.evaluate(WG, {"id": id, "c": c, "z": z, "l": l})
+        check(id + " draws points and names both sources", r["n"] > 3 and "Wikidata" in r["tip"] and "OpenStreetMap" in r["leg"], r)
+        await pg.mouse.click(r["x"], r["y"])
+        await pg.wait_for_timeout(3000)
+        t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+        check(id + " tap shows the place with a source link", ("wikidata.org/wiki/Q" in t[1] or "openstreetmap.org/" in t[1])
+              and len(t[0]) > 10 and not errs, [t[0][:300], errs, {k: r[k] for k in ('np', 'at', 'x', 'y')}])
+        await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

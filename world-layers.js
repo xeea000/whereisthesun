@@ -175,6 +175,31 @@
     layers: HIST.map((h) => { return { id: "hist-" + h[0], codes: [h[0]], color: h[2], r: h[3], name: h[1] }; }),
     lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year >= 0 && DESIG.test(r.kind || "") ? (r.year ? "Designated or founded " + K.esc(r.year) + " (Wikidata; not the build date)" : "") :
       +r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
+  /* t388u: ghost towns and abandoned places (tools/build-wrecks-ghost.js): Wikidata worldwide, OpenStreetMap adds Canada.
+   * Ruins stay with Historic plaques & sites */
+  var OSMA = '<a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
+  var osmSrc = (r) => {
+    if (r.qid) return ["Wikidata " + r.qid, "https://www.wikidata.org/wiki/" + r.qid];
+    var t = { n: "node", w: "way" }[String(r.osm || "").charAt(0)];
+    return ["OpenStreetMap (ODbL)", t ? "https://www.openstreetmap.org/" + t + "/" + String(r.osm).slice(1) : "https://www.openstreetmap.org/"];
+  };
+  var wikiOsm = (w) => {
+    var m = /^([a-z]{2,3}):(.+)$/.exec(w || "");
+    return m ? '<a href="https://' + m[1] + ".wikipedia.org/wiki/" + encodeURIComponent(m[2]) + '" target="_blank" rel="noopener">Wikipedia article</a>' : "";
+  };
+  pointLayer({ id: "ghost", file: "ghost", name: "Ghost towns & abandoned places", icon: "🏚️", group: "History",
+    tip: "Ghost towns and abandoned villages worldwide (Wikidata), with abandoned camps and settlements in Canada from OpenStreetMap. " +
+      "Ruins are under Historic plaques & sites",
+    attrib: OSMA, src: ["Wikidata", "https://www.wikidata.org/"], srcOf: osmSrc,
+    title: (r) => { return r.name || "Abandoned place"; },
+    legend: K.legKeys([["#c9a27e", "dot", "ghost town or abandoned village"], ["#8d8d8d", "dot", "other abandoned place, Canada (camp, hamlet, farm…)"]]) +
+      '<div class="ls-row"><small>Wikidata worldwide; OpenStreetMap adds Canada</small></div>',
+    layers: [{ id: "ghost-town", codes: ["t"], color: "#c9a27e", r: 3 }, { id: "ghost-other", codes: ["a"], color: "#8d8d8d", r: 2.2 }],
+    lines: (r, k) => {
+      return [k === "t" ? "Ghost town or abandoned village" : "Abandoned place" + (r.kind ? " (" + K.esc(String(r.kind).replace(/_/g, " ")) + ")" : ""),
+        r.date ? "Abandoned " + K.esc(r.date) : "", K.esc(r.desc), wikiOsm(r.wiki)];
+    } });
   /* Travel: airports */
   pointLayer({ id: "airports", file: "airports", name: "Airports", icon: "✈️", group: "Travel", dflt: true,
     tip: "Large airports and medium airports with scheduled flights; in Canada also every small airfield and water aerodrome (OurAirports, public domain)",
@@ -587,4 +612,17 @@
         apply(map, on);
       } });
   })();
+  /* t388u: shipwrecks next to the undersea layers (tools/build-wrecks-ghost.js): Wikidata worldwide, OpenStreetMap adds Canada */
+  pointLayer({ id: "wrecks", file: "wrecks", name: "Shipwrecks", icon: "⚓", group: "Ocean",
+    tip: "Shipwrecks worldwide with a known spot (Wikidata, about 30,000), and in Canada also the wrecks mapped in OpenStreetMap, " +
+      "including those marked on sea charts",
+    attrib: OSMA, src: ["Wikidata", "https://www.wikidata.org/"], srcOf: osmSrc,
+    title: (r) => { return r.name || "Shipwreck"; },
+    legend: K.legKeys([["#ff7043", "dot", "shipwreck"], ["#4dd0e1", "dot", "wreck marked on sea charts, Canada"]]) +
+      '<div class="ls-row"><small>Wikidata worldwide; OpenStreetMap adds Canada. Depth in metres where recorded</small></div>',
+    layers: [{ id: "wreck-hist", codes: ["h"], color: "#ff7043", r: 3 }, { id: "wreck-chart", codes: ["s"], color: "#4dd0e1", r: 2 }],
+    lines: (r, k) => {
+      return [k === "h" ? "Shipwreck" : "Wreck marked on sea charts", r.type ? "Type: " + K.esc(String(r.type).replace(/_/g, " ")) : "",
+        r.sunk ? "Lost " + K.esc(r.sunk) : "", r.depth ? "Depth " + K.esc(r.depth) + " metres" : "", K.esc(r.desc), wikiOsm(r.wiki)];
+    } });
 })();
