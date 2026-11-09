@@ -1,5 +1,4 @@
 /* workspace/whereisthesun/layers-panel.css (opt94): Windy-style fold-out layers panel, Tonight card */
-#btn-crown, #btn-skyglow, #btn-observatories, #btn-craters { display: none; }
 .lp-panel { position: fixed; left: 0; top: 56px; bottom: 96px; width: 270px; max-width: 82vw; z-index: 20; transform: translateX(-100%); transition: transform 0.22s ease; background: rgba(18, 22, 30, 0.92); color: #fff; border-radius: 0 12px 12px 0; box-shadow: 2px 0 14px rgba(0, 0, 0, 0.35); font: 13px/1.3 system-ui, sans-serif; display: flex; flex-direction: column; }
 .lp-panel.is-open { transform: translateX(0); }
 .lp-title { padding: 10px 14px 4px; font-weight: 800; font-size: 15px; }

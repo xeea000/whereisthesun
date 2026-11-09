@@ -20,6 +20,12 @@
     if (f && JSON.stringify(layout["text-field"] || "").indexOf("name:nonlatin") !== -1) layout["text-field"] = f;
   }
   var ids = {};
+  var text = {};
+  /* t382u: the Labels switch (#toggle-map) also governs every base theme's own place and road names */
+  function labelsOn() {
+    var t = document.getElementById("toggle-map");
+    return !!(t && t.checked);
+  }
   var styleJson = {};
   var added = {};
   var done = {};
@@ -66,6 +72,7 @@
           try {
             map.addLayer(copy, before);
             ids[mode].push(copy.id);
+            if (copy.type === "symbol") text[copy.id] = true;
           } catch (e) {}
         }
         if (i < list.length) nextTurn(some);
@@ -92,8 +99,9 @@
     }
     Object.keys(STYLES).forEach((m) => {
       var vis = active(mode) && m === mode ? "visible" : "none";
+      var words = labelsOn() ? vis : "none";
       ids[m].forEach((id) => {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", text[id] ? words : vis);
       });
     });
     if (window.SunnyKit && window.SunnyKit.mapBrightness) try { window.SunnyKit.mapBrightness.refresh(map); } catch (e) {}
@@ -114,7 +122,21 @@
       apply(wanted);
     });
   }
+  /* The Dark picture map (used when the vector map is off or fails) has a CARTO twin without names */
+  function darkPicture() {
+    var s = window.map && window.map.getSource && window.map.getSource("base-dark");
+    var u = "https://basemaps.cartocdn.com/" + (labelsOn() ? "dark_all" : "dark_nolabels") + "/{z}/{x}/{y}.png";
+    if (s && s.setTiles) s.setTiles([window.SunnyBaseUrl ? window.SunnyBaseUrl(u) : u]);
+  }
+  function relabel() {
+    apply(wanted);
+    darkPicture();
+  }
   function start(map) {
+    if (map && !labelsOn()) {
+      if (map.isStyleLoaded()) darkPicture();
+      else map.once("load", darkPicture);
+    }
     if (!enabled() || !map) return;
     if (map.isStyleLoaded()) install(map).catch(fallback);
     else map.once("load", () => install(map).catch(fallback));
@@ -128,5 +150,6 @@
     } catch (e) {}
   }
   if (enabled()) Object.keys(STYLES).forEach(styleOf);
+  document.addEventListener("change", (e) => { if (e.target && e.target.id === "toggle-map") relabel(); });
   window.SunnyVectorBase = { start: start, apply: apply, active: active };
 })();

@@ -207,9 +207,21 @@ async def radar_span(b):
     await pg.wait_for_timeout(800)
     check("radar turns the time span off and says the last 3 hours", await pg.evaluate(span) == [True, True])
     await ctx.close()
+BASE_SYM = """async(mode)=>{const s=t=>new Promise(r=>setTimeout(r,t));map.jumpTo({center:[-79.4,43.7],zoom:9});
+  [...document.querySelectorAll('#basemap-seg .seg-btn')].find(b=>b.getAttribute('data-basemap')===mode).click();await s(6000);
+  const n=()=>map.queryRenderedFeatures().filter(f=>f.layer.type==='symbol'&&f.layer.id.indexOf('vb-')===0).length;
+  const tm=document.getElementById('toggle-map');if(tm.checked)tm.click();await s(2500);const off=n();tm.click();await s(4000);const on=n();
+  return {off,on}}"""
+async def labels_base(b):
+    """t382u: with Labels off, the Dark base map still drew its own place and road names (57 on screen)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-labels": "0"})
+    for mode in ("dark", "roads"):
+        r = await pg.evaluate(BASE_SYM, mode)
+        check("Labels off hides the %s base map's own names" % mode, r["off"] == 0 and r["on"] > 0, r)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
