@@ -84,6 +84,45 @@
   frameImage.release = release;
   frameImage.live = () => { return frameUrls ? frameUrls.size : 0; };
   K.frameImage = frameImage;
+  /* opt247: picture jobs in pixel-worker.js. pixels(msg) gives a Promise of an ImageBitmap, or null when this browser
+   * has no worker canvas (the caller then does the same job on the page). */
+  var pw = null;
+  var pwSeq = 0;
+  var pwWait = {};
+  function pwDone(ev) {
+    var m = ev.data || {};
+    var w = pwWait[m.id];
+    if (!w) return;
+    delete pwWait[m.id];
+    if (m.bmp) w.resolve(m.bmp);
+    else w.reject(new Error(m.err || "pixel job failed"));
+  }
+  function pwBroken() {
+    pw = false;
+    Object.keys(pwWait).forEach((id) => { pwWait[id].reject(new Error("pixel worker stopped")); });
+    pwWait = {};
+  }
+  function pixelWorker() {
+    if (pw !== null) return pw;
+    pw = false;
+    if (typeof Worker !== "function" || typeof OffscreenCanvas !== "function" || typeof createImageBitmap !== "function") return pw;
+    try {
+      pw = new Worker("pixel-worker.js?v=opt247");
+      pw.onmessage = pwDone;
+      pw.onerror = pwBroken;
+    } catch (e) { pw = false; }
+    return pw;
+  }
+  function pixels(msg) {
+    var w = pixelWorker();
+    if (!w) return null;
+    var id = ++pwSeq;
+    return new Promise((resolve, reject) => {
+      pwWait[id] = { resolve: resolve, reject: reject };
+      w.postMessage(Object.assign({ id: id }, msg));
+    });
+  }
+  K.pixels = pixels;
   K.once = once;
   K.viewSize = viewSize;
   K.fmt = { frameTime: frameTime };

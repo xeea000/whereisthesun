@@ -507,11 +507,12 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     playCanvasSession = false;
   }
   /* opt51: write-path contexts use alpha; willReadFrequently ONLY where getImageData runs */
-  function canvas2dWrite(c) {
+  /* read: the canvas pixels are read back often (motion estimate), so they stay on the CPU */
+  function canvas2dWrite(c, read) {
     if (!c) return null;
     var ctx = null;
     try {
-      ctx = c.getContext("2d", { alpha: true });
+      ctx = c.getContext("2d", { alpha: true, willReadFrequently: !!read });
     } catch (eW) {
       try { ctx = c.getContext("2d"); } catch (e2) { ctx = null; }
     }

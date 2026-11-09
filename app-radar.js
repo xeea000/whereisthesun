@@ -48,17 +48,15 @@ var radarTweenSource;
     var canvas = document.createElement("canvas");
     canvas.width = cw;
     canvas.height = ch;
-    var ctx = canvas2dWrite(canvas);
+    var ctx = canvas2dWrite(canvas, true);
     rec = { key: key, canvas: canvas, done: false, failed: 0, total: 0, loaded: 0 };
     radarComp[key] = rec;
     radarCompTouch(key);
     if (!ctx) { rec.done = true; return rec; }
     /* opt65: one WMS GetMap covers the whole view (IEM NEXRAD), drawn to the canvas */
     rec.total = 1;
-    var img = new Image();
-    img.crossOrigin = "anonymous";
-    function onViewLoad() {
-      try { ctx.drawImage(img, 0, 0, cw, ch); if (window.SunnyRadarKey) window.SunnyRadarKey.keyCanvas(ctx, cw, ch); } catch (eD) {}
+    var src = window.SunnyRadar.viewUrl(fr.path, box, cw, ch);
+    function viewDone() {
       rec.loaded++;
       rec.done = true;
       try { if (radarCanvasOn || playAnimating) paintContinuousRadar(); } catch (eP) {}
@@ -67,9 +65,27 @@ var radarTweenSource;
       rec.failed++;
       rec.done = true;
     }
-    img.onload = onViewLoad;
-    img.onerror = onViewError;
-    img.src = window.SunnyRadar.viewUrl(fr.path, box, cw, ch);
+    /* the page path: load, draw, filter weak echoes here */
+    function onPage() {
+      var img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try { ctx.drawImage(img, 0, 0, cw, ch); if (window.SunnyRadarKey) window.SunnyRadarKey.keyCanvas(ctx, cw, ch); } catch (eD) {}
+        viewDone();
+      };
+      img.onerror = onViewError;
+      img.src = src;
+    }
+    /* opt247: the pixel worker does the same fetch, draw and filter off the page when it can */
+    var off = window.SunnyRadarKey && window.SunnyRadarKey.keyUrl ? window.SunnyRadarKey.keyUrl(src, cw, ch) : null;
+    if (!off) onPage();
+    else {
+      off.then((bmp) => {
+        try { ctx.drawImage(bmp, 0, 0); } catch (eD) {}
+        if (bmp.close) bmp.close();
+        viewDone();
+      }, onPage);
+    }
     return rec;
   }
   function radarCompPeek(i) {

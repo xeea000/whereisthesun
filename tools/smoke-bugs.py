@@ -122,9 +122,28 @@ async def goes_slots(b):
     await pg.wait_for_timeout(10000)
     check("no GIBS 4xx with Clouds on and Play", not bad, bad[:5])
     await ctx.close()
+PIXEL_JS = """async()=>{
+  const w=64,h=48,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
+  const cols=['#415b9e','#d2d4b4','#00ff00','#ff0000','#4bd690','#808cb0'];
+  for(let i=0;i<cols.length;i++){x.fillStyle=cols[i];x.fillRect(i*10,0,10,h);}
+  const url=URL.createObjectURL(await new Promise(r=>c.toBlob(r,'image/png')));
+  const job=SunnyRadarKey.keyUrl(url,w,h);if(!job)return {skip:true};
+  const bmp=await job;const a=document.createElement('canvas');a.width=w;a.height=h;
+  const ax=a.getContext('2d',{willReadFrequently:true});ax.drawImage(bmp,0,0);const d1=ax.getImageData(0,0,w,h).data;
+  const img=new Image();img.src=url;await img.decode();const p=document.createElement('canvas');p.width=w;p.height=h;
+  const px=p.getContext('2d',{willReadFrequently:true});px.imageSmoothingEnabled=true;px.imageSmoothingQuality='high';
+  px.drawImage(img,0,0,w,h);SunnyRadarKey.keyCanvas(px,w,h);const d2=px.getImageData(0,0,w,h).data;
+  let diff=0,clear=0;for(let i=0;i<d1.length;i++)if(d1[i]!==d2[i])diff++;for(let i=3;i<d1.length;i+=4)if(!d1[i])clear++;
+  return {diff,clear}}"""
+async def pixel_same(b):
+    """opt247 perf guard: the radar weak-echo filter in pixel-worker.js gives the same pixels as the page path."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"})
+    r = await pg.evaluate(PIXEL_JS)
+    check("pixel worker matches the page radar filter", not r.get("skip") and r["diff"] == 0 and r["clear"] > 0, r)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
