@@ -103,8 +103,12 @@
   }
   function onData(lngLat, my, d) {
     if (my !== gen) return;
+    var extra = { sea: "", air: "" };
+    var put = () => { if (my === gen) show(lngLat, card(d) + extra.sea + extra.air); };
     show(lngLat, card(d));
-    marine(lngLat.lat, lngLat.lng).then((m) => { var r = seaRow(m); if (r && my === gen) show(lngLat, card(d) + r); });
+    marine(lngLat.lat, lngLat.lng).then((m) => { extra.sea = seaRow(m); if (extra.sea) put(); });
+    var S = window.SunnySmoke; /* air quality only while Smoke & air quality is on */
+    if (S && S.on()) S.row(lngLat.lat, lngLat.lng).then((r) => { extra.air = r; if (r) put(); });
   }
   function onFail(lngLat, my, k, err) {
     delete cache[k]; /* a failed fetch is never kept, so the next press tries again */

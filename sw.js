@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt267"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt268"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -60,7 +60,7 @@ var PRECACHE = [
   "radar-legend.js?h=82ca8259a4",
   "wind-field.js?h=e5e0fb680c",
   "wind-gl.js?h=09b3941c63",
-  "point-forecast.js?h=3a2a36247e",
+  "point-forecast.js?h=72d7bba40a",
   "beach-toggle.js?h=6f8bbe8fdf",
   "side-buttons.js?h=b0ec3429d6",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
@@ -111,7 +111,8 @@ var PRECACHE = [
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
   "sky-layers.js?h=f3661544a7",
-  "earth-layers.js?h=43fb50aa20",
+  "smoke-aq.js?h=3dc0835e01",
+  "earth-layers.js?h=30237759c5",
   "forest-loss.js?h=ade90b3739",
   "oil-spills.js?h=2d5c0335c0",
   "airbursts.js?h=347dc2f94c",

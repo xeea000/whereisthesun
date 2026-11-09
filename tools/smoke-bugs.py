@@ -416,9 +416,26 @@ async def tonight_sky(b):
     check("Night-sky score names the darkest sky within 100 km and rings it", "Darkest sky within 100 km" in r["dark"] and r["ring"], r)
     check("Night-sky score off clears the block and the ring", r["off"] == "" and r["ringOff"] == "none" and not errs, [r, errs])
     await ctx.close()
+SMOKE = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();map.jumpTo({center:[-100,50],zoom:3});await s(800);
+  const vis=(id)=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';
+  SunnyLayers.set('fires',true);for(let i=0;i<40&&!(vis('smoke-aod')&&map.getLayer('fire-dot'));i++)await s(500);
+  const a={smoke:vis('smoke-aod'),dot:vis('fire-dot')};SunnyLayers.kidSet('fires-hot',false);await s(400);a.dotOff=!vis('fire-dot')&&vis('smoke-aod');
+  SunnyLayers.kidSet('fires-smoke',false);await s(400);a.smokeOff=!vis('smoke-aod');a.rowOff=SunnySmoke.on();
+  SunnyLayers.kidSet('fires-hot',true);SunnyLayers.kidSet('fires-smoke',true);await s(400);a.row=await SunnySmoke.row(43.65,-79.38);
+  SunnyLayers.set('fires',false);await s(400);a.allOff=!vis('smoke-aod')&&!vis('fire-dot');return a}"""
+async def smoke_aq(b):
+    """t388u: Wildfires & smoke holds two kids, Fires & hotspots and Smoke & air quality (NASA aerosol map plus PM2.5 and the
+    air quality index in the Weather card); each kid switches only its own part (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    r = await pg.evaluate(SMOKE)
+    check("Wildfires & smoke draws the hotspots and the smoke map", r["smoke"] and r["dot"], r)
+    check("each kid hides only its own part", r["dotOff"] and r["smokeOff"] and r["rowOff"] is False, r)
+    check("Weather card air row spells out PM2.5 units and the air quality index", "micrograms per cubic metre" in r["row"] and "air quality index" in r["row"], r)
+    check("Wildfires & smoke off clears both", r["allOff"] and not errs, [r, errs])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

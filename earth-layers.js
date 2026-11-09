@@ -18,7 +18,7 @@
   /* wildfires */
   var FIRE_URL = "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/ows?service=WFS&version=2.0.0&request=GetFeature" +
     "&typeNames=public:hotspots_last24hrs&outputFormat=application/json&propertyName=lat,lon,rep_date,satellite,frp,agency";
-  var fireLoading = null;
+  var fireLoading = null, fmap = null;
   function fireData() {
     var c = K.getStore("fires");
     if (c) return Promise.resolve(c);
@@ -47,7 +47,7 @@
   }
   var DAY = 864e5;
   function perimTap(map, e) {
-    if (!L.isOn("fires") || map.getZoom() < 3) return;
+    if (!hotOn(L.isOn("fires")) || map.getZoom() < 3) return;
     if (map.queryRenderedFeatures(e.point).some((f) => { return f.layer && f.layer.id === "fire-dot"; })) return;
     var a = map.unproject([e.point.x - 3, e.point.y + 3]), b = map.unproject([e.point.x + 3, e.point.y - 3]);
     var u = "https://cwfis.cfs.nrcan.gc.ca/geoserver/public/ows?service=WFS&version=2.0.0&request=GetFeature&typeNames=public:m3_polygons_current" +
@@ -64,7 +64,10 @@
         p.hcount ? K.esc(p.hcount) + " hotspots" : ""], ["CWFIS fire M3 perimeters, NRCan", "https://cwfis.cfs.nrcan.gc.ca/interactive-map"]);
     }).catch(() => {});
   }
+  var hotOn = (on) => { return K.kids.layerOn(on, "fires-hot", true); };
   function fireApply(map, on) {
+    if (window.SunnySmoke) window.SunnySmoke.apply(map, on);
+    on = hotOn(on);
     K.vis(map, ["fire-dot", "fire-perim"], on);
     if (!on) return;
     try { perimAdd(map); } catch (eP) {}
@@ -81,12 +84,24 @@
           "circle-color": ["interpolate", ["linear"], ["coalesce", ["get", "frp"], 0], 0, "#ffb000", 50, "#ff5a00", 300, "#d0001a"],
           "circle-stroke-color": "#3a0a00", "circle-stroke-width": 0.6 } }, K.before(map));
       }
-      K.vis(map, ["fire-dot", "fire-perim"], L.isOn("fires"));
+      K.vis(map, ["fire-dot", "fire-perim"], hotOn(L.isOn("fires")));
     }).catch(() => {});
   }
-  L.add({ id: "fires", name: "Wildfires", icon: "🔥", group: "Weather", taps: ["fire-dot"],
-    tip: "Fire perimeters this season and satellite hotspots from the last 24 hours, North America (CWFIS, NRCan)", apply: fireApply,
+  var smokeLeg = () => {
+    var S = window.SunnySmoke;
+    return S ? K.legRamp(S.ramp.join(","), "0 clear", "0.3 hazy", "0.7+ thick smoke or dust") +
+      '<div class="ls-row"><small>Smoke and haze: aerosol optical depth, how much sunlight the air column blocks (no unit). ' +
+      "NASA MODIS, the day before; blank where clouds hid the ground. Tap a spot, then Weather, for PM2.5 and the air quality index there</small></div>" : "";
+  };
+  L.add({ id: "fires", name: "Wildfires & smoke", icon: "🔥", group: "Weather", taps: ["fire-dot"],
+    tip: "Fire perimeters this season and satellite hotspots from the last 24 hours, North America (CWFIS, NRCan); smoke and haze from space " +
+      "(NASA MODIS aerosol optical depth, the day before) with PM2.5, air quality index and pollen at a tapped spot in the Weather card (Open-Meteo)",
+    apply: fireApply,
+    kids: [{ id: "fires-hot", name: "Fires & hotspots", dflt: true }, { id: "fires-smoke", name: "Smoke & air quality", dflt: true }],
+    kidSet: () => { if (fmap) fireApply(fmap, L.isOn("fires")); },
+    legend: K.legKeys([["#ff5a00", "dot", "Fire hotspot, last 24 hours (redder = more fire power)"], ["#222", "area", "Burned area this season (zoom 3+)"]]) + smokeLeg(),
     attach: (map, on) => {
+      fmap = map;
       idleAdd(map, "fires", "fire-dot", fireApply);
       setInterval(() => { if (L.isOn("fires")) fireApply(map, true); }, 30 * 60000 + 5000); /* after the 30-minute keep runs out */
       map.on("click", (e) => { if (!(window.SunnyTapSnap && window.SunnyTapSnap.hit(e))) perimTap(map, e); });
