@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt251"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt252"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -33,7 +33,7 @@ var PRECACHE = [
   "vendor/lag-o-meter-1.7.0/start.js?h=00de626178&key=sunny-lag",
   "vendor/maplibre-gl.slim.css?h=5ae31c574f",
   "styles.css?h=abe35cdd07",
-  "settings-panel.css?h=f5be224c45",
+  "settings-panel.css?h=a69b785b77",
   "side-buttons.css?h=9e18a6b16c",
   "layers-panel.css?h=5ae51b1805",
   "info-panel.css?h=f8b872b3fa",
@@ -54,7 +54,7 @@ var PRECACHE = [
   "msg-clouds.js?h=64a9d75088",
   "play-handoff.js?h=b695a52a77",
   "radar-key.js?h=f5fb81876e",
-  "radar-source.js?h=d310113d57",
+  "radar-source.js?h=4437e90566",
   "radar-warm.js?h=3430fcf9a7",
   "radar-mask.js?h=801e09e7d5",
   "radar-legend.js?h=82ca8259a4",
@@ -71,7 +71,7 @@ var PRECACHE = [
   "share-link.js?h=770348876e",
   "bar-toggles.js?h=68ff6400e3",
   "legend-stack.js?h=4554a57966",
-  "existing-layers.js?h=936da8aa52",
+  "existing-layers.js?h=db06caf7a1",
   "advanced.js?h=ef030f80f5",
   "hover-box.js?h=32cdb130cf",
   "offline.js?h=f591704655",
@@ -110,8 +110,8 @@ var PRECACHE = [
   "flight-time.js?h=79218c417c",
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
-  "sky-layers.js?h=df4aa86dcf",
-  "earth-layers.js?h=9be3f18de9",
+  "sky-layers.js?h=f3661544a7",
+  "earth-layers.js?h=43fb50aa20",
   "forest-loss.js?h=f5913f4711",
   "oil-spills.js?h=2d5c0335c0",
   "airbursts.js?h=347dc2f94c",
@@ -136,7 +136,7 @@ var PRECACHE = [
   "mtg-stores.js?h=0ecc6b2323",
   "parks-ca.js?h=fb1fec2c6b",
   "sky-card.js?h=b371ae5f3a",
-  "sats.js?h=ac6320e177",
+  "sats.js?h=ea5fdb3a67",
   "sky-draw.js?h=de5f452ae8",
   "hover-tips.js?h=a6001eefb3",
   "manifest.webmanifest?h=3122f023bd",

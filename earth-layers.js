@@ -88,7 +88,7 @@
     tip: "Fire perimeters this season and satellite hotspots from the last 24 hours, North America (CWFIS, NRCan)", apply: fireApply,
     attach: (map, on) => {
       idleAdd(map, "fires", "fire-dot", fireApply);
-      setInterval(() => { if (L.isOn("fires")) fireApply(map, true); }, 30 * 60000);
+      setInterval(() => { if (L.isOn("fires")) fireApply(map, true); }, 30 * 60000 + 5000); /* after the 30-minute keep runs out */
       map.on("click", (e) => { if (!(window.SunnyTapSnap && window.SunnyTapSnap.hit(e))) perimTap(map, e); });
       (window.SunnyHoverName = window.SunnyHoverName || {})["fire-dot"] = (f) => { var p = f.properties;
         var t = p.t ? new Date(p.t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";

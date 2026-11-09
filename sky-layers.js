@@ -125,7 +125,7 @@
     attach: (map, on) => {
       map.on("styledata", () => { try { aurTop(map); } catch (e) {} });
       map.on("idle", () => { if (L.isOn("aurora") && !map.getLayer("aurora-dot")) aurApply(map, true); });
-      setInterval(() => { if (L.isOn("aurora")) aurApply(map, true); }, 30 * 60000);
+      setInterval(() => { if (L.isOn("aurora")) aurApply(map, true); }, 30 * 60000 + 5000); /* after the 30-minute keep runs out */
       map.on("click", (e) => {
         if (window.SunnyTapSnap && window.SunnyTapSnap.hit(e)) return;
         var v = window.SunnyAurora.at(e.lngLat.lng, e.lngLat.lat);

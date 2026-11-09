@@ -198,9 +198,18 @@ async def labels_bar(b):
     r = await pg.evaluate("()=>[document.getElementById('bar-labels').checked,document.getElementById('toggle-map').checked]")
     check("bar Labels box matches the saved Labels setting at load", r == [True, True], r)
     await ctx.close()
+async def radar_span(b):
+    """t382u missed promise: Time span 24h/12h/6h changed nothing on Radar (frames are always the last 3 hours)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1"})
+    span = "()=>[[...document.querySelectorAll('#range-seg [data-range]')].every(x=>x.disabled),!(document.getElementById('range-radar-note')||{hidden:true}).hidden]"
+    check("time span buttons work while Clouds is on", await pg.evaluate(span) == [False, False])
+    await pg.evaluate("()=>document.querySelector('#overlay-seg [data-overlay=\"radar\"]').click()")
+    await pg.wait_for_timeout(800)
+    check("radar turns the time span off and says the last 3 hours", await pg.evaluate(span) == [True, True])
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

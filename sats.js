@@ -14,7 +14,7 @@
   if (!K || !L) return;
   var GROUPS = [["crewed", "Crewed", true, "#ffd34d", 0], ["stations", "Space stations (ISS, Tiangong)", true, "#ffd34d", 0], ["science", "Major science (Hubble…)", false, "#c08bff", 0],
     ["weather", "Weather", false, "#5ad1ff", 0], ["gnss", "GNSS / GPS", false, "#7fe08a", 0], ["visual", "Visible to the naked eye", false, "#ffffff", 0],
-    ["starlink", "Starlink (big, ~1.5 MB)", false, "#9fb4d9", 1], ["active", "Other active (big, ~2 MB)", false, "#8a93a6", 1]];
+    ["starlink", "Starlink (big, ~1.8 MB)", false, "#9fb4d9", 1], ["active", "Other active (big, ~2.7 MB)", false, "#8a93a6", 1]];
   var CACHE = "sunny-tle-v1", DAY = 864e5;
   /* Crew on board as of 2026-10-25 (orbitnight.com / The Space Devs Launch Library 2). Visiting ships list their station. */
   var CREW_AT = "25 Oct 2026";

@@ -99,14 +99,29 @@
       map.setPaintProperty(COVER_SRC, "raster-opacity", want);
     } catch (eSync) {}
   }
+  /* Radar frames cover the last 3 hours (SPAN_MS) whatever the Time span, so the span buttons are off and say why */
+  function syncSpan() {
+    var seg = document.getElementById("range-seg"), on = radarSelected();
+    if (!seg) return;
+    seg.querySelectorAll("[data-range]").forEach((b) => { b.disabled = on; });
+    var note = document.getElementById("range-radar-note");
+    if (!note) {
+      note = document.createElement("small");
+      note.id = "range-radar-note";
+      note.textContent = "Radar shows the last 3 hours";
+      seg.parentNode.appendChild(note);
+    }
+    note.hidden = !on;
+  }
   function attach(map) {
     if (!map || attachedMap === map) return;
     attachedMap = map;
     map.on("idle", syncCoverage);
     map.on("styledata", syncCoverage);
     var btn = document.querySelector('#overlay-seg [data-overlay="radar"]');
-    if (btn && window.MutationObserver) new MutationObserver(syncCoverage).observe(btn, { attributes: true });
+    if (btn && window.MutationObserver) new MutationObserver(() => { syncCoverage(); syncSpan(); }).observe(btn, { attributes: true });
     syncCoverage();
+    syncSpan();
   }
   function state() {
     return { latest: latestIso, coverOpacity: coverWant, attached: !!attachedMap };
