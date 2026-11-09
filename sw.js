@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt245"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt246"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -198,6 +198,15 @@ function claimAll() {
 function onActivate(event) {
   event.waitUntil(caches.keys().then(dropUnknownCaches).then(pruneApp).then(pruneData).then(claimAll));
 }
+/* opt247: one opened handle per cache name for this worker's life instead of caches.open on every request */
+var handles = {};
+function openCache(name) {
+  if (!handles[name]) {
+    handles[name] = caches.open(name);
+    handles[name].catch(() => { delete handles[name]; });
+  }
+  return handles[name];
+}
 function netFetch(req, opts) {
   return fetch(req, opts);
 }
@@ -230,7 +239,7 @@ function putIn(name, max, req, res) {
   function capped() {
     return trimDue(name) ? trim(name, max) : null;
   }
-  return caches.open(name).then(store).then(capped).catch(noop);
+  return openCache(name).then(store).then(capped).catch(noop);
 }
 /* opt244: hand the response over at once; the cache write finishes in the background under the fetch event */
 function later(ev, p) {
@@ -248,7 +257,7 @@ function cacheFirst(name, max, req, ev) {
   function lookup(cache) {
     return cache.match(req);
   }
-  return caches.open(name).then(lookup).then(hitOrNet);
+  return openCache(name).then(lookup).then(hitOrNet);
 }
 function networkFirst(req, ev) {
   function stored(res) {
@@ -390,6 +399,12 @@ function onFetch(event) {
   var u;
   try { u = new URL(req.url); } catch (eUrl) { return; }
   if (u.protocol !== "https:" && u.protocol !== "http:") return;
+  /* opt247: the app's own hashed files (scripts, styles) go straight to the app cache, then the network; this is
+   * the same answer route() gives them, without the data-hash and offline-region checks that do not apply */
+  if (isHashed(u) && !relData(u) && u.pathname.indexOf("/data/") === -1) {
+    event.respondWith(cacheFirst(CACHE, 9999, req, event));
+    return;
+  }
   event.respondWith(withSaved(req, u, event));
 }
 /* opt61: the update banner asks a waiting worker to take over now. */
