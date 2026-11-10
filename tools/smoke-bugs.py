@@ -566,6 +566,29 @@ async def label_tiers(b):
               "state" in r["z65s"].split(",") and "country" not in r["z65s"].split(","), r)
         check(th + " brightness dims labels and Labels off hides them", r["dim"] < 1 and r["off"] and not errs, [r, errs])
         await ctx.close()
+RAIL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id==='rail-abandoned');
+  map.jumpTo({center:[-79.42,43.69],zoom:7});SunnyLayers.set('rail-abandoned',true);await s(1500);const far=typeof d.note==='function'?d.note():'';
+  map.jumpTo({center:[-79.418,43.695],zoom:13});const ids=['rail-ab-line','rail-ab-dash'];let n=0,t0=Date.now();
+  for(let i=0;i<120&&!n;i++){await s(1000);n=ids.some(i=>map.getLayer(i))?map.queryRenderedFeatures({layers:ids.filter(i=>map.getLayer(i))}).length:0}
+  const f=n?map.queryRenderedFeatures({layers:['rail-ab-hit']}):[];const r=map.getContainer().getBoundingClientRect();
+  const g=f[0]&&f[0].geometry;const c=g?(g.type==='LineString'?g.coordinates[Math.floor(g.coordinates.length/2)]:g.coordinates[0][0]):null;
+  const p=c?map.project(c):{x:0,y:0};const kinds=[...new Set(map.queryRenderedFeatures({layers:ids.filter(i=>map.getLayer(i))}).map(x=>x.properties.k))].sort().join();
+  return {group:d.group,far,n,kinds,ms:Date.now()-t0,leg:typeof d.legend==='function'?d.legend():d.legend,x:r.left+p.x,y:r.top+p.y,dflt:!!d.dflt}}"""
+async def rail_abandoned(b):
+    """t396u: Abandoned railways (History) loads live OpenStreetMap lines at zoom 9 and in, says so when zoomed out, draws the
+    Toronto Belt Line and other old lines, and a tap names the line with its OpenStreetMap link (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    r = await pg.evaluate(RAIL)
+    check("abandoned railways sit in History, off by default, with a legend and a zoom-in note when far out",
+          r["group"] == "History" and not r["dflt"] and "rail trail" in r["leg"] and "Zoom in" in r["far"], r)
+    check("abandoned railways draw around Toronto from live OpenStreetMap", r["n"] > 0, r)
+    await pg.mouse.click(r["x"], r["y"])
+    await pg.wait_for_timeout(2500)
+    t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');const q=document.querySelector('.maplibregl-popup');" +
+                          "return [(c?c.innerHTML:'')+(q?q.innerHTML:''),(c?c.innerText:'')+(q?q.innerText:'')]}")
+    check("abandoned railway tap names the line with its OpenStreetMap link", "openstreetmap.org/way/" in t[0] and not errs, [t[1][:300], errs])
+    await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
   const hit=(a,b)=>!!(a&&b&&a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3]);const at=document.querySelector('.maplibregl-ctrl-attrib');
   const btn=R(at.querySelector('.maplibregl-ctrl-attrib-button'));const lag=R(document.querySelector('lag-o-meter'));const fps=document.getElementById('fps');
@@ -591,7 +614,7 @@ async def credits(b):
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

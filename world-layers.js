@@ -200,6 +200,43 @@
       return [k === "t" ? "Ghost town or abandoned village" : "Abandoned place" + (r.kind ? " (" + K.esc(String(r.kind).replace(/_/g, " ")) + ")" : ""),
         r.date ? "Abandoned " + K.esc(r.date) : "", K.esc(r.desc), wikiOsm(r.wiki)];
     } });
+  /* t396u: abandoned railways from live OpenStreetMap at zoom 9 and in (Overpass, cached a week per tile): lines whose track
+   * is gone (railway=abandoned or razed), lines still in place but out of use (disused), and former lines that are now trails */
+  var RAIL_KIND = { a: "Abandoned railway, track removed", d: "Disused railway, track still in place", t: "Rail trail on an old railway line" };
+  var railKind = (t) => {
+    var r = t.railway || "";
+    if (t.highway || t.route) return "t";
+    if (r === "disused" || t["disused:railway"]) return "d";
+    return "a";
+  };
+  var r5 = (v) => { return Math.round(v * 1e5) / 1e5; };
+  osmLayer({ id: "rail-abandoned", name: "Abandoned railways", icon: "🛤️", group: "History", src: "w-rail-ab", minZoom: 9, maxTiles: 16,
+    ids: ["rail-ab-line", "rail-ab-dash", "rail-ab-hit"], taps: ["rail-ab-hit"],
+    tip: "Old railway lines from OpenStreetMap: track removed, out of use, or now a trail. Loads when you zoom in to a town or county",
+    legend: K.legKeys([["#c98a5a", "line", "abandoned, track removed (dashed)"], ["#a89f92", "line", "disused, track still in place"],
+      ["#7cc576", "line", "rail trail on an old line"]]) + '<div class="ls-row"><small>Live OpenStreetMap, zoom 9 and in</small></div>',
+    q: 'way["railway"~"^(abandoned|disused|razed)$"]BB;way["abandoned:railway"]BB;way["razed:railway"]BB;way["disused:railway"]BB;',
+    item: (el) => {
+      if (el.type !== "way" || !el.geometry || el.geometry.length < 2) return null;
+      var t = el.tags || {};
+      return { t: { id: "way/" + el.id, name: t.name || "", k: railKind(t), op: t.operator || t["historic:operator"] || t["abandoned:operator"] || "",
+        st: t.start_date || "", end: t.end_date || t["abandoned:date"] || "" },
+        g: { type: "LineString", coordinates: el.geometry.map((c) => { return [r5(c.lon), r5(c.lat)]; }) } };
+    },
+    title: (p) => { return RAIL_KIND[p.k] || "Old railway"; },
+    lines: (p) => {
+      return [p.name ? RAIL_KIND[p.k] : "", p.op ? "Operator " + K.esc(p.op) : "", p.st ? "Opened " + K.esc(p.st) : "",
+        p.end ? "Closed " + K.esc(p.end) : ""];
+    },
+    add: (map) => {
+      if (!map.getLayer("rail-ab-hit")) map.addLayer({ id: "rail-ab-hit", type: "line", source: "w-rail-ab", paint: { "line-color": "#000", "line-width": 16, "line-opacity": 0 } });
+      var w = ["interpolate", ["linear"], ["zoom"], 9, 2, 14, 3.6];
+      if (!map.getLayer("rail-ab-line")) map.addLayer({ id: "rail-ab-line", type: "line", source: "w-rail-ab", filter: ["!=", ["get", "k"], "a"],
+        paint: { "line-color": ["match", ["get", "k"], "d", "#a89f92", "#7cc576"], "line-width": w, "line-opacity": 0.9 } }, K.before(map));
+      /* line dashes cannot follow a feature property, so track-removed lines get their own dashed layer */
+      if (!map.getLayer("rail-ab-dash")) map.addLayer({ id: "rail-ab-dash", type: "line", source: "w-rail-ab", filter: ["==", ["get", "k"], "a"],
+        paint: { "line-color": "#c98a5a", "line-width": w, "line-opacity": 0.9, "line-dasharray": [2, 1.2] } }, K.before(map));
+    } });
   /* Travel: airports */
   pointLayer({ id: "airports", file: "airports", name: "Airports", icon: "✈️", group: "Travel", dflt: true,
     tip: "Large airports and medium airports with scheduled flights; in Canada also every small airfield and water aerodrome (OurAirports, public domain)",
@@ -444,7 +481,7 @@
     } });
   /* OSM viewport layers via Overpass (only when zoomed in, cached per tile for a week) */
   function osmLayer(o) {
-    var loader = null;
+    var loader = null, mapRef = null;
     function draw(map, items) {
       var geo = K.fc(items.map((it) => { return { type: "Feature", properties: it.t, geometry: it.g }; }));
       if (map.getSource(o.src)) map.getSource(o.src).setData(geo);
@@ -458,9 +495,17 @@
       K.vis(map, o.ids, on);
       if (on && loader) loader.refresh();
     }
-    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: o.ids, dflt: o.dflt, apply: apply, legend: o.legend,
-      note: () => { return osmNote(loader); },
+    var taps = o.taps || o.ids;
+    L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply, legend: o.legend,
+      note: () => { return mapRef && mapRef.getZoom() < o.minZoom ? "Zoom in closer to load it (zoom " + o.minZoom + " and in)" : osmNote(loader); },
       attach: (map, on) => {
+        mapRef = map;
+        var near = map.getZoom() >= o.minZoom; /* the row's zoom note changes only when the view crosses minZoom */
+        map.on("zoomend", () => {
+          var n = map.getZoom() >= o.minZoom;
+          if (n !== near && L.isOn(o.id) && L.refresh) L.refresh();
+          near = n;
+        });
         loader = K.tiles(map, { key: o.id, onState: () => { if (L.refresh) L.refresh(); },
           minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
@@ -468,7 +513,7 @@
             return K.overpass("[out:json][timeout:25];(" + o.q.split("BB").join(bb) + ");out geom 400;").then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });
           },
           onData: (items) => { draw(map, items); } });
-        o.ids.forEach((t) => {
+        taps.forEach((t) => {
           map.on("click", t, (e) => {
             var p = e.features[0].properties;
             K.show(map, e.lngLat, p.name || o.title(p), o.lines(p), ["OpenStreetMap " + p.id, "https://www.openstreetmap.org/" + p.id]);
