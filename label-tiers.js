@@ -36,39 +36,40 @@
   var rank = (op, n) => { return [op, ["coalesce", ["get", "rank"], 99], n]; };
   /* The tier table. min/max: zoom range; size: [zoom, px] stops; role: palette colour; first row wins collisions. */
   var TIERS = [
-    { id: "continent", min: 0, max: 2.2, role: "region", font: BOLD, size: [[0, 11], [2, 13]], upper: true, space: 0.3,
+    { id: "continent", min: 0, max: 2.2, role: "continent", font: REG, size: [[0, 10], [2, 12]], upper: true, space: 0.45,
       filter: ["all", cls(["continent"]), ["match", ["coalesce", ["get", "name:en"], ["get", "name"]], CONTINENTS, true, false]] },
-    { id: "country-xl", min: 2, max: 7, role: "major", font: BOLD, size: [[2, 14], [5, 21]], space: 0.08, filter: country("xl") },
+    { id: "country-xl", min: 2, max: 7, role: "country", font: BOLD, size: [[2, 14], [5, 21]], upper: true, space: 0.12, filter: country("xl") },
     { id: "capital", min: 4, role: "major", font: BOLD, size: [[4, 11.5], [8, 14], [12, 17]], filter: ["all", cls(["city"]), cap(2)] },
-    { id: "country-l", min: 2.5, max: 7.5, role: "major", font: BOLD, size: [[2.5, 12.5], [5, 17]], filter: country("l") },
-    { id: "country-m", min: 3, max: 8, role: "major", font: BOLD, size: [[3, 11.5], [6, 15]], filter: country("m") },
-    { id: "country-s", min: 3.8, max: 8.5, role: "major", font: BOLD, size: [[3.8, 10.5], [7, 13]], filter: country("s") },
-    { id: "country-xs", min: 4.8, max: 9, role: "major", font: BOLD, size: [[4.8, 10], [8, 12]], filter: country("xs") },
+    { id: "country-l", min: 2.5, max: 7.5, role: "country", font: BOLD, size: [[2.5, 12.5], [5, 17]], upper: true, space: 0.12, filter: country("l") },
+    { id: "country-m", min: 3, max: 8, role: "country", font: BOLD, size: [[3, 11.5], [6, 15]], upper: true, space: 0.12, filter: country("m") },
+    { id: "country-s", min: 3.8, max: 8.5, role: "country", font: BOLD, size: [[3.8, 10.5], [7, 13]], upper: true, space: 0.12, filter: country("s") },
+    { id: "country-xs", min: 4.8, max: 9, role: "country", font: BOLD, size: [[4.8, 10], [8, 12]], upper: true, space: 0.12, filter: country("xs") },
     { id: "state", min: 4, max: 9, role: "region", font: REG, size: [[4, 9.5], [8, 12]], upper: true, space: 0.1,
       filter: cls(["state", "province"]) },
-    { id: "capital-region", min: 5, role: "place", font: BOLD, size: [[5, 11], [9, 13.5], [12, 16]],
+    { id: "capital-region", min: 4, role: "place", font: BOLD, size: [[4, 10.5], [9, 13.5], [12, 16]],
       filter: ["all", cls(["city", "town"]), cap(4)] },
-    { id: "city-major", min: 6, role: "place", font: REG, size: [[6, 11], [10, 14], [13, 17]], filter: ["all", cls(["city"]), notCap, rank("<=", 3)] },
-    { id: "city", min: 7.5, role: "place", font: REG, size: [[7.5, 10.5], [11, 13.5], [14, 16]], filter: ["all", cls(["city"]), notCap, rank(">", 3)] },
-    { id: "town", min: 9, role: "minor", font: REG, size: [[9, 10.5], [13, 13.5]], filter: ["all", cls(["town"]), ["!", cap(4)]] },
+    { id: "city-major", min: 5, role: "place", font: REG, size: [[5, 10.5], [10, 14], [13, 17]], filter: ["all", cls(["city"]), notCap, rank("<=", 3)] },
+    { id: "city", min: 6, role: "place", font: REG, size: [[6, 10], [11, 13.5], [14, 16]], filter: ["all", cls(["city"]), notCap, rank(">", 3)] },
+    { id: "town", min: 8, role: "minor", font: REG, size: [[8, 10], [13, 13.5]], filter: ["all", cls(["town"]), ["!", cap(4)]] },
     { id: "village", min: 11, role: "minor", font: REG, size: [[11, 10.5], [14, 13]], filter: cls(["village"]) },
     /* every other place class (hamlets, suburbs, neighbourhoods, localities…) only close in */
     { id: "hamlet", min: 12, role: "minor", font: REG, size: [[12, 10], [15, 12.5]],
       filter: ["!", cls(["continent", "country", "state", "province", "city", "town", "village"])] }
   ];
   /* One palette per theme. No pure white; Dark and Satellite get a soft dark halo, Roads a light one.
-   * roadLine tints the Labels overlay road lines. t390u: Roads and Dark are about 12% dimmer than t389u for a calmer map. */
+   * roadLine tints the Labels overlay road lines. t390u: Roads and Dark are about 12% dimmer than t389u for a calmer map.
+   * t391u: country names in a darker grey, all caps; continents lighter, thinner and wider spaced; road dim 0.6 to 0.5 and darker road lines. */
   /* t390u: one road dim for every vector theme (Roads and Dark): road lines, the overlay roads and their casing are drawn
    * at this share of their style opacity. Satellite keeps full roads so they stay visible over photos. */
-  var ROAD_DIM = 0.6;
+  var ROAD_DIM = 0.5;
   var VECTOR = { roads: true, dark: true };
   var PAL = {
-    dark: { major: "#c9c4ba", place: "#b9b4ab", minor: "#9e9a92", region: "#908c85", halo: "rgba(12,14,18,0.8)", haloW: 1.2,
-      road: "#8a867f", water: "#6f88a2", poi: "#8f8b84", roadLine: "rgb(112,109,104)" },
-    satellite: { major: "#eeeae0", place: "#e5e1d7", minor: "#d3cfc5", region: "#d0cbc0", halo: "rgba(8,10,14,0.86)", haloW: 1.5,
+    dark: { country: "#aca79d", continent: "#86827b", major: "#c9c4ba", place: "#b9b4ab", minor: "#9e9a92", region: "#908c85", halo: "rgba(12,14,18,0.8)", haloW: 1.2,
+      road: "#8a867f", water: "#6f88a2", poi: "#8f8b84", roadLine: "rgb(96,93,89)" },
+    satellite: { country: "#e4dfd5", continent: "#cbc6bb", major: "#eeeae0", place: "#e5e1d7", minor: "#d3cfc5", region: "#d0cbc0", halo: "rgba(8,10,14,0.86)", haloW: 1.5,
       road: "#e5e1d7", water: "#cfe0f2", poi: "#d3cfc5", roadLine: "rgba(240,235,225,0.85)" },
-    roads: { major: "#3c4046", place: "#464a50", minor: "#5e636a", region: "#7a746e", halo: "rgba(248,246,241,0.82)", haloW: 1.2,
-      road: "#686c72", water: "#4f6d97", poi: "#6e7278", roadLine: "#efe9dd" }
+    roads: { country: "#2e3238", continent: "#8a847e", major: "#3c4046", place: "#464a50", minor: "#5e636a", region: "#7a746e", halo: "rgba(248,246,241,0.82)", haloW: 1.2,
+      road: "#686c72", water: "#4f6d97", poi: "#6e7278", roadLine: "#e2dbce" }
   };
   var PREFIX = "ov-place-";
   /* Bottom tier first: a layer added or moved later sits on top, and the top layer wins collisions */
@@ -90,7 +91,7 @@
     return { "text-color": p[t.role], "text-halo-color": p.halo, "text-halo-width": p.haloW, "text-halo-blur": 0.4, "text-opacity": opacity() };
   }
   function spec(t, vis) {
-    var lay = { visibility: vis, "text-field": t.upper ? ["upcase", NAME] : NAME, "text-font": t.font, "text-size": size(t.size),
+    var lay = { visibility: vis, "text-field": NAME, "text-transform": t.upper ? "uppercase" : "none", "text-font": t.font, "text-size": size(t.size),
       "text-max-width": 8, "text-padding": 4, "text-letter-spacing": t.space || 0, "symbol-sort-key": ["coalesce", ["get", "rank"], 99] };
     var s = { id: PREFIX + t.id, type: "symbol", source: "ofm", "source-layer": "place", minzoom: t.min, filter: t.filter,
       layout: lay, paint: paintOf(t) };

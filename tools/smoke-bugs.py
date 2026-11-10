@@ -505,7 +505,10 @@ LBL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const idle=()=>new
   const ids=SunnyLabelTiers.ids.filter(i=>map.getLayer(i));const cls=()=>[...new Set(map.queryRenderedFeatures({layers:ids}).map(f=>f.properties.class))].sort().join();
   const names=()=>map.queryRenderedFeatures({layers:ids}).map(f=>f.properties.name_en||f.properties.name);
   const a={n:ids.length};map.jumpTo({center:[-96,56],zoom:1});await idle();a.z1=cls();map.jumpTo({center:[-96,50],zoom:3});await idle();a.z3=cls();
-  map.jumpTo({center:[-79.4,43.7],zoom:4.5});await idle();a.z45=cls();map.jumpTo({center:[-79.4,43.7],zoom:9});await idle();a.z9=cls();
+  map.jumpTo({center:[-79.4,43.7],zoom:4.5});await idle();a.z45=cls();map.jumpTo({center:[-79.4,43.7],zoom:6.5});await idle();
+  a.z65=[...new Set(map.queryRenderedFeatures({layers:ids}).map(f=>f.layer.id.replace('ov-place-','')))].sort().join();
+  map.jumpTo({center:[-79.4,43.7],zoom:9});await idle();a.z9=cls();
+  a.caps=map.getLayoutProperty('ov-place-country-xl','text-transform');a.cont=SunnyLabelTiers.TIERS[0].role;
   map.jumpTo({center:[-17,63.5],zoom:3});await idle();a.ice3=names().includes('Iceland');map.jumpTo({center:[-17,63.5],zoom:4.5});await idle();a.ice45=names().includes('Iceland');
   const white=/^(#fff|#ffffff|white|rgb\\(255, ?255, ?255\\)|rgba\\(255, ?255, ?255, ?1\\))$/i;
   a.white=map.getStyle().layers.filter(l=>l.type==='symbol'&&/^(ov-|vb-)/.test(l.id)&&l.layout&&l.layout.visibility!=='none').filter(l=>white.test(String((l.paint||{})['text-color']||''))).map(l=>l.id);
@@ -524,6 +527,9 @@ async def label_tiers(b):
         check(th + " regions and capitals next, cities and towns closer, no villages at 9",
               "village" not in r["z45"] and "town" not in r["z45"] and "state" in r["z45"] and "town" in r["z9"] and "village" not in r["z9"], r)
         check(th + " Iceland waits until a closer zoom", (not r["ice3"]) and r["ice45"], r)
+        check(th + " cities show by zoom 6.5 (t391u: city tiers start 1 to 1.5 zooms sooner)",
+              any(k in r["z65"].split(",") for k in ["city", "city-major"]) and "capital-region" in r["z65"], r)
+        check(th + " country names in capitals, continents styled apart", r["caps"] == "uppercase" and r["cont"] == "continent", r)
         check(th + " no pure white text, no second set of place names", not r["white"] and r["vbPlace"] == 0, r)
         check(th + " roads drawn at the shared road dim", r["road"] is not None and r["road"] < 1, r)
         check(th + " brightness dims labels and Labels off hides them", r["dim"] < 1 and r["off"] and not errs, [r, errs])
