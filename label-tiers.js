@@ -50,19 +50,21 @@
   var SIZE = { "country-xl": [17, 22], "country-l": [16, 20], "country-m": [15, 18], "country-s": [15, 17], "country-xs": [15, 16],
     state: [13, 15], capital: [13, 15], "capital-region": [12, 14], "city-major": [12, 14], city: [11, 13], town: [11, 12.5],
     village: [10, 12], hamlet: [10, 11], street: [10, 11], continent: [10, 12], feature: [10.5, 12.5] };
-  /* The tier table. min/max: zoom range; rank: place in RANKS; first row wins collisions. */
+  /* The tier table. min/max: zoom range; rank: place in RANKS; first row wins collisions.
+   * t394u, after comparing Windy, Google Maps and Apple Maps (labels/recon/FINDINGS.md; their zoom N is this map's N-1):
+   * every name is one fixed label at its tile point, never moved to follow the view; country names end around zoom 6,
+   * where province and state names take over; province and state names show from zoom 4 to 7 in letter-spaced
+   * capitals and are gone at city zooms. */
   var TIERS = [
     { id: "continent", min: 0, max: 2.2, rank: "continent", font: REG, upper: true, space: 0.45,
       filter: ["all", cls(["continent"]), ["match", ["coalesce", ["get", "name:en"], ["get", "name"]], CONTINENTS, true, false]] },
-    { id: "country-xl", min: 2, max: 7, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xl") },
+    { id: "country-xl", min: 2, max: 6, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xl") },
     { id: "capital", min: 4, rank: "capital", font: BOLD, filter: ["all", cls(["city"]), cap(2)] },
-    { id: "country-l", min: 2.5, max: 7.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("l") },
-    { id: "country-m", min: 3, max: 8, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("m") },
-    { id: "country-s", min: 3.8, max: 8.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("s") },
-    { id: "country-xs", min: 4.8, max: 9, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xs") },
-    /* names of countries whose own label point is off screen, at the middle of their visible part (country-view.js) */
-    { id: "country-view", min: 3.5, max: 9, rank: "country", font: BOLD, upper: true, space: 0.12, view: true },
-    { id: "state", min: 4, max: 9, rank: "state", font: REG, upper: true, space: 0.1, filter: cls(["state", "province"]) },
+    { id: "country-l", min: 2.5, max: 6, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("l") },
+    { id: "country-m", min: 3, max: 6.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("m") },
+    { id: "country-s", min: 3.8, max: 6.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("s") },
+    { id: "country-xs", min: 4.8, max: 7, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xs") },
+    { id: "state", min: 4, max: 7, rank: "state", font: REG, upper: true, space: 0.2, filter: cls(["state", "province"]) },
     { id: "capital-region", min: 4, rank: "capital-region", font: BOLD, filter: ["all", cls(["city", "town"]), cap(4)] },
     { id: "city-major", min: 5, rank: "city-major", font: REG, filter: ["all", cls(["city"]), notCap, rank("<=", 3)] },
     { id: "city", min: 6, rank: "city", font: REG, filter: ["all", cls(["city"]), notCap, rank(">", 3)] },
@@ -112,13 +114,8 @@
     start = start || 0;
     return ["interpolate", ["linear"], ["zoom"], start, fc[0], start + (fc[1] - fc[0]) / GROW, fc[1]];
   }
-  /* the moved country names carry their own size per area class (property s); the others read SIZE */
-  function sizeKey(t) { return SIZE[t.id] ? t.id : t.view ? "country-m" : t.rank; }
-  /* area class of a country code: xl, l, m, s or xs */
-  function areaClass(c) {
-    var k = ["xl", "l", "m", "xs"].filter((x) => { return AREA[x].indexOf(c) !== -1; })[0];
-    return k || "s";
-  }
+  /* country rows read their area class size, every other row its rank size */
+  function sizeKey(t) { return SIZE[t.id] ? t.id : t.rank; }
   function pal() { return PAL[mode] || PAL.roads; }
   function opacity() {
     var K = window.SunnyKit, b = K && K.mapBrightness ? K.mapBrightness.get() : 1;
@@ -134,19 +131,11 @@
       "text-max-width": 8, "text-padding": 4, "text-letter-spacing": t.space || 0, "symbol-sort-key": ["coalesce", ["get", "rank"], 99] };
     var s = { id: PREFIX + t.id, type: "symbol", source: "ofm", "source-layer": "place", minzoom: t.min, filter: t.filter,
       layout: lay, paint: paintOf(t) };
-    if (t.view) {
-      s.source = VIEW_SRC;
-      delete s["source-layer"];
-      delete s.filter;
-      lay["text-size"] = ["get", "s"];
-    }
     if (t.max) s.maxzoom = t.max;
     return s;
   }
   /* Adds every tier once, bottom tier first, so the first rows of the table sit on top */
-  var VIEW_SRC = "country-view";
   function add(map, before, vis) {
-    if (!map.getSource(VIEW_SRC)) map.addSource(VIEW_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     ORDER.forEach((t, i) => {
       if (map.getLayer(ids[i])) return;
       try { map.addLayer(spec(t, vis || "none"), before && map.getLayer(before) ? before : undefined); } catch (e) {}
@@ -209,5 +198,5 @@
     '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
   window.SunnyLabelTiers = { OFM_CREDIT: OFM_CREDIT, TIERS: TIERS, RANKS: RANKS, SIZE: SIZE, PAL: PAL, AREA: AREA, ROAD_DIM: ROAD_DIM,
     STREET_MIN: STREET_MIN, ids: ids, add: add, theme: theme, restyle: restyle, repaint: repaint, colourOf: colourOf, sizeAt: sizeAt,
-    textSize: textSize, sizeKey: sizeKey, areaClass: areaClass, VIEW_SRC: VIEW_SRC, mode: () => { return mode; } };
+    textSize: textSize, sizeKey: sizeKey, mode: () => { return mode; } };
 })();
