@@ -70,8 +70,9 @@
           "circle-radius": K.markerScale.bind(map, "storm-now", "circle-radius", ["+", 7, ["*", 2, ["get", "c"]]]),
           "circle-stroke-color": "#fff", "circle-stroke-width": 2, "circle-opacity": 0.85 } });
         map.addLayer({ id: "storm-now-label", type: "symbol", source: "tc-now", layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
-          "text-size": K.markerScale.bind(map, "storm-now-label", "text-size", 11, { layout: true }), "text-offset": [0, 1.6] },
-          paint: { "text-color": "#fff", "text-halo-color": "#000", "text-halo-width": 1.2 } });
+          /* t392u: feature names take the shared text size floor and ceiling */
+          "text-size": window.SunnyLabelTiers ? window.SunnyLabelTiers.textSize("feature") : 11, "text-offset": [0, 1.6] },
+          paint: { "text-color": "#ece8de", "text-halo-color": "#000", "text-halo-width": 1.2 } });
         K.vis(map, ["storm-now", "storm-now-label"], L.isOn("stormsnow"));
       }).catch(() => { liveAt = 0; });
   };

@@ -528,7 +528,7 @@ var labelsIdleHealArmed, labelsHealBusy;
         "symbol-placement": "line",
         "text-field": nameField,
         "text-font": ["Noto Sans Regular"],
-        "text-size": 12,
+        "text-size": window.SunnyLabelTiers ? window.SunnyLabelTiers.textSize("street", 12) : 12,
         "text-max-angle": 30
       },
       paint: {

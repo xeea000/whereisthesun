@@ -34,52 +34,90 @@
   var cap = (v) => { return ["==", ["coalesce", ["get", "capital"], 0], v]; };
   var notCap = ["!", ["match", ["coalesce", ["get", "capital"], 0], [2, 4], true, false]];
   var rank = (op, n) => { return [op, ["coalesce", ["get", "rank"], 99], n]; };
-  /* The tier table. min/max: zoom range; size: [zoom, px] stops; role: palette colour; first row wins collisions. */
+  /* t392u: one importance order drives colour and size. A rank nearer the start of RANKS is brighter (Dark, Satellite) or darker (Roads)
+   * and never smaller at any zoom: country > province/state > national capital > provincial capital > large city > city >
+   * town > village > hamlet/suburb > street names. SHADE is each rank's step from the palette's top colour to its bottom.
+   * Continents sit outside the order: they show alone, far out, in their own softer style. */
+  var RANKS = ["country", "state", "capital", "capital-region", "city-major", "city", "town", "village", "hamlet", "street"];
+  var SHADE = { country: 0, state: 0.03, capital: 0.06, "capital-region": 0.09, "city-major": 0.12, city: 0.15, town: 0.18,
+    village: 0.24, hamlet: 0.32, street: 0.75 };
+  /* Text size floor and ceiling (px). A label starts at its floor the moment its tier shows and grows GROW px per zoom
+   * level up to its ceiling. Floors and ceilings never rise down the order. Sources (t393u): screen text no smaller than
+   * about 9-10 px and ranked groups at least 2 px apart (Axis Maps labelling guide); a few size groups with weight and
+   * case doing the rest, as in OpenMapTiles OSM Bright and Positron (capitals and large cities 14, other places 10,
+   * road names 10, countries bold caps growing with zoom, regions in letter-spaced caps). Countries also scale with land area. */
+  var GROW = 1;
+  var SIZE = { "country-xl": [17, 22], "country-l": [16, 20], "country-m": [15, 18], "country-s": [15, 17], "country-xs": [15, 16],
+    state: [13, 15], capital: [13, 15], "capital-region": [12, 14], "city-major": [12, 14], city: [11, 13], town: [11, 12.5],
+    village: [10, 12], hamlet: [10, 11], street: [10, 11], continent: [10, 12], feature: [10.5, 12.5] };
+  /* The tier table. min/max: zoom range; rank: place in RANKS; first row wins collisions. */
   var TIERS = [
-    { id: "continent", min: 0, max: 2.2, role: "continent", font: REG, size: [[0, 10], [2, 12]], upper: true, space: 0.45,
+    { id: "continent", min: 0, max: 2.2, rank: "continent", font: REG, upper: true, space: 0.45,
       filter: ["all", cls(["continent"]), ["match", ["coalesce", ["get", "name:en"], ["get", "name"]], CONTINENTS, true, false]] },
-    { id: "country-xl", min: 2, max: 7, role: "country", font: BOLD, size: [[2, 14], [5, 21]], upper: true, space: 0.12, filter: country("xl") },
-    { id: "capital", min: 4, role: "major", font: BOLD, size: [[4, 11.5], [8, 14], [12, 17]], filter: ["all", cls(["city"]), cap(2)] },
-    { id: "country-l", min: 2.5, max: 7.5, role: "country", font: BOLD, size: [[2.5, 12.5], [5, 17]], upper: true, space: 0.12, filter: country("l") },
-    { id: "country-m", min: 3, max: 8, role: "country", font: BOLD, size: [[3, 11.5], [6, 15]], upper: true, space: 0.12, filter: country("m") },
-    { id: "country-s", min: 3.8, max: 8.5, role: "country", font: BOLD, size: [[3.8, 10.5], [7, 13]], upper: true, space: 0.12, filter: country("s") },
-    { id: "country-xs", min: 4.8, max: 9, role: "country", font: BOLD, size: [[4.8, 10], [8, 12]], upper: true, space: 0.12, filter: country("xs") },
-    { id: "state", min: 4, max: 9, role: "region", font: REG, size: [[4, 9.5], [8, 12]], upper: true, space: 0.1,
-      filter: cls(["state", "province"]) },
-    { id: "capital-region", min: 4, role: "place", font: BOLD, size: [[4, 10.5], [9, 13.5], [12, 16]],
-      filter: ["all", cls(["city", "town"]), cap(4)] },
-    { id: "city-major", min: 5, role: "place", font: REG, size: [[5, 10.5], [10, 14], [13, 17]], filter: ["all", cls(["city"]), notCap, rank("<=", 3)] },
-    { id: "city", min: 6, role: "place", font: REG, size: [[6, 10], [11, 13.5], [14, 16]], filter: ["all", cls(["city"]), notCap, rank(">", 3)] },
-    { id: "town", min: 8, role: "minor", font: REG, size: [[8, 10], [13, 13.5]], filter: ["all", cls(["town"]), ["!", cap(4)]] },
-    { id: "village", min: 11, role: "minor", font: REG, size: [[11, 10.5], [14, 13]], filter: cls(["village"]) },
+    { id: "country-xl", min: 2, max: 7, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xl") },
+    { id: "capital", min: 4, rank: "capital", font: BOLD, filter: ["all", cls(["city"]), cap(2)] },
+    { id: "country-l", min: 2.5, max: 7.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("l") },
+    { id: "country-m", min: 3, max: 8, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("m") },
+    { id: "country-s", min: 3.8, max: 8.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("s") },
+    { id: "country-xs", min: 4.8, max: 9, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xs") },
+    /* names of countries whose own label point is off screen, at the middle of their visible part (country-view.js) */
+    { id: "country-view", min: 3.5, max: 9, rank: "country", font: BOLD, upper: true, space: 0.12, view: true },
+    { id: "state", min: 4, max: 9, rank: "state", font: REG, upper: true, space: 0.1, filter: cls(["state", "province"]) },
+    { id: "capital-region", min: 4, rank: "capital-region", font: BOLD, filter: ["all", cls(["city", "town"]), cap(4)] },
+    { id: "city-major", min: 5, rank: "city-major", font: REG, filter: ["all", cls(["city"]), notCap, rank("<=", 3)] },
+    { id: "city", min: 6, rank: "city", font: REG, filter: ["all", cls(["city"]), notCap, rank(">", 3)] },
+    { id: "town", min: 8, rank: "town", font: REG, filter: ["all", cls(["town"]), ["!", cap(4)]] },
+    { id: "village", min: 11, rank: "village", font: REG, filter: cls(["village"]) },
     /* every other place class (hamlets, suburbs, neighbourhoods, localities…) only close in */
-    { id: "hamlet", min: 12, role: "minor", font: REG, size: [[12, 10], [15, 12.5]],
+    { id: "hamlet", min: 12, rank: "hamlet", font: REG,
       filter: ["!", cls(["continent", "country", "state", "province", "city", "town", "village"])] }
   ];
-  /* One palette per theme. No pure white; Dark and Satellite get a soft dark halo, Roads a light one.
-   * roadLine tints the Labels overlay road lines. t390u: Roads and Dark are about 12% dimmer than t389u for a calmer map.
-   * t391u: country names in a darker grey, all caps; continents lighter, thinner and wider spaced; road dim 0.6 to 0.5 and darker road lines. */
+  var STREET_MIN = 12;
+  /* One palette per theme: top and bottom of the importance ramp, plus the continent, water and point colours.
+   * No pure white; Dark and Satellite get a soft dark halo, Roads a light one. roadLine tints the Labels overlay roads.
+   * t392u: countries a step dimmer than t391u; towns and villages brighter; streets and road lines fainter. */
   /* t390u: one road dim for every vector theme (Roads and Dark): road lines, the overlay roads and their casing are drawn
    * at this share of their style opacity. Satellite keeps full roads so they stay visible over photos. */
-  var ROAD_DIM = 0.5;
+  var ROAD_DIM = 0.4;
   var VECTOR = { roads: true, dark: true };
   var PAL = {
-    dark: { country: "#aca79d", continent: "#86827b", major: "#c9c4ba", place: "#b9b4ab", minor: "#9e9a92", region: "#908c85", halo: "rgba(12,14,18,0.8)", haloW: 1.2,
-      road: "#8a867f", water: "#6f88a2", poi: "#8f8b84", roadLine: "rgb(96,93,89)" },
-    satellite: { country: "#e4dfd5", continent: "#cbc6bb", major: "#eeeae0", place: "#e5e1d7", minor: "#d3cfc5", region: "#d0cbc0", halo: "rgba(8,10,14,0.86)", haloW: 1.5,
+    dark: { top: "#aba69c", bottom: "#75726c", continent: "#86827b", halo: "rgba(12,14,18,0.8)", haloW: 1.2,
+      water: "#6f88a2", poi: "#8f8b84", roadLine: "rgb(84,82,78)" },
+    satellite: { top: "#e2ddd3", bottom: "#b4afa6", continent: "#cbc6bb", halo: "rgba(8,10,14,0.86)", haloW: 1.5,
       road: "#e5e1d7", water: "#cfe0f2", poi: "#d3cfc5", roadLine: "rgba(240,235,225,0.85)" },
-    roads: { country: "#2e3238", continent: "#8a847e", major: "#3c4046", place: "#464a50", minor: "#5e636a", region: "#7a746e", halo: "rgba(248,246,241,0.82)", haloW: 1.2,
-      road: "#686c72", water: "#4f6d97", poi: "#6e7278", roadLine: "#e2dbce" }
+    roads: { top: "#383c42", bottom: "#8a8d92", continent: "#8a847e", halo: "rgba(248,246,241,0.82)", haloW: 1.2,
+      water: "#4f6d97", poi: "#6e7278", roadLine: "#e2dbce" }
   };
   var PREFIX = "ov-place-";
   /* Bottom tier first: a layer added or moved later sits on top, and the top layer wins collisions */
   var ORDER = TIERS.slice().reverse();
   var ids = ORDER.map((t) => { return PREFIX + t.id; });
   var mode = "roads";
-  function size(stops) {
-    var e = ["interpolate", ["linear"], ["zoom"]];
-    stops.forEach((s) => { e.push(s[0], s[1]); });
-    return e;
+  function hex(c) { return [1, 3, 5].map((i) => { return parseInt(c.substr(i, 2), 16); }); }
+  /* colour of a rank in a theme: SHADE of the way from the palette top to its bottom */
+  function colourOf(r, m) {
+    var p = PAL[m] || PAL.roads;
+    if (r === "continent") return p.continent;
+    if (r === "street" && p.road) return p.road;
+    var a = hex(p.top), b = hex(p.bottom), t = SHADE[r] || 0;
+    return "#" + a.map((v, i) => { return ("0" + Math.round(v + (b[i] - v) * t).toString(16)).slice(-2); }).join("");
+  }
+  /* size in px of a size key at zoom z for a label that starts showing at zoom start */
+  function sizeAt(key, start, z) {
+    var fc = SIZE[key];
+    return Math.max(fc[0], Math.min(fc[1], fc[0] + GROW * (z - start)));
+  }
+  function textSize(key, start) {
+    var fc = SIZE[key];
+    start = start || 0;
+    return ["interpolate", ["linear"], ["zoom"], start, fc[0], start + (fc[1] - fc[0]) / GROW, fc[1]];
+  }
+  /* the moved country names carry their own size per area class (property s); the others read SIZE */
+  function sizeKey(t) { return SIZE[t.id] ? t.id : t.view ? "country-m" : t.rank; }
+  /* area class of a country code: xl, l, m, s or xs */
+  function areaClass(c) {
+    var k = ["xl", "l", "m", "xs"].filter((x) => { return AREA[x].indexOf(c) !== -1; })[0];
+    return k || "s";
   }
   function pal() { return PAL[mode] || PAL.roads; }
   function opacity() {
@@ -88,18 +126,27 @@
   }
   function paintOf(t) {
     var p = pal();
-    return { "text-color": p[t.role], "text-halo-color": p.halo, "text-halo-width": p.haloW, "text-halo-blur": 0.4, "text-opacity": opacity() };
+    return { "text-color": colourOf(t.rank, mode), "text-halo-color": p.halo, "text-halo-width": p.haloW, "text-halo-blur": 0.4,
+      "text-opacity": opacity() };
   }
   function spec(t, vis) {
-    var lay = { visibility: vis, "text-field": NAME, "text-transform": t.upper ? "uppercase" : "none", "text-font": t.font, "text-size": size(t.size),
+    var lay = { visibility: vis, "text-field": NAME, "text-transform": t.upper ? "uppercase" : "none", "text-font": t.font, "text-size": textSize(sizeKey(t), t.min),
       "text-max-width": 8, "text-padding": 4, "text-letter-spacing": t.space || 0, "symbol-sort-key": ["coalesce", ["get", "rank"], 99] };
     var s = { id: PREFIX + t.id, type: "symbol", source: "ofm", "source-layer": "place", minzoom: t.min, filter: t.filter,
       layout: lay, paint: paintOf(t) };
+    if (t.view) {
+      s.source = VIEW_SRC;
+      delete s["source-layer"];
+      delete s.filter;
+      lay["text-size"] = ["get", "s"];
+    }
     if (t.max) s.maxzoom = t.max;
     return s;
   }
   /* Adds every tier once, bottom tier first, so the first rows of the table sit on top */
+  var VIEW_SRC = "country-view";
   function add(map, before, vis) {
+    if (!map.getSource(VIEW_SRC)) map.addSource(VIEW_SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     ORDER.forEach((t, i) => {
       if (map.getLayer(ids[i])) return;
       try { map.addLayer(spec(t, vis || "none"), before && map.getLayer(before) ? before : undefined); } catch (e) {}
@@ -117,7 +164,7 @@
     var r = pal();
     if (map.getLayer("ov-road-name")) {
       try {
-        map.setPaintProperty("ov-road-name", "text-color", r.road);
+        map.setPaintProperty("ov-road-name", "text-color", colourOf("street", mode));
         map.setPaintProperty("ov-road-name", "text-halo-color", r.halo);
       } catch (e) {}
     }
@@ -131,8 +178,9 @@
     mode = PAL[m] ? m : "roads";
     repaint(map);
   }
-  /* The base styles' own road, water and point names keep their layout and take this palette's colours */
-  var ROLE = { transportation_name: "road", water_name: "water", waterway: "water", poi: "poi", aerodrome_label: "poi",
+  /* The base styles' own road, water and point names keep their layout and take this palette's colours and sizes:
+   * street names at the bottom of the order, water and point names at the feature size */
+  var ROLE = { transportation_name: "street", water_name: "water", waterway: "water", poi: "poi", aerodrome_label: "poi",
     mountain_peak: "poi", park: "poi" };
   function restyle(layer, m) {
     var p = PAL[m];
@@ -141,9 +189,12 @@
       if (o === undefined || typeof o === "number") layer.paint = Object.assign({}, layer.paint, { "line-opacity": (o === undefined ? 1 : o) * ROAD_DIM });
       return layer;
     }
-    if (!p || layer.type !== "symbol" || !ROLE[layer["source-layer"]] || (layer.layout || {})["icon-image"]) return layer;
-    layer.paint = Object.assign({}, layer.paint, { "text-color": p[ROLE[layer["source-layer"]]], "text-halo-color": p.halo,
+    var role = ROLE[layer["source-layer"]];
+    if (!p || layer.type !== "symbol" || !role || (layer.layout || {})["icon-image"]) return layer;
+    var street = role === "street";
+    layer.paint = Object.assign({}, layer.paint, { "text-color": street ? colourOf("street", m) : p[role], "text-halo-color": p.halo,
       "text-halo-width": p.haloW });
+    layer.layout = Object.assign({}, layer.layout, { "text-size": street ? textSize("street", STREET_MIN) : textSize("feature", layer.minzoom || 0) });
     return layer;
   }
   var hooked = false;
@@ -156,6 +207,7 @@
   /* t390u: one credit line for the OpenFreeMap tiles, with links, shown behind the map's "i" button */
   var OFM_CREDIT = '<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · ' +
     '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
-  window.SunnyLabelTiers = { OFM_CREDIT: OFM_CREDIT, TIERS: TIERS, PAL: PAL, AREA: AREA, ROAD_DIM: ROAD_DIM, ids: ids, add: add, theme: theme, restyle: restyle, repaint: repaint,
-    mode: () => { return mode; } };
+  window.SunnyLabelTiers = { OFM_CREDIT: OFM_CREDIT, TIERS: TIERS, RANKS: RANKS, SIZE: SIZE, PAL: PAL, AREA: AREA, ROAD_DIM: ROAD_DIM,
+    STREET_MIN: STREET_MIN, ids: ids, add: add, theme: theme, restyle: restyle, repaint: repaint, colourOf: colourOf, sizeAt: sizeAt,
+    textSize: textSize, sizeKey: sizeKey, areaClass: areaClass, VIEW_SRC: VIEW_SRC, mode: () => { return mode; } };
 })();

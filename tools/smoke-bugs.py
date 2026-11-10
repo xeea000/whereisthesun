@@ -508,12 +508,23 @@ LBL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const idle=()=>new
   map.jumpTo({center:[-79.4,43.7],zoom:4.5});await idle();a.z45=cls();map.jumpTo({center:[-79.4,43.7],zoom:6.5});await idle();
   a.z65=[...new Set(map.queryRenderedFeatures({layers:ids}).map(f=>f.layer.id.replace('ov-place-','')))].sort().join();
   map.jumpTo({center:[-79.4,43.7],zoom:9});await idle();a.z9=cls();
-  a.caps=map.getLayoutProperty('ov-place-country-xl','text-transform');a.cont=SunnyLabelTiers.TIERS[0].role;
+  a.caps=map.getLayoutProperty('ov-place-country-xl','text-transform');a.cont=SunnyLabelTiers.TIERS[0].rank;
   map.jumpTo({center:[-17,63.5],zoom:3});await idle();a.ice3=names().includes('Iceland');map.jumpTo({center:[-17,63.5],zoom:4.5});await idle();a.ice45=names().includes('Iceland');
   const white=/^(#fff|#ffffff|white|rgb\\(255, ?255, ?255\\)|rgba\\(255, ?255, ?255, ?1\\))$/i;
   a.white=map.getStyle().layers.filter(l=>l.type==='symbol'&&/^(ov-|vb-)/.test(l.id)&&l.layout&&l.layout.visibility!=='none').filter(l=>white.test(String((l.paint||{})['text-color']||''))).map(l=>l.id);
   a.vbPlace=map.getStyle().layers.filter(l=>/^vb-/.test(l.id)&&l['source-layer']==='place').length;
   a.road=map.getLayer('ov-road')?map.getPaintProperty('ov-road','line-opacity'):null;
+  const L=SunnyLabelTiers,R=L.RANKS,th=L.mode(),lum=c=>{const v=[1,3,5].map(i=>parseInt(c.substr(i,2),16));return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2]};
+  a.mono=[];for(const z of [3,5,7,9,12]){const vis=L.TIERS.filter(t=>!t.view&&t.rank!=='continent'&&z>=t.min&&z<(t.max||24)&&map.getLayer('ov-place-'+t.id))
+    .map(t=>({r:R.indexOf(t.rank),id:t.id,s:L.sizeAt(L.sizeKey(t),t.min,z),c:map.getPaintProperty('ov-place-'+t.id,'text-color')}));
+    if(z>=L.STREET_MIN)vis.push({r:R.indexOf('street'),id:'street',s:L.sizeAt('street',L.STREET_MIN,z),c:L.colourOf('street',th)});
+    vis.sort((p,q)=>p.r-q.r);for(let i=1;i<vis.length;i++){const p=vis[i-1],q=vis[i];if(q.r===p.r)continue;
+      const brighter=th==='roads'?lum(q.c)<lum(p.c):lum(q.c)>lum(p.c);if(q.s>p.s||brighter)a.mono.push(z+':'+q.id+'>'+p.id+' '+q.s+'/'+p.s+' '+q.c+'/'+p.c)}}
+  a.tableColour=L.TIERS.filter(t=>!t.view&&map.getLayer('ov-place-'+t.id)).every(t=>map.getPaintProperty('ov-place-'+t.id,'text-color')===L.colourOf(t.rank,th));
+  map.jumpTo({center:[-79.4,43.7],zoom:5});await idle();await s(1200);
+  const vw=map.queryRenderedFeatures({layers:['ov-place-country-view']}).map(f=>f.properties.name_en);
+  const st=map.queryRenderedFeatures({layers:ids.filter(i=>/country-(xl|l|m|s|xs)$/.test(i))}).map(f=>f.properties.name_en);
+  a.view=vw.sort().join();a.dup=vw.filter(n=>st.includes(n));a.viewMs=SunnyCountryView.stats.ms;
   SunnyKit.mapBrightness.set(0.5);await s(300);a.dim=map.getPaintProperty(ids[0],'text-opacity');SunnyKit.mapBrightness.set(1);
   document.getElementById('toggle-map').click();await s(800);a.off=ids.every(i=>map.getLayoutProperty(i,'visibility')==='none');return a}"""
 async def label_tiers(b):
@@ -523,7 +534,7 @@ async def label_tiers(b):
     for th in ["dark", "roads"]:
         ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done", "sunny-basemap": th, "sunny-labels": "1"}, w=390)
         r = await pg.evaluate(LBL)
-        check(th + " far out shows continents only, then countries", r["n"] == 14 and r["z1"] == "continent" and r["z3"] == "country", r)
+        check(th + " far out shows continents only, then countries", r["n"] == 15 and r["z1"] == "continent" and r["z3"] == "country", r)
         check(th + " regions and capitals next, cities and towns closer, no villages at 9",
               "village" not in r["z45"] and "town" not in r["z45"] and "state" in r["z45"] and "town" in r["z9"] and "village" not in r["z9"], r)
         check(th + " Iceland waits until a closer zoom", (not r["ice3"]) and r["ice45"], r)
@@ -532,6 +543,10 @@ async def label_tiers(b):
         check(th + " country names in capitals, continents styled apart", r["caps"] == "uppercase" and r["cont"] == "continent", r)
         check(th + " no pure white text, no second set of place names", not r["white"] and r["vbPlace"] == 0, r)
         check(th + " roads drawn at the shared road dim", r["road"] is not None and r["road"] < 1, r)
+        check(th + " brightness and size never rise down the importance order (z3,5,7,9,12), colours from the table",
+              not r["mono"] and r["tableColour"], r)
+        check(th + " country names follow the view: Canada and United States named at Toronto z5, no duplicates",
+              "Canada" in r["view"] and "United States" in r["view"] and not r["dup"], r)
         check(th + " brightness dims labels and Labels off hides them", r["dim"] < 1 and r["off"] and not errs, [r, errs])
         await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};

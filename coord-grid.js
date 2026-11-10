@@ -43,7 +43,8 @@
       paint: { "line-color": ["match", ["get", "k"], 0, "rgba(40,60,90,0.45)", 3, "rgba(200,120,30,0.8)", "rgba(200,40,40,0.8)"],
         "line-width": ["match", ["get", "k"], 0, 0.8, 1.6] } }, K.before(map));
     map.addLayer({ id: "grid-label", type: "symbol", source: "grid", filter: ["==", ["geometry-type"], "Point"],
-      layout: { "text-field": ["get", "t"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-allow-overlap": true, "text-ignore-placement": true },
+      layout: { "text-field": ["get", "t"], "text-font": ["Noto Sans Regular"], "text-size": window.SunnyLabelTiers ? window.SunnyLabelTiers.textSize("feature") : 11,
+        "text-allow-overlap": true, "text-ignore-placement": true },
       paint: { "text-color": "#1d2b44", "text-halo-color": "rgba(255,255,255,0.85)", "text-halo-width": 1.4 } });
   };
   var on = false, hooked = false;

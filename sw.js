@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt275"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt276"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -48,7 +48,8 @@ var PRECACHE = [
   "beach-card.js?h=0237ca65e1",
   "beach-icons.js?h=20b06e164b",
   "data-saver.js?h=e646e5f5ee",
-  "label-tiers.js?h=1b006da3ca",
+  "label-tiers.js?h=c60b088c77",
+  "country-view.js?h=9b5d057fa3",
   "vector-base.js?h=d38449997d",
   "light-clouds.js?h=3eec306776",
   "cloud-key.js?h=5d5b626b3c",
@@ -88,7 +89,7 @@ var PRECACHE = [
   "app-cloud-layers.js?h=044f396d25",
   "app-play-buffers.js?h=f67069c191",
   "app-play-blend.js?h=2d35ed038e",
-  "app-cloud-frames.js?h=4e58a45b38",
+  "app-cloud-frames.js?h=8f56604d07",
   "app-beach-store.js?h=2f443c94e4",
   "app-beach-fetch.js?h=2b9c93ee7a",
   "app-beach-search.js?h=d42286ab71",
@@ -123,12 +124,12 @@ var PRECACHE = [
   "plates.js?h=fc25f7fdd7",
   "quakes.js?h=96c8ef8693",
   "volcanoes.js?h=bbd8b6d5a8",
-  "storms.js?h=4f9c730441",
+  "storms.js?h=acd4e567c3",
   "tornadoes.js?h=e268aebfac",
   "golden-hour.js?h=16bf01063e",
   "sun-card.js?h=f5194300bd",
   "sun-hours.js?h=cb04d37309",
-  "coord-grid.js?h=a8528bd13f",
+  "coord-grid.js?h=c49f678b9e",
   "currents.js?h=6eb08ffcef",
   "water-temp.js?h=a0005ad2e5",
   "waves.js?h=c1631fca41",
