@@ -431,7 +431,6 @@
   function setFilter(code) {
     filterSet = code || "";
     if (pMap) redraw(pMap);
-    if (!L.isOn("mtg") && filterSet) L && null;
     renderSchedule();
     syncFilterChip();
   }

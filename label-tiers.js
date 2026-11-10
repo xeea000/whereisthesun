@@ -50,7 +50,8 @@
   var SIZE = { "country-xl": [17, 22], "country-l": [16, 20], "country-m": [15, 18], "country-s": [15, 17], "country-xs": [15, 16],
     state: [13, 15], capital: [13, 15], "capital-region": [12, 14], "city-major": [12, 14], city: [11, 13], town: [11, 12.5],
     village: [10, 12], hamlet: [10, 11], street: [10, 11], continent: [10, 12], feature: [10.5, 12.5] };
-  /* The tier table. min/max: zoom range; rank: place in RANKS; first row wins collisions.
+  /* The tier table. min/max: zoom range; from: zoom its size starts growing (default min); rank: place in RANKS;
+   * first row wins collisions.
    * t394u, after comparing Windy, Google Maps and Apple Maps (labels/recon/FINDINGS.md; their zoom N is this map's N-1):
    * every name is one fixed label at its tile point, never moved to follow the view; country names end around zoom 6,
    * where province and state names take over; province and state names show from zoom 4 to 7 in letter-spaced
@@ -64,7 +65,10 @@
     { id: "country-m", min: 3, max: 6.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("m") },
     { id: "country-s", min: 3.8, max: 6.5, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("s") },
     { id: "country-xs", min: 4.8, max: 7, rank: "country", font: BOLD, upper: true, space: 0.12, filter: country("xs") },
-    { id: "state", min: 4, max: 7, rank: "state", font: REG, upper: true, space: 0.2, filter: cls(["state", "province"]) },
+    /* t396u: two-letter codes first (as Apple Maps does to about its zoom 5.5), full names from zoom 5 */
+    { id: "state-code", min: 4, max: 5, rank: "state", font: REG, upper: true, space: 0.1, code: true, twin: true,
+      filter: cls(["state", "province"]) },
+    { id: "state", min: 5, from: 4, max: 7, rank: "state", font: REG, upper: true, space: 0.2, twin: true, filter: cls(["state", "province"]) },
     { id: "capital-region", min: 4, rank: "capital-region", font: BOLD, filter: ["all", cls(["city", "town"]), cap(4)] },
     { id: "city-major", min: 5, rank: "city-major", font: REG, filter: ["all", cls(["city"]), notCap, rank("<=", 3)] },
     { id: "city", min: 6, rank: "city", font: REG, filter: ["all", cls(["city"]), notCap, rank(">", 3)] },
@@ -74,6 +78,36 @@
     { id: "hamlet", min: 12, rank: "hamlet", font: REG,
       filter: ["!", cls(["continent", "country", "state", "province", "city", "town", "village"])] }
   ];
+  /* t396u: ISO 3166-2 subdivision codes (the same as the American and Canadian postal codes) for the 50 American states, the District
+   * of Columbia and the 13 Canadian provinces and territories, from Wikidata property P300, keyed to the English name the
+   * tiles carry. Every other region keeps its full name. */
+  var CODES = ("AL Alabama|AK Alaska|AZ Arizona|AR Arkansas|CA California|CO Colorado|CT Connecticut|DE Delaware|" +
+    "DC District of Columbia|FL Florida|GA Georgia|HI Hawaii|ID Idaho|IL Illinois|IN Indiana|IA Iowa|KS Kansas|KY Kentucky|" +
+    "LA Louisiana|ME Maine|MD Maryland|MA Massachusetts|MI Michigan|MN Minnesota|MS Mississippi|MO Missouri|MT Montana|" +
+    "NE Nebraska|NV Nevada|NH New Hampshire|NJ New Jersey|NM New Mexico|NY New York|NC North Carolina|ND North Dakota|OH Ohio|" +
+    "OK Oklahoma|OR Oregon|PA Pennsylvania|RI Rhode Island|SC South Carolina|SD South Dakota|TN Tennessee|TX Texas|UT Utah|" +
+    "VT Vermont|VA Virginia|WA Washington|WV West Virginia|WI Wisconsin|WY Wyoming|AB Alberta|BC British Columbia|" +
+    "MB Manitoba|NB New Brunswick|NL Newfoundland and Labrador|NS Nova Scotia|NT Northwest Territories|NU Nunavut|" +
+    "ON Ontario|PE Prince Edward Island|QC Quebec|SK Saskatchewan|YT Yukon").split("|").map((x) => { return [x.slice(3), x.slice(0, 2)]; });
+  var CODE_FIELD = ["match", ["coalesce", ["get", "name_en"], ["get", "name"]]].concat(...CODES, [NAME]);
+  function codeOf(n) { var c = CODES.find((x) => { return x[0] === n; }); return c ? c[1] : null; }
+  /* t396u: a second label spot for the regions over 900,000 km² (Nunavut, Quebec, Northwest Territories, Ontario, Alaska,
+   * British Columbia), whose one tile label sits far from where people live. Fixed points, drawn only while the tile
+   * label point (main) is off screen, so one name shows at a time. [name, spot lon, lat, main lon, lat] */
+  var SPOTS = [["Ontario", -79.5, 44.5, -86, 50], ["Quebec", -72.6, 46.6, -71.8, 52.5], ["British Columbia", -121.5, 50.2, -125, 55],
+    ["Alaska", -148, 61.8, -149.7, 64.4], ["Northwest Territories", -115.8, 60.8, -118, 65], ["Nunavut", -70, 64.6, -92.6, 65]];
+  var SPOT_SRC = "label-spots";
+  function spotsFor(map) {
+    var b = map.getBounds();
+    return { type: "FeatureCollection", features: SPOTS.filter((p) => { return !b.contains([p[3], p[4]]); }).map((p) => {
+      return { type: "Feature", properties: { name: p[0], name_en: p[0], class: "state", rank: 2 },
+        geometry: { type: "Point", coordinates: [p[1], p[2]] } };
+    }) };
+  }
+  function syncSpots(map) {
+    var src = map.getSource(SPOT_SRC);
+    if (src) src.setData(spotsFor(map));
+  }
   var STREET_MIN = 12;
   /* One palette per theme: top and bottom of the importance ramp, plus the continent, water and point colours.
    * No pure white; Dark and Satellite get a soft dark halo, Roads a light one. roadLine tints the Labels overlay roads.
@@ -91,8 +125,10 @@
       water: "#4f6d97", poi: "#6e7278", roadLine: "#e2dbce" }
   };
   var PREFIX = "ov-place-";
+  /* every row marked twin also draws the second label spots, just below its own row */
+  var ROWS = [].concat(...TIERS.map((t) => { return t.twin ? [t, Object.assign({}, t, { id: t.id + "-2", src: SPOT_SRC })] : [t]; }));
   /* Bottom tier first: a layer added or moved later sits on top, and the top layer wins collisions */
-  var ORDER = TIERS.slice().reverse();
+  var ORDER = ROWS.slice().reverse();
   var ids = ORDER.map((t) => { return PREFIX + t.id; });
   var mode = "roads";
   function hex(c) { return [1, 3, 5].map((i) => { return parseInt(c.substr(i, 2), 16); }); }
@@ -127,15 +163,21 @@
       "text-opacity": opacity() };
   }
   function spec(t, vis) {
-    var lay = { visibility: vis, "text-field": NAME, "text-transform": t.upper ? "uppercase" : "none", "text-font": t.font, "text-size": textSize(sizeKey(t), t.min),
+    var lay = { visibility: vis, "text-field": t.code ? CODE_FIELD : NAME, "text-transform": t.upper ? "uppercase" : "none", "text-font": t.font, "text-size": textSize(sizeKey(t), t.from || t.min),
       "text-max-width": 8, "text-padding": 4, "text-letter-spacing": t.space || 0, "symbol-sort-key": ["coalesce", ["get", "rank"], 99] };
     var s = { id: PREFIX + t.id, type: "symbol", source: "ofm", "source-layer": "place", minzoom: t.min, filter: t.filter,
       layout: lay, paint: paintOf(t) };
+    if (t.src) {
+      s.source = t.src;
+      delete s["source-layer"];
+    }
     if (t.max) s.maxzoom = t.max;
     return s;
   }
   /* Adds every tier once, bottom tier first, so the first rows of the table sit on top */
   function add(map, before, vis) {
+    if (!map.getSource(SPOT_SRC)) map.addSource(SPOT_SRC, { type: "geojson", data: spotsFor(map) });
+    if (!map._sunnySpots) { map._sunnySpots = true; map.on("moveend", () => { syncSpots(map); }); }
     ORDER.forEach((t, i) => {
       if (map.getLayer(ids[i])) return;
       try { map.addLayer(spec(t, vis || "none"), before && map.getLayer(before) ? before : undefined); } catch (e) {}
@@ -198,5 +240,5 @@
     '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
   window.SunnyLabelTiers = { OFM_CREDIT: OFM_CREDIT, TIERS: TIERS, RANKS: RANKS, SIZE: SIZE, PAL: PAL, AREA: AREA, ROAD_DIM: ROAD_DIM,
     STREET_MIN: STREET_MIN, ids: ids, add: add, theme: theme, restyle: restyle, repaint: repaint, colourOf: colourOf, sizeAt: sizeAt,
-    textSize: textSize, sizeKey: sizeKey, mode: () => { return mode; } };
+    textSize: textSize, sizeKey: sizeKey, codeOf: codeOf, SPOTS: SPOTS, mode: () => { return mode; } };
 })();

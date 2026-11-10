@@ -2,7 +2,7 @@
 /* SUNNY light pollution layer (opt91): NASA GIBS VIIRS Black Marble 2016 night lights,
  * public domain, keyless, CORS open. Bright = light-polluted sky, black = dark sky.
  * Raster at 70 % opacity under beaches, with a small legend. Off by default; the Dark sky
- * layer row drives the hidden #toggle-skyglow switch, which saves the choice. */
+ * layer row saves the choice (t396u: no hidden switch). */
 (function () {
   "use strict";
   var K = window.SunnyKit;
@@ -16,8 +16,7 @@
   var map = null;
   var legend = null;
   function isOn() {
-    var t = document.getElementById("toggle-skyglow");
-    return !!(t && t.checked);
+    try { return localStorage.getItem(KEY) === "1"; } catch (eR) { return false; }
   }
   /* the night-lights tint sits above the base map, the cloud pictures, the night shade and the night-sky squares (they hid it),
    * and under every other overlay */
@@ -58,10 +57,6 @@
     }
     if (map.getLayer(ID)) map.setLayoutProperty(ID, "visibility", on ? "visible" : "none");
   }
-  function onToggle() {
-    try { localStorage.setItem(KEY, isOn() ? "1" : "0"); } catch (eS) {}
-    apply();
-  }
   function onIdle() {
     if (isOn() !== !!(map.getLayer(ID) && map.getLayoutProperty(ID, "visibility") !== "none")) apply();
   }
@@ -72,14 +67,9 @@
     apply();
   }
   function init() {
-    var t = document.getElementById("toggle-skyglow");
-    if (t) {
-      try { t.checked = localStorage.getItem(KEY) === "1"; } catch (eR) {}
-      t.addEventListener("change", onToggle);
-    }
     apply();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
-  window.SunnySkyGlow = { attach: attach, isOn: isOn };
+  window.SunnySkyGlow = { attach: attach, isOn: isOn, apply: apply };
 })();

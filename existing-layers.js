@@ -19,6 +19,18 @@
       }
     };
   }
+  /* t396u: a layer whose module loads with the Layers panel keeps its on/off under its own saved key; the module reads
+   * the key when it attaches and apply() redraws it once it is there */
+  function saved(key, mod) {
+    return {
+      get: () => { try { return localStorage.getItem(key) === "1"; } catch (eR) { return false; } },
+      set: (on) => {
+        try { localStorage.setItem(key, on ? "1" : "0"); } catch (eS) {}
+        var m = window[mod];
+        if (m && m.apply) m.apply();
+      }
+    };
+  }
   var K = window.SunnyKit;
   var LEG = { /* opt110 legends */
     wind: K.legKeys([["#ebf5ff", "line", "moving lines follow the wind; brighter, longer = stronger"]]),
@@ -46,12 +58,12 @@
     L.add(def);
   }
   row({ id: "wind", name: "Wind", icon: "💨", group: "Weather", tip: "Wind lines from Open-Meteo, current wind only: they hide while Play runs and do not follow the timeline" }, checkbox("toggle-wind"));
-  row({ id: "skyglow", name: "Dark sky", icon: "🌌", group: "Sky & Space", tip: "NASA Black Marble night lights from 2016 (VIIRS): dark = dark sky" }, checkbox("toggle-skyglow"));
+  row({ id: "skyglow", name: "Dark sky", icon: "🌌", group: "Sky & Space", tip: "NASA Black Marble night lights from 2016 (VIIRS): dark = dark sky" }, saved("sunny-skyglow", "SunnySkyGlow"));
   row({ id: "observatories", name: "Observatories", icon: "🔭", group: "Sky & Space", tip: "Telescopes, detectors, dark-sky places and stargazing sites",
     kids: [["scope", "Telescopes"], ["detector", "Detectors"], ["darksky", "Dark Sky Reserves & Parks"], ["stargaze", "Stargazing sites"]].map((k) => {
       return { id: "observatories-" + k[0], name: k[1], dflt: true }; }),
-    kidSet: () => { if (window.SunnyObservatories) window.SunnyObservatories.refresh(); } }, checkbox("toggle-observatories"));
-  row({ id: "craters", name: "Impact craters", icon: "☄️", group: "Earth", tip: "Confirmed impact structures at true size" }, checkbox("toggle-craters"));
+    kidSet: () => { if (window.SunnyObservatories) window.SunnyObservatories.refresh(); } }, saved("sunny-observatories", "SunnyObservatories"));
+  row({ id: "craters", name: "Impact craters", icon: "☄️", group: "Earth", tip: "Confirmed impact structures at true size" }, saved("sunny-craters", "SunnyCraters"));
   /* t384u: Find beaches, All beaches and Sunny only are the same elements the search code wires up (app-core.js),
    * moved from their hidden holder into this row's controls. The panel rebuilds every row when layers
    * register, so the block is held here and put into each new row. */

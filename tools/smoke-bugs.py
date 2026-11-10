@@ -40,6 +40,8 @@ async def lazy_legacy(b):
         await pg.evaluate("(id)=>SunnyLayers.set(id,false)", lid)
         await pg.wait_for_timeout(400)
         check("lazy layer hides: " + lid, not await pg.evaluate(VIS, mid))
+    check("t396u: no hidden Settings switches for craters, observatories or dark sky (the rows save their own state)",
+          await pg.evaluate("()=>!document.querySelector('#toggle-craters,#toggle-observatories,#toggle-skyglow')"))
     check("lazy legacy no page errors", not errs, errs)
     await ctx.close()
     store = {"sunny-layers-off-v1": "1", "sunny-craters": "1", "sunny-skyglow": "1"}
@@ -516,7 +518,7 @@ LBL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const idle=()=>new
   a.road=map.getLayer('ov-road')?map.getPaintProperty('ov-road','line-opacity'):null;
   const L=SunnyLabelTiers,R=L.RANKS,th=L.mode(),lum=c=>{const v=[1,3,5].map(i=>parseInt(c.substr(i,2),16));return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2]};
   a.mono=[];for(const z of [3,5,7,9,12]){const vis=L.TIERS.filter(t=>t.rank!=='continent'&&z>=t.min&&z<(t.max||24)&&map.getLayer('ov-place-'+t.id))
-    .map(t=>({r:R.indexOf(t.rank),id:t.id,s:L.sizeAt(L.sizeKey(t),t.min,z),c:map.getPaintProperty('ov-place-'+t.id,'text-color')}));
+    .map(t=>({r:R.indexOf(t.rank),id:t.id,s:L.sizeAt(L.sizeKey(t),t.from||t.min,z),c:map.getPaintProperty('ov-place-'+t.id,'text-color')}));
     if(z>=L.STREET_MIN)vis.push({r:R.indexOf('street'),id:'street',s:L.sizeAt('street',L.STREET_MIN,z),c:L.colourOf('street',th)});
     vis.sort((p,q)=>p.r-q.r);for(let i=1;i<vis.length;i++){const p=vis[i-1],q=vis[i];if(q.r===p.r)continue;
       const brighter=th==='roads'?lum(q.c)<lum(p.c):lum(q.c)>lum(p.c);if(q.s>p.s||brighter)a.mono.push(z+':'+q.id+'>'+p.id+' '+q.s+'/'+p.s+' '+q.c+'/'+p.c)}}
@@ -525,17 +527,25 @@ LBL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));const idle=()=>new
   map.jumpTo({center:[-85,50],zoom:5});await idle();a.on5=st();map.jumpTo({center:[-95,40],zoom:5});await idle();a.us5=st();
   map.jumpTo({center:[-89,43],zoom:6.5});await idle();a.z65s=cls();
   a.fixed=!map.getStyle().layers.some(l=>/view/.test(l.id))&&!map.getSource('country-view')&&!window.SunnyCountryView;
+  const on=(l)=>map.queryRenderedFeatures({layers:[l]}).map(f=>f.properties.name_en);
+  map.jumpTo({center:[-79.4,43.7],zoom:4.5});await idle();a.code45=on('ov-place-state-code').length;a.full45=on('ov-place-state').length;
+  a.codeOf=[L.codeOf('Ontario'),L.codeOf('New York'),L.codeOf('Quebec'),L.codeOf('Bavaria')].join();
+  a.codeExpr=JSON.stringify(map.getLayoutProperty('ov-place-state-code','text-field')).includes('"Ontario","ON"');
+  map.jumpTo({center:[-79.4,43.7],zoom:5.5});await idle();a.code55=on('ov-place-state-code').length;a.full55=on('ov-place-state').length;
+  map.jumpTo({center:[-79.4,44],zoom:6});await idle();a.spotTo=on('ov-place-state-2');a.mainTo=on('ov-place-state');
+  map.jumpTo({center:[-85,50],zoom:5.5});await idle();a.spotOn=on('ov-place-state-2');a.mainOn=on('ov-place-state');
   SunnyKit.mapBrightness.set(0.5);await s(300);a.dim=map.getPaintProperty(ids[0],'text-opacity');SunnyKit.mapBrightness.set(1);
   document.getElementById('toggle-map').click();await s(800);a.off=ids.every(i=>map.getLayoutProperty(i,'visibility')==='none');return a}"""
 async def label_tiers(b):
     """t389u: base-map place names follow one tier table on Roads and Dark: continents far out, countries by size (Iceland
     later than Canada), regions and national capitals, then cities and towns; no pure white text; Map brightness dims them;
     the Labels switch hides them all (390 px). t394u: province and state names show at z5, every name stays one fixed
-    label, and country names end where province and state names take over."""
+    label, and country names end where province and state names take over. t396u: two-letter codes first, then full
+    names; the largest regions get a second fixed label spot shown only while their main label point is off screen."""
     for th in ["dark", "roads"]:
         ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done", "sunny-basemap": th, "sunny-labels": "1"}, w=390)
         r = await pg.evaluate(LBL)
-        check(th + " far out shows continents only, then countries", r["n"] == 14 and r["z1"] == "continent" and r["z3"] == "country", r)
+        check(th + " far out shows continents only, then countries", r["n"] == 17 and r["z1"] == "continent" and r["z3"] == "country", r)
         check(th + " regions and capitals next, cities and towns closer, no villages at 9",
               "village" not in r["z45"] and "town" not in r["z45"] and "state" in r["z45"] and "town" in r["z9"] and "village" not in r["z9"], r)
         check(th + " Iceland waits until a closer zoom", (not r["ice3"]) and r["ice45"], r)
@@ -548,6 +558,10 @@ async def label_tiers(b):
               not r["mono"] and r["tableColour"], r)
         check(th + " province and state names show at z5 (Ontario; Kansas), one fixed label each, no view-following names",
               "Ontario" in r["on5"] and "Kansas" in r["us5"] and r["fixed"], r)
+        check(th + " two-letter ISO 3166-2 codes at z4.5 (ON, NY, QC; other regions keep names), full names from z5",
+              r["code45"] > 3 and r["full45"] == 0 and r["codeOf"] == "ON,NY,QC," and r["codeExpr"] and r["code55"] == 0 and r["full55"] > 0, r)
+        check(th + " Ontario's second spot names it near Toronto (z6) while its main point is off screen, never both",
+              "Ontario" in r["spotTo"] and "Ontario" not in r["mainTo"] and "Ontario" in r["mainOn"] and "Ontario" not in r["spotOn"], r)
         check(th + " country names end where province and state names take over (z6.5: states, no countries)",
               "state" in r["z65s"].split(",") and "country" not in r["z65s"].split(","), r)
         check(th + " brightness dims labels and Labels off hides them", r["dim"] < 1 and r["off"] and not errs, [r, errs])

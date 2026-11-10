@@ -98,8 +98,7 @@
     if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
   }
   function isOn() {
-    var t = document.getElementById("toggle-craters");
-    return !!(t && t.checked);
+    try { return localStorage.getItem(KEY) === "1"; } catch (eR) { return false; }
   }
   function apply() {
     if (!map) return;
@@ -140,22 +139,13 @@
     if (!map.getLayer("craters-dot")) apply();
     else keepOrder();
   }
-  function onToggle() {
-    try { localStorage.setItem(KEY, isOn() ? "1" : "0"); } catch (eS) {}
-    apply();
-  }
   function attach(m) {
     map = m;
-    var t = document.getElementById("toggle-craters");
-    if (t) {
-      try { t.checked = localStorage.getItem(KEY) === "1"; /* opt153: off by default */ } catch (eR) {}
-      t.addEventListener("change", onToggle);
-    }
     map.on("click", "craters-fill", onClick);
     map.on("click", "craters-dot", onClick);
     map.on("load", apply);
     map.on("idle", onIdle);
     apply();
   }
-  window.SunnyCraters = { attach: attach };
+  window.SunnyCraters = { attach: attach, apply: apply };
 })();

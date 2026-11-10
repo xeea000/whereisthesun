@@ -116,8 +116,7 @@
     if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
   }
   function isOn() {
-    var t = document.getElementById("toggle-observatories");
-    return !!(t && t.checked);
+    try { return localStorage.getItem(KEY) === "1"; } catch (eR) { return false; }
   }
   function apply() {
     if (!map) return;
@@ -197,10 +196,6 @@
     if (!map.getLayer("obs-point")) apply();
     else keepOrder();
   }
-  function onToggle() {
-    try { localStorage.setItem(KEY, isOn() ? "1" : "0"); } catch (eS) {}
-    apply();
-  }
   function attach(m) {
     map = m;
     window.SunnyLeafName = window.SunnyLeafName || {}; /* opt172: names for small-cluster hover */
@@ -213,16 +208,11 @@
         upd("<b>" + esc(d.name || hint) + "</b><br><small>" + esc(hint + (d.type && d.type !== hint ? " · " + d.type : "")) + "</small>"); }).catch(() => {});
       return "<b>" + esc(hint) + "</b>";
     };
-    var t = document.getElementById("toggle-observatories");
-    if (t) {
-      try { t.checked = localStorage.getItem(KEY) === "1"; } catch (eR) {}
-      t.addEventListener("change", onToggle);
-    }
     map.on("click", "obs-point", onClick);
     map.on("click", "obs-cluster", onCluster);
     map.on("load", apply);
     map.on("idle", onIdle);
     apply();
   }
-  window.SunnyObservatories = { attach: attach, popupHtml: popupHtml, refresh: refresh, CLS: CLS };
+  window.SunnyObservatories = { attach: attach, apply: apply, popupHtml: popupHtml, refresh: refresh, CLS: CLS };
 })();
