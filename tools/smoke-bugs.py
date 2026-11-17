@@ -690,6 +690,46 @@ async def reefs(b):
         check(lid + " tap shows the place with its source link", want in t[1] and not errs, [t[0][:300], errs])
         print("  ", lid, r["n"], t[0][:220].replace("\n", " | "), flush=True)
         await ctx.close()
+FLIGHT = """async(a)=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();SunnyLayers.set('flighttime',true);await s(1500);
+  const st=()=>{const o=SunnyFlightOrigin();const l=map.getLayer('flight-band');return {o:o?[+o.lat.toFixed(1),+(o.lon!=null?o.lon:o.lng).toFixed(1)]:null,
+    vis:!!l&&map.getLayoutProperty('flight-band','visibility')!=='none',url:(map.getSource('flight-band')||{}).url||''}};return st()}"""
+FLIGHT_ST = """()=>{const o=SunnyFlightOrigin();const l=map.getLayer('flight-band');return {o:o?[+o.lat.toFixed(1),+(o.lon!=null?o.lon:o.lng).toFixed(1)]:null,
+  vis:!!l&&map.getLayoutProperty('flight-band','visibility')!=='none',url:((map.getSource('flight-band')||{}).url||'').length}}"""
+async def flight_pin(b):
+    """t410u: Flight time from pin measures from the red pin of the last map tap: the bands draw around a tapped place and
+    move when you tap somewhere else, with no page errors (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click();map.jumpTo({center:[-40,45],zoom:3})}")
+    await pg.evaluate(FLIGHT, {})
+    pts = []
+    for x, y in [(120, 380), (300, 520)]:
+        await pg.mouse.click(x, y)
+        await pg.wait_for_timeout(2500)
+        ll = await pg.evaluate("(p)=>{const q=map.unproject(p);return [+q.lat.toFixed(1),+q.lng.toFixed(1)]}", [x, y])
+        pts.append([ll, await pg.evaluate(FLIGHT_ST)])
+    near = lambda a, o: o and abs(a[0] - o[0]) < 1.5 and abs(a[1] - o[1]) < 1.5
+    check("flight time draws around the tapped pin", pts[0][1]["vis"] and near(pts[0][0], pts[0][1]["o"]), pts)
+    check("flight time follows the pin to the next tap", pts[1][1]["vis"] and near(pts[1][0], pts[1][1]["o"]) and not errs, [pts, errs])
+    await ctx.close()
+BEACH_FLOW = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));map.jumpTo({center:[-79.45,43.63],zoom:10});await s(1500);
+  const c=map.getContainer().getBoundingClientRect();map.fire('click',{point:{x:c.width/2,y:c.height/2},lngLat:map.getCenter()});await s(800);
+  document.getElementById('lp-tab').click();await s(1000);const st=()=>document.getElementById('status').textContent;
+  const sun=document.getElementById('toggle-sunny');if(!sun.checked){sun.checked=true;sun.dispatchEvent(new Event('change'))}
+  document.getElementById('btn-sun').click();for(let i=0;i<40&&!/sunny beach|No beaches/.test(st());i++)await s(500);const a=st();
+  sun.checked=false;sun.dispatchEvent(new Event('change'));for(let i=0;i<40&&!/beach(es)? found/.test(st());i++)await s(500);const b=st();
+  const shown=SunnyBeachToggle.isShown();document.getElementById('btn-all').click();
+  let n=0;for(let i=0;i<40&&!n;i++){await s(500);n=map.getLayer('beaches-sun')?map.queryRenderedFeatures({layers:['beaches-sun']}).length:0}
+  return {a,b,shown,n,all:st()}}"""
+async def beach_flow(b):
+    """t411u: Find beaches with Sunny only says what it found or what to do next; turning Sunny only off runs Find again at once
+    and lists the nearest beaches; All beaches draws the beach weather icons (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    r = await pg.evaluate(BEACH_FLOW)
+    check("Find beaches with Sunny only reports sunny beaches or how to see the nearest", "sunny beach" in r["a"] or "Turn off Sunny only" in r["a"], r)
+    check("turning Sunny only off runs Find again and lists the nearest beaches", "found" in r["b"] and r["shown"], r)
+    check("All beaches draws beach weather icons, no page errors", r["n"] > 0 and not errs, [r, errs])
+    await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
   const hit=(a,b)=>!!(a&&b&&a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3]);const at=document.querySelector('.maplibregl-ctrl-attrib');
   const btn=R(at.querySelector('.maplibregl-ctrl-attrib-button'));const lag=R(document.querySelector('lag-o-meter'));const fps=document.getElementById('fps');
@@ -715,7 +755,7 @@ async def credits(b):
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

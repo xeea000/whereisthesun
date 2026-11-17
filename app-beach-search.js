@@ -253,6 +253,8 @@
     btn.title = b.name || "Beach";
     btn._beach = b;
   }
+  /* t411u: say what to do next, not only that nothing matched */
+  var NO_SUNNY = "No beaches under 20% cloud nearby. Turn off Sunny only for the nearest beaches.";
   function openSunnySheet(list, sunnyMode) {
     sheetSunnyMode = sunnyMode !== false;
     sheetListRows = list ? list.slice() : [];
@@ -264,7 +266,7 @@
         var dead = sunnySheetList.querySelectorAll(".sheet-item");
         for (var di = 0; di < dead.length; di++) dead[di].classList.remove("is-active");
       }
-      setStatus("No beaches under 20% cloud nearby");
+      setStatus(NO_SUNNY);
       return;
     }
     if (!sunnySheet || !sunnySheetList) {
@@ -392,7 +394,7 @@
         }
         if (!list || !list.length) {
           unlockSearch();
-          setStatus("No beaches under 20% cloud nearby");
+          setStatus(NO_SUNNY);
           return;
         }
         return weatherCollectSunny(list, true, SUNNY_PICK_CAP, myGen).then((rows) => {
@@ -402,7 +404,7 @@
             setStatus(rows.length === 1 ? "1 sunny beach found." : rows.length + " sunny beaches found. Pick one.");
             openSunnySheet(rows, true);
           } else {
-            setStatus("No beaches under 20% cloud nearby");
+            setStatus(NO_SUNNY);
           }
         });
       })
@@ -411,7 +413,7 @@
         unlockSearch();
         if (!beachDb) return;
         if (wantSunny) {
-          setStatus("No beaches under 20% cloud nearby");
+          setStatus(NO_SUNNY);
         } else {
           setStatus("Couldn't find a beach" + where + " within " + km + " km.");
         }

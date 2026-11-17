@@ -179,8 +179,10 @@ function sunnyStep14() {
     if (on) locate();
     else { clearLocateWatch(); setStatus(""); }
   });
-  if (btnAll) btnAll.addEventListener("click", showAllBeaches);
-  btnSun.addEventListener("click", goNearestBeaches);
+  /* t411u: Find beaches is the search a Sunny only change repeats, so the switch takes effect at once */
+  var lastFind = false;
+  if (btnAll) btnAll.addEventListener("click", () => { lastFind = false; showAllBeaches(); });
+  btnSun.addEventListener("click", () => { lastFind = true; goNearestBeaches(); });
   if (toggleSunny) {
     function stopSunBubble(e) {
       if (e && e.stopPropagation) e.stopPropagation();
@@ -193,6 +195,7 @@ function sunnyStep14() {
         unlockSearch();
         setStatus(sunnyModeOn() ? "Sunny on — hit Find again." : "Sunny off — hit Find for nearest beaches.");
       }
+      if (lastFind && sunnyApp_origin) goNearestBeaches();
     });
     if (toggleSunny.parentNode) {
       toggleSunny.parentNode.addEventListener("click", stopSunBubble);

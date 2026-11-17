@@ -2,7 +2,8 @@
 /* SUNNY Travel: flight time from the pin. Colour bands of rough nonstop flight hours from the pin, measured along the curved Earth
  * (great circle), so the bands bend on the flat map. Hours = 0.5 h for take-off and landing + distance / 830 km/h.
  * Drawn on the phone for the current view, one pixel at a time, with a thin line between bands, and redrawn when the map stops
- * or the pin moves, so edges stay sharp at every zoom. The pin is the dropped beach pin when that is in use, else your spot. No data. */
+ * or the pin moves, so edges stay sharp at every zoom. The pin is the red pin of the last map tap, else the beach pin when that is
+ * in use, else your spot. No data. */
 (() => {
   "use strict";
   var K = window.SunnyKit;
@@ -19,7 +20,10 @@
     return 0.5 + 2 * R * Math.asin(Math.min(1, Math.sqrt(h))) / SPEED;
   };
   var band = (h) => { for (var i = 0; i < BANDS.length; i++) if (h <= BANDS[i][0]) return i; return BANDS.length - 1; };
+  /* t410u: the red pin of the last map tap (info-panel.js) comes first: that is the pin people see. Then the beach pin, then the spot */
+  var tapPin = null;
   var origin = () => {
+    if (tapPin) return tapPin;
     var p = window.SunnyBeachRef && window.SunnyBeachRef.pin && window.SunnyBeachRef.pin();
     if (p) return p;
     return typeof sunnyApp_origin !== "undefined" && sunnyApp_origin ? sunnyApp_origin : null;
@@ -60,12 +64,15 @@
   }
   var leg = K.legKeys(BANDS.map((b, i) => { return [b[1], "area", i === BANDS.length - 1 ? "over 15 h" : (i ? BANDS[i - 1][0] + "–" : "under ") + b[0] + " h"]; }));
   L.add({ id: "flighttime", name: "Flight time from pin", icon: "🕒", group: "Travel", dflt: true, apply: apply, legend: leg,
-    tip: "Rough nonstop flight hours from your pin along the curved Earth (0.5 h plus 830 km/h). Drop a pin to see it",
-    note: (map, on) => { return on && !origin() ? "drop a pin" : ""; },
+    tip: "Rough nonstop flight hours along the curved Earth (0.5 h plus 830 km/h) from the last place you tapped (the red pin), " +
+      "else your beach pin or spot. Tap the map to move it",
+    note: (map, on) => { return on && !origin() ? "tap the map to drop a pin" : ""; },
     attach: (map, on) => {
       map.on("moveend", () => { if (L.isOn("flighttime")) apply(map, true); });
       document.addEventListener("sunny-origin", () => { if (mapRef && L.isOn("flighttime")) apply(mapRef, true); });
+      document.addEventListener("sunny-tap-pin", (e) => { tapPin = e.detail; if (mapRef && L.isOn("flighttime")) apply(mapRef, true); });
       apply(map, on);
     } });
   window.SunnyFlightHours = hours;
+  window.SunnyFlightOrigin = origin;
 })();

@@ -33,8 +33,17 @@
     var pcH = pc ? '<span class="pc-code" title="Plus Code (Open Location Code)">' + pc + '</span><button type="button" class="pc-copy" data-c="' + pc + '" title="Copy Plus Code" aria-label="Copy Plus Code"><svg class="pc-ico" viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.6"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5"/></svg></button>' : "";
     return '<div class="tp-ll">' + at + '<button type="button" class="pf-wx" data-ll="' + w + '">Weather</button>' + pcH + '</div>';
   }
+  /* t410u: the last tapped place, for layers that measure from it (Flight time from pin); an event when it moves */
+  var lastTap = "";
+  function tapMoved(ll) {
+    var k = ll.lat.toFixed(5) + "," + ll.lng.toFixed(5);
+    if (k === lastTap) return;
+    lastTap = k;
+    document.dispatchEvent(new CustomEvent("sunny-tap-pin", { detail: { lat: ll.lat, lon: ll.lng } }));
+  }
   function syncPin() {
     var p = where();
+    if (p) tapMoved(p._sLL || p._lngLat);
     if (!p || !pinOn || !p._map || !window.maplibregl.Marker) {
       if (pin) { pin.remove(); pin = null; }
       return;
