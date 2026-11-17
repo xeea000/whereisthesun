@@ -181,6 +181,18 @@
         map.addLayer({ id: "sky-moon", type: "circle", source: "sky-draw", filter: ["==", ["get", "k"], "moon"],
           paint: { "circle-radius": K.markerScale.bind(map, "sky-moon", "circle-radius", 9),
             "circle-color": "#f4f1de", "circle-stroke-color": "#333", "circle-stroke-width": 1.5 } });
+        map.on("click", "sky-moon", (e) => {
+          if (!L.isOn("moon")) return;
+          K.show(map, e.lngLat, "Moon overhead here", ["The moon is at its highest in the sky above this point.", "Phase and moonrise times are in Tonight's sky."],
+            ["SunCalc", "https://github.com/mourner/suncalc"]);
+        });
+        map.on("click", "sky-night", (e) => {
+          if (!L.isOn("moon")) return;
+          var top = map.queryRenderedFeatures(e.point).filter((f) => { return f.layer && f.source === "sky-draw" && f.layer.id !== "sky-night"; })[0];
+          if (top) return;
+          K.show(map, e.lngLat, "Night side of the Earth", ["This side of the world is in night right now.", "The pale disc is where the moon is overhead."],
+            ["SunCalc", "https://github.com/mourner/suncalc"]);
+        });
       } else {
         map.getSource("sky-draw").setData(K.fc(f));
       }

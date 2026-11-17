@@ -30,12 +30,13 @@
   };
   var pname = (c) => { return names[c] || c; };
   /* plate lookup: segments bucketed by 1 degree latitude row; a ray to the east counts crossings per plate */
-  var rows = null, poles = [];
+  var rows = null, poles = [], pnames = [];
   var index = (g) => {
-    rows = []; for (var r = 0; r < 180; r++) rows.push([]);
+    rows = []; poles = []; pnames = []; for (var r = 0; r < 180; r++) rows.push([]);
     g.features.forEach((f) => {
       if (f.properties.t !== "plate") return;
       var pi = poles.length; poles.push(f.properties.pole && typeof f.properties.pole === "string" ? JSON.parse(f.properties.pole) : f.properties.pole);
+      pnames[pi] = f.properties.name || f.properties.code || "";
       f.geometry.coordinates.forEach((poly) => { poly.forEach((ring) => { for (var i = 0; i + 1 < ring.length; i++) {
         var a = ring[i], b = ring[i + 1], y0 = Math.max(0, Math.floor(Math.min(a[1], b[1]) + 90)), y1 = Math.min(179, Math.floor(Math.max(a[1], b[1]) + 90));
         for (var y = y0; y <= y1; y++) rows[y].push([a[0], a[1], b[0], b[1], pi]);
@@ -63,6 +64,18 @@
     var vx = wy * rz - wz * ry, vy = wz * rx - wx * rz, vz = wx * ry - wy * rx;
     return { u: -Math.sin(l) * vx + Math.cos(l) * vy, v: -Math.sin(f) * Math.cos(l) * vx - Math.sin(f) * Math.sin(l) * vy + Math.cos(f) * vz, p: pi };
   };
+  window.SunnyPlateMotion = {
+    at: at,
+    name: (pi) => { return pnames[pi] || ""; }
+  };
+  window.SunnyTapValue = Object.assign(window.SunnyTapValue || {}, {
+    platemotion: (ll) => {
+      var s = at(ll.lng, ll.lat);
+      if (!s) return "";
+      var nm = pnames[s.p] || "This plate";
+      return nm + " moves about " + Math.round(Math.hypot(s.u, s.v)) + " mm a year here, toward " + Math.round((Math.atan2(s.u, s.v) * 180 / Math.PI + 360) % 360) + "°";
+    }
+  });
   L.add({ id: "plates", name: "Tectonic plates", icon: "🧩", group: "Earth", taps: ["plate-edge", "plate-fill"], dflt: true,
     tip: "The 52 plates of Bird's PB2002 model and the type of each boundary",
     legend: K.legKeys(Object.keys(KIND).map((k) => { return [KIND[k][0], "line", KIND[k][1]]; })), apply: apply,

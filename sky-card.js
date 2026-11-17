@@ -248,11 +248,12 @@
     render();
     if (window.SunnySkyDraw) window.SunnySkyDraw.apply();
   }
-  function def(id, name, icon, tip, leg) {
-    L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, apply: applyAll, legend: leg });
+  function def(id, name, icon, tip, leg, taps) {
+    L.add({ id: id, name: name, icon: icon, group: "Sky & Space", tip: tip, apply: applyAll, legend: leg, taps: taps });
   }
   def("moon", "Moon", "🌙", "Moon phase, moonrise and moonset here, where the moon is overhead, and the night side of the Earth",
-    '<div class="ls-k">Labels: moonrise and moonset directions from the map centre. Phase and times in the Tonight\'s sky block.</div>');
+    '<div class="ls-k">Labels: moonrise and moonset directions from the map centre. Phase and times in the Tonight\'s sky block.</div>',
+    ["sky-night", "sky-moon"]);
   def("nightscore", "Night-sky score", "⭐", "Tonight's stargazing score 0-10 from clouds (Open-Meteo), the moon and dark-sky data, " +
     "and a green ring on the darkest land within 100 km (NASA Black Marble night lights, 2016)",
     '<div class="sat-leg"><div class="sat-ramp" style="background:linear-gradient(90deg,#b2182b,#ef8a62 30%,#fddb6d 50%,#a6d96a 70%,#1a9850)"></div>' +

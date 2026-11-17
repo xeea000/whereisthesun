@@ -68,7 +68,7 @@
    * moved from their hidden holder into this row's controls. The panel rebuilds every row when layers
    * register, so the block is held here and put into each new row. */
   var finder = null;
-  row({ id: "beaches", name: "Beaches", icon: "🏖️", group: "Outdoors", tip: "Find beaches near you, sunny ones first unless Sunny only is off", open: true,
+  row({ id: "beaches", name: "Beaches", icon: "🏖️", group: "Outdoors", taps: ["beaches-fill", "beaches-line", "beaches-dot", "beaches-sun"], tip: "Find beaches near you, sunny ones first unless Sunny only is off", open: true,
     controls: (host) => {
       var f = finder = finder || box("beach-find");
       if (!f) return;

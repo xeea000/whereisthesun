@@ -741,6 +741,7 @@ CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();r
     text:at.querySelector('.maplibregl-ctrl-attrib-inner').textContent}}"""
 from smoke_pointer import pointer_only
 from smoke_areawx import area_wx
+from smoke_taps import taps_card
 async def credits(b):
     """t390u: map credits sit behind one small "i" button, closed at load on phone and desktop, clear of the Lag-O-Meter and
     FPS; a tap shows every credit with its links."""
@@ -820,7 +821,7 @@ async def camps_split(b):
     await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, taps_card]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

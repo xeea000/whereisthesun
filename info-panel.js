@@ -100,9 +100,11 @@
   /* opt96: a tap shows a small peek card near the bottom; More opens the panel. Never auto-opens. */
   var peek = null;
   /* opt99: the tapped thing first; wide-area cards (aurora, night sky, eclipse paths) after it */
-  var BROAD = /Aurora chance|Night-sky score|solar eclipse|lunar eclipse/;
+  /* t409u: a bare dropped-pin card goes last, behind the card of the thing that was tapped */
+  var BROAD = /Aurora chance|Night-sky score|solar eclipse|lunar eclipse/, PIN_ONLY = /^<div class="pf-src">(Dropped pin|Loading forecast…)<\/div>$/;
   function order(list) {
-    return list.filter((c) => { return !BROAD.test(c.html); }).concat(list.filter((c) => { return BROAD.test(c.html); }));
+    var rank = (c) => { return PIN_ONLY.test(c.html) ? 2 : BROAD.test(c.html) ? 1 : 0; };
+    return list.map((c, i) => { return [rank(c), i, c]; }).sort((a, b) => { return a[0] - b[0] || a[1] - b[1]; }).map((r) => { return r[2]; });
   }
   function renderPeek() {
     if (!peek) {
@@ -196,8 +198,8 @@
       lastGen = tapGen;
     }
     var hit = cards.filter((c) => { return c.p === p; })[0];
-    if (hit) hit.html = p._sHtml;
-    else cards.push({ p: p, html: p._sHtml, lids: layersAt(p) });
+    if (hit) { hit.html = p._sHtml; hit.t = Date.now(); }
+    else cards.push({ p: p, html: p._sHtml, lids: layersAt(p), t: Date.now() });
     renderCards();
     renderPeek();
     syncPin();
@@ -317,5 +319,9 @@
     if (!ll) return null;
     return { lng: ll.lng, lat: ll.lat };
   }
-  window.SunnyInfo = { prune: prune, section: section, open: setOpen, isOpen: isOpen, src: srcLink, selection: selection };
+  /* t409u: the cards opened or changed at or after time t (tap-card.js opens one only when a tap opened none) */
+  function since(t) {
+    return cards.filter((c) => { return c.html && c.t >= t; }).map((c) => { return c.html; });
+  }
+  window.SunnyInfo = { prune: prune, section: section, open: setOpen, isOpen: isOpen, src: srcLink, selection: selection, since: since };
 })();
