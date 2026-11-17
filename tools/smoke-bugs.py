@@ -670,16 +670,17 @@ async def smells(b):
     print("  ", r["n"], pl, t[0][:200].replace("\n", " | "), flush=True)
     await ctx.close()
 async def reefs(b):
-    """t397u: Coral bleaching watch and Reefs & underwater sit in Ocean and Launch sites & rocket factories in Sky & Space, Artificial,
-    all off at start; each draws its places, and a tap shows the NOAA alert or the place with its source link (390 px)."""
+    """t397u: Coral bleaching watch and Reefs & underwater sit in Ocean, Launch sites & rocket factories in Sky & Space, Artificial,
+    and Ports, marinas & shipyards in Travel, all off at start; each draws its places, and a tap shows the NOAA alert or the place with its source link (390 px)."""
     for lid, ids, c, z, want in [("bleaching", ["crw-%d" % i for i in range(5)], [146.5, -18.5], 5, "coralreefwatch.noaa.gov"),
                                  ("reefs", ["reef-" + k for k in ["coral", "atoll", "reef", "hole"]], [73.2, 3.5], 6, "wikidata.org/wiki/Q"),
-                                 ("space", ["space-" + k for k in ["port", "pad", "centre", "factory"]], [-80.6, 28.5], 9, "wikidata.org/wiki/Q")]:
+                                 ("space", ["space-" + k for k in ["port", "pad", "centre", "factory"]], [-80.6, 28.5], 9, "wikidata.org/wiki/Q"),
+                                 ("maritime", ["sea-" + k for k in ["port", "marina", "ramp", "yard", "dry"]], [-63.57, 44.64], 12, "openstreetmap.org/")]:
         ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
         await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
         off = await pg.evaluate("async(id)=>{await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id===id);return [d.group,SunnyLayers.isOn(id)]}", lid)
         r = await pg.evaluate(WG, {"id": lid, "c": c, "z": z, "l": ids})
-        grp = "Sky & Space/Artificial" if lid == "space" else "Ocean"
+        grp = {"space": "Sky & Space/Artificial", "maritime": "Travel"}.get(lid, "Ocean")
         check(lid + " in " + grp + ", off at start, draws its places", off == [grp, False] and r["n"] > 0, [off, r["n"]])
         await pg.mouse.click(r["x"], r["y"])
         await pg.wait_for_timeout(3000)
