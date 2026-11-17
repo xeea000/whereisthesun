@@ -200,6 +200,28 @@
       return [k === "t" ? "Ghost town or abandoned village" : "Abandoned place" + (r.kind ? " (" + K.esc(String(r.kind).replace(/_/g, " ")) + ")" : ""),
         r.date ? "Abandoned " + K.esc(r.date) : "", K.esc(r.desc), wikiOsm(r.wiki)];
     } });
+  /* t399u-t401u: Wars under History (tools/build-wars.js, Wikidata): battles, landings, forts and bunkers, memorials, war cemeteries
+   * and other places that are part of a war. Each war, or group of wars, is its own row with one switch per kind;
+   * each place is on one row only, and places already on Heritage & ancient sites stay there */
+  var WAR_KIND = [["battle", "Battle or siege", "#e53935", 2.8], ["landing", "Landing", "#29b6f6", 3.2], ["fort", "Fort or bunker", "#a1887f", 2.4],
+    ["memorial", "Memorial", "#ffd54f", 2.2], ["cemetery", "War cemetery", "#b0bec5", 2.2], ["site", "Camp, headquarters or other place", "#9575cd", 2.2]];
+  var WARS = [["ww1", "World War I", "🪖", "1914 to 1918"], ["ww2", "World War II", "🎖️", "1939 to 1945, with Nazi camps"],
+    ["korea", "Korean War", "⚔️", "1950 to 1953"], ["vietnam", "Vietnam War", "⚔️", "1955 to 1975"],
+    ["indep", "Independence wars & revolutions", "🏳️", "American Revolutionary War, French Revolutionary Wars, Spanish American and Greek independence, Croatian War of Independence and more"],
+    ["civil", "Civil wars", "⚔️", "American, Russian, Spanish, English and Chinese civil wars, Wars of the Roses and more"],
+    ["colonial", "Colonial & frontier wars", "⚔️", "First and Second Boer Wars, American Indian Wars, Australian frontier wars, Opium Wars"],
+    ["modern", "Other wars since 1800", "⚔️", "Napoleonic Wars, War of 1812, Franco-Prussian, Austro-Prussian and Balkan wars, Falklands and more"],
+    ["early", "Wars before 1800", "🛡️", "Crusades, Reconquista, Seven Years' War, Punic Wars, Great Northern War and more"]];
+  var WARA = 'Wars: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>';
+  WARS.forEach((w) => {
+    pointLayer({ id: "war-" + w[0], file: "wars-" + w[0], name: w[1], icon: w[2], group: "History/Wars", kids: true,
+      tip: w[1] + " (" + w[3] + "): battles, landings, forts and bunkers, memorials and war cemeteries (Wikidata)", attrib: WARA,
+      src: ["Wikidata", "https://www.wikidata.org/"],
+      layers: WAR_KIND.map((k) => { return { id: "war-" + w[0] + "-" + k[0], codes: [k[0]], color: k[2], r: k[3], name: k[1] }; }),
+      lines: (r) => {
+        return [K.esc(cap(r.kind)), r.war !== w[1] ? "Part of the " + K.esc(r.war) : "", K.esc(r.year), place(r), wikiLine(r)];
+      } });
+  });
   /* t396u: abandoned railways from live OpenStreetMap at zoom 9 and in (Overpass, cached a week per tile): lines whose track
    * is gone (railway=abandoned or razed), lines still in place but out of use (disused), and former lines that are now trails */
   var RAIL_KIND = { a: "Abandoned railway, track removed", d: "Disused railway, track still in place", t: "Rail trail on an old railway line" };

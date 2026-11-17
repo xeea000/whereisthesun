@@ -589,6 +589,31 @@ async def rail_abandoned(b):
                           "return [(c?c.innerHTML:'')+(q?q.innerHTML:''),(c?c.innerText:'')+(q?q.innerText:'')]}")
     check("abandoned railway tap names the line with its OpenStreetMap link", "openstreetmap.org/way/" in t[0] and not errs, [t[1][:300], errs])
     await ctx.close()
+WAR_IN = """()=>{const h=[...document.querySelectorAll('.lp-head')].find(e=>/Wars$/.test(e.textContent));const box=h&&h.nextElementSibling;
+  const ids=[...(box?box.querySelectorAll('.lp-row'):[])].map(r=>r.dataset.id);const on=ids.filter(i=>SunnyLayers.isOn(i));
+  const par=h&&h.parentElement&&h.parentElement.previousElementSibling;return {ids,on,parent:par?par.textContent:''}}"""
+async def wars(b):
+    """t399u-t401u: History has a Wars section with one row per war (WW1, WW2, Korea, Vietnam) and grouped rows for the rest, all
+    off at start; WW2 draws Normandy and the War of 1812 draws Niagara, and a tap shows the place with its Wikidata link (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.evaluate("()=>SunnyLayerLazy.load()")
+    await pg.wait_for_timeout(800)
+    r = await pg.evaluate(WAR_IN)
+    want = ["war-ww1", "war-ww2", "war-korea", "war-vietnam", "war-indep", "war-civil", "war-colonial", "war-modern", "war-early"]
+    check("Wars section under History holds every war row, all off at start", r["ids"] == want and not r["on"] and "History" in r["parent"], r)
+    await ctx.close()
+    kinds = ["battle", "landing", "fort", "memorial", "cemetery", "site"]
+    for id, c, z, word in [("war-ww2", [-0.6, 49.33], 8, "World War"), ("war-modern", [-79.05, 43.1], 8, "1812")]:
+        ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+        await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+        r = await pg.evaluate(WG, {"id": id, "c": c, "z": z, "l": [id + "-" + k for k in kinds]})
+        check(id + " draws its places with a legend by kind", r["n"] > 3 and "Battle or siege" in r["leg"] and "Wikidata" in r["tip"], {k: r[k] for k in ("n", "np", "tip")})
+        await pg.mouse.click(r["x"], r["y"])
+        await pg.wait_for_timeout(3000)
+        t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+        check(id + " tap shows the place with its Wikidata link", "wikidata.org/wiki/Q" in t[1] and len(t[0]) > 10 and not errs, [t[0][:300], errs])
+        print("  ", id, r["n"], t[0][:160].replace("\n", " | "), flush=True)
+        await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
   const hit=(a,b)=>!!(a&&b&&a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3]);const at=document.querySelector('.maplibregl-ctrl-attrib');
   const btn=R(at.querySelector('.maplibregl-ctrl-attrib-button'));const lag=R(document.querySelector('lag-o-meter'));const fps=document.getElementById('fps');
@@ -614,7 +639,7 @@ async def credits(b):
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

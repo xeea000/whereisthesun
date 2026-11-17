@@ -169,7 +169,7 @@
     plates: "Earth/Geology", platemotion: "Earth/Geology", quakes: "Earth/Geology", quakeslive: "Earth/Geology",
     volcanoes: "Earth/Geology", volcdue: "Earth/Geology", stations: "Science",
     forest: "Human impact" };
-  var SUBS = { "Sky & Space": ["", "Tonight's sky", "Artificial"], Earth: ["", "Geology"] };
+  var SUBS = { "Sky & Space": ["", "Tonight's sky", "Artificial"], Earth: ["", "Geology"], History: ["", "Wars"] };
   function fold(parent, path, label, lvl) {
     var key = "sunny-lp-g2-" + path; /* opt104: folded by default; Outdoors starts open (owner) */
     var open = path === "Outdoors";
