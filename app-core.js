@@ -9,7 +9,7 @@ var btnPlay, btnSpeed, toggleLoop, loopBtn, playSpeedEl, slider, timeLabel, time
 var cloudOpacityEl, toggleMap, toggleIntl, toggleWind, windVisInput, WIND_VIS_KEY, WIND_VIS_DEFAULT, windVisK;
 var overlaySeg, rangeSeg, sunnyApp_origin, homeCountry, beaches, waitingForTap, locateWatchId, locateDeadlineTimer;
 var userMarker, destMarker, popup, hoverId, playTimer, cloudTimes, cloudIndex;
-var hourlyCache, currentWxCache, CURRENT_WX_TTL_MS, wikiCache, cloudOpacity, _co, searchingSunny, overlayIds;
+var currentWxCache, CURRENT_WX_TTL_MS, wikiCache, cloudOpacity, _co, searchingSunny, overlayIds;
 var BASEMAP_KEY, OPACITY_KEY, LABELS_KEY, INTL_KEY, RADAR_KEY, OVERLAY_KEY, WIND_KEY, LOOP_KEY;
 var overlayNone = false; /* opt96/opt201: Clouds and Radar both off; fresh profile starts none */
 var SPEED_KEY, RANGE_KEY, LOOP_START_KEY, _sunnySavedLoopStartFrac, overlayMode, playLoop, playSpeed, cloudOpacitySavedForRadar;
@@ -464,7 +464,6 @@ function sunnyStep01() {
   playTimer = null;
   cloudTimes = [];
   cloudIndex = 0;
-  hourlyCache = {};
   currentWxCache = {};
   CURRENT_WX_TTL_MS = 20 * 60 * 1000;
   wikiCache = {};

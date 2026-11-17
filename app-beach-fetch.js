@@ -230,95 +230,33 @@
       }
     });
   }
+  /* t420u: cloud now and hourly come from the shared area forecast (SunnyAreaWx): a coarse grid in one or a few
+   * requests per view, never one request per beach; sun height, day and UV are worked out here with SunCalc */
+  function areaWx() {
+    if (!window.SunnyAreaWx) throw new Error("area forecast missing");
+    return window.SunnyAreaWx;
+  }
   function fetchCurrentWeather(points, signal) {
     if (!points.length) return Promise.resolve([]);
-    var out = new Array(points.length);
-    var missing = [];
-    var missingIdx = [];
-    var i, hit;
-    for (i = 0; i < points.length; i++) {
-      hit = getCachedCurrentWx(points[i].lat, points[i].lon);
-      if (hit) {
-        out[i] = Object.assign({}, points[i], hit);
-      } else {
-        missing.push(points[i]);
-        missingIdx.push(i);
-      }
-    }
-    if (!missing.length) return Promise.resolve(out);
-    /* Cap per-request size so one hung Open-Meteo call can't freeze Find */
-    var CAP = WX_BATCH;
-    if (missing.length > CAP) {
-      var slices = [];
-      var start = 0;
-      while (start < missing.length) {
-        slices.push({
-          pts: missing.slice(start, start + CAP),
-          idx: missingIdx.slice(start, start + CAP)
-        });
-        start += CAP;
-      }
-      /* opt203: run up to WX_PARALLEL Open-Meteo batches at once */
-      var parallel = Math.max(1, Number(WX_PARALLEL) || 1);
-      var cursor = 0;
-      function runOne() {
-        if (signal && signal.aborted) return Promise.resolve();
-        if (cursor >= slices.length) return Promise.resolve();
-        var slot = slices[cursor++];
-        return fetchCurrentWeather(slot.pts, signal).then((rows) => {
-          var r;
-          for (r = 0; r < rows.length; r++) {
-            if (rows[r]) out[slot.idx[r]] = rows[r];
-          }
-        }).catch(() => { /* partial OK */ }).then(runOne);
-      }
-      var workers = [];
-      var w;
-      for (w = 0; w < Math.min(parallel, slices.length); w++) workers.push(runOne());
-      return Promise.all(workers).then(() => {
-        var filled = [];
-        var fi;
-        for (fi = 0; fi < out.length; fi++) {
-          filled.push(out[fi] || Object.assign({}, points[fi]));
+    var missing = points.filter((p) => { return !getCachedCurrentWx(p.lat, p.lon); });
+    var wait = missing.length ? Promise.resolve().then(() => { return areaWx().need(missing); }) : Promise.resolve();
+    return wait.then(() => {
+      if (signal && signal.aborted) throw new DOMException("aborted", "AbortError");
+      return points.map((p) => {
+        var hit = getCachedCurrentWx(p.lat, p.lon);
+        if (!hit) {
+          hit = areaWx().current(p.lat, p.lon);
+          if (hit) putCachedCurrentWx(p.lat, p.lon, hit);
         }
-        return filled;
-      });
-    }
-    var lats = missing.map((p) => { return p.lat.toFixed(4); }).join(",");
-    var lons = missing.map((p) => { return p.lon.toFixed(4); }).join(",");
-    var url = METEO_URL + "?latitude=" + lats + "&longitude=" + lons + "&current=cloud_cover,uv_index,is_day";
-    return fetchWithTimeout(url, WX_FETCH_TIMEOUT_MS, signal).then(readJsonSafe).then((data) => {
-      var rows = Array.isArray(data) ? data : [data];
-      if (rows.length !== missing.length) throw new Error("Open-Meteo count mismatch");
-      var j, wx;
-      for (j = 0; j < missing.length; j++) {
-        try {
-          wx = parseCurrent(rows[j]);
-          putCachedCurrentWx(missing[j].lat, missing[j].lon, wx);
-          out[missingIdx[j]] = Object.assign({}, missing[j], wx);
-        } catch (eRow) {
-          out[missingIdx[j]] = Object.assign({}, missing[j]);
-        }
-      }
-      return out.map((row, idx) => {
-        return row || Object.assign({}, points[idx]);
+        return hit ? Object.assign({}, p, hit) : Object.assign({}, p);
       });
     });
   }
   function fetchHourly(lat, lon) {
-    var key = lat.toFixed(3) + "," + lon.toFixed(3);
-    if (hourlyCache[key]) return Promise.resolve(hourlyCache[key]);
-    var url = METEO_URL + "?latitude=" + lat.toFixed(4) + "&longitude=" + lon.toFixed(4) +
-      "&current=cloud_cover,uv_index,is_day" +
-      "&hourly=cloud_cover,is_day,uv_index,sunshine_duration" +
-      "&forecast_hours=48&timezone=auto";
-    return fetch(url).then(readJsonSafe).then((data) => {
-      hourlyCache[key] = data;
-      try {
-        if (data && data.current && data.current.cloud_cover != null) {
-          putCachedCurrentWx(lat, lon, parseCurrent(data));
-        }
-      } catch (e) {}
+    return areaWx().need([{ lat: lat, lon: lon }]).then(() => {
+      var data = areaWx().hourly(lat, lon);
+      if (!data) throw new Error("no area forecast yet");
+      try { putCachedCurrentWx(lat, lon, parseCurrent(data)); } catch (e) {}
       return data;
     });
   }
@@ -343,7 +281,7 @@
     return "about " + n + " hours";
   }
   function sunForecast(data) {
-    if (!data || !data.hourly || !data.hourly.time) return "Couldn't get the sun forecast.";
+    if (!data || !data.hourly || !data.hourly.time) return BEACH_WX_BUSY;
     var times = data.hourly.time;
     var clouds = data.hourly.cloud_cover;
     var days = data.hourly.is_day;
@@ -554,29 +492,35 @@
       return null;
     });
   }
+  /* t419u: a popup never dead-ends: while the weather service is busy it says so and fills itself in when data comes */
+  var BEACH_WX_BUSY = "Weather service busy, retrying…";
+  function areaNote(data) {
+    if (!data || !data.area) return "";
+    return " Estimated from the area forecast" + (data.km ? " " + data.km + " km away" : "") + ".";
+  }
+  function forecastLine(b) {
+    return fetchHourly(b.lat, b.lon).then((data) => { return sunForecast(data) + areaNote(data); }, () => { return BEACH_WX_BUSY; });
+  }
+  function retryBusy(b, line, withWiki) {
+    if (line !== BEACH_WX_BUSY) return;
+    setTimeout(() => {
+      var open = popup && typeof popup.isOpen === "function" && popup.isOpen();
+      var ll = open && popup.getLngLat();
+      if (ll && Math.abs(ll.lat - b.lat) < 1e-6 && Math.abs(ll.lng - b.lon) < 1e-6) enrichBeach(b, withWiki);
+    }, 20000);
+  }
   function enrichBeach(b, withWiki) {
-    /* withWiki default true for map hover-dwell / click popup path only */
     if (withWiki === false) {
-      return fetchHourly(b.lat, b.lon).then((data) => {
-        var forecast = sunForecast(data);
-        showPopup(b, [b.lon, b.lat], forecast, "");
-        return data;
-      }).catch(() => {
-        showPopup(b, [b.lon, b.lat], "Couldn't get the sun forecast.", "");
+      return forecastLine(b).then((line) => {
+        showPopup(b, [b.lon, b.lat], line, "");
+        retryBusy(b, line, false);
       });
     }
-    return Promise.all([
-      fetchHourly(b.lat, b.lon).then(sunForecast).catch(() => { return "Couldn't get the sun forecast."; }),
-      fetchWiki(b)
-    ]).then((pair) => {
-      var forecast = pair[0];
+    return Promise.all([forecastLine(b), fetchWiki(b)]).then((pair) => {
       var wiki = pair[1];
-      var extra = forecast;
-      if (wiki && wiki.extract) extra = forecast;
-      var img = wiki && wiki.thumb ? wiki.thumb : "";
-      var brief = b.brief;
-      if (wiki && wiki.extract) brief = wiki.extract;
-      showPopup(Object.assign({}, b, { brief: brief }), [b.lon, b.lat], extra, img);
+      var brief = wiki && wiki.extract ? wiki.extract : b.brief;
+      showPopup(Object.assign({}, b, { brief: brief }), [b.lon, b.lat], pair[0], wiki && wiki.thumb ? wiki.thumb : "");
+      retryBusy(b, pair[0], withWiki);
     });
   }
   function setHover(id) {

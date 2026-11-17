@@ -4,12 +4,12 @@
  * night black, overcast night dark grey; dawn and dusk ramp with SunCalc at the beach). Inner disc: direct
  * sun, yellow when clear, greyer with cloud, black when the sun is down. Centre: weather glyph from the
  * Open-Meteo weather_code. Red pin at 12 = now; orange pin = sunset, yellow pin = sunrise, at their times.
- * One hourly Open-Meteo request per batch of beaches (cached 30 min). Pictures are cached by state key.
+ * Clouds come from the shared area forecast (area-wx.js: a coarse grid, one or a few requests per view, cached
+ * 30 min), blended for each beach; daylight is SunCalc at the beach. Pictures are cached by state key.
  * Weather glyphs: Meteocons (MIT) sprite. Unticking "Detailed beach icons" draws only the disc and glyph. */
 (() => {
   "use strict";
   var PX = 2;
-  var TTL = 30 * 60 * 1000;
   var MODE_KEY = "sunny-beach-icon";
   var SIZE_KEY = "sunny-beach-icon-size"; /* 1× draws at 75 % of the size 1× drew under "sunny-beach-icon-scale" */
   var OLD_SIZE_KEY = "sunny-beach-icon-scale";
@@ -32,15 +32,13 @@
     for (var i = 0; i < SIZE_STOPS.length; i += 2) e.push(SIZE_STOPS[i], SIZE_STOPS[i + 1] * BASE * scale * g);
     return e;
   };
-  var wx = {};
-  var pending = {};
+  var AW = () => window.SunnyAreaWx;
   var lastKey = "";
   var lastList = [];
   var made = {};
   var DC = [47, 143, 255], DO = [240, 240, 240], NC = [0, 0, 0], NO = [58, 58, 58];
   var mix = (a, b, t) => [0, 1, 2].map((i) => { return a[i] + (b[i] - a[i]) * t; });
   var rgb = (c) => { return "rgb(" + c.map(Math.round).join(",") + ")"; };
-  var bin = (lat, lon) => { return Math.round(lat * 20) + "," + Math.round(lon * 20); };
   var getMap = () => { return typeof map !== "undefined" ? map : null; };
   /* Daylight 0..1 at time t: full from 45 min after sunrise to 45 min before sunset. */
   var light = (t, lat, lon) => {
@@ -94,10 +92,10 @@
   var codeFromCloud = (c) => { return c < 20 ? 0 : c < 50 ? 1 : c < 85 ? 2 : 3; };
   /* State for one beach: clouds per hour, daylight per hour, glyph, sun up, sunrise/sunset slots. */
   var state = (b) => {
-    var w = wx[bin(b.lat, b.lon)];
+    var w = AW() ? AW().at(b.lat, b.lon) : null;
     var cl = null, code = null;
     var now = Date.now();
-    if (w && now - w.t < TTL) {
+    if (w) {
       var i0 = Math.max(0, Math.floor((now - w.start) / 3600000));
       cl = w.cl.slice(i0, i0 + 12);
       code = w.code[i0];
@@ -185,27 +183,10 @@
     if (!made[k] && !m.hasImage(k)) { m.addImage(k, draw(s), { pixelRatio: PX }); made[k] = 1; }
     return k;
   };
-  /* One Open-Meteo call for all visible beaches that lack fresh hourly data (cap 50 points). */
+  /* the area grid nodes for the beaches on screen; a repaint only when new nodes arrived */
   var fetchBatch = (list) => {
-    var now = Date.now(), need = [], seen = {};
-    list.forEach((b) => {
-      var k = bin(b.lat, b.lon);
-      if (seen[k] || pending[k] || (wx[k] && now - wx[k].t < TTL)) return;
-      seen[k] = 1; need.push([k, b.lat, b.lon]);
-    });
-    need = need.slice(0, 50);
-    if (!need.length) return;
-    need.forEach((n) => { pending[n[0]] = 1; });
-    var u = "https://api.open-meteo.com/v1/forecast?latitude=" + need.map((n) => { return n[1].toFixed(3); }).join(",") +
-      "&longitude=" + need.map((n) => { return n[2].toFixed(3); }).join(",") +
-      "&hourly=cloud_cover,weather_code&forecast_hours=14&past_hours=1&timezone=GMT&timeformat=unixtime";
-    fetch(u).then((r) => { return r.json(); }).then((j) => {
-      (Array.isArray(j) ? j : [j]).forEach((row, i) => {
-        if (!row || !row.hourly || !need[i]) return;
-        wx[need[i][0]] = { t: Date.now(), start: row.hourly.time[0] * 1000, cl: row.hourly.cloud_cover, code: row.hourly.weather_code };
-      });
-      lastKey = ""; paint(lastList);
-    }).catch(() => {}).then(() => { need.forEach((n) => { delete pending[n[0]]; }); });
+    if (!AW() || !list.length) return;
+    AW().need(list).then((n) => { if (n) { lastKey = ""; paint(lastList); } }).catch(() => {});
   };
   var ensure = (m) => {
     if (!m.getSource("beach-suns")) m.addSource("beach-suns", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -338,7 +319,7 @@
   setInterval(() => { paint(lastList); }, 5 * 60000);
   /* Hourly cloud and weather code for the next 12 hours (falls back to the current cloud). */
   var hourly = (b) => {
-    var w = wx[bin(b.lat, b.lon)], now = Date.now(), out = [];
+    var w = AW() ? AW().at(b.lat, b.lon) : null, now = Date.now(), out = [];
     var i0 = w ? Math.max(0, Math.floor((now - w.start) / 3600000)) : 0;
     var c = b.cloud;
     if (c == null && window.sunnyCachedWx) c = (window.sunnyCachedWx(b.lat, b.lon) || {}).cloud;

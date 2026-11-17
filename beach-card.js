@@ -28,6 +28,7 @@
     var img = "";
     try { img = BI.draw(s, 5, true, true).toDataURL("image/png"); } catch (e) { return ""; }
     var hrs = BI.hourly(b);
+    var aw = window.SunnyAreaWx, astro = aw ? aw.sun(b.lat, b.lon) : null;
     var set = next(b, "sunset"), rise = next(b, "sunrise");
     var sunH = 0;
     hrs.forEach((h) => { if (h.cl != null) sunH += BI.light(h.t + 1800000, b.lat, b.lon) * (1 - h.cl / 100); });
@@ -40,7 +41,10 @@
     return '<div class="bx-ring"><div class="bc-ring"><img class="bx-big" alt="Sun and cloud ring" src="' + img + '">' +
       lab("bc-n", 0, "Now ") + lab("bc-e", 3, "+3h ") + lab("bc-s", 6, "+6h ") + lab("bc-w", 9, "+9h ") + "</div>" +
       '<div class="bc-facts"><div><b>' + words(hrs[0].code) + "</b> · cloud " + (hrs[0].cl == null ? "?" : Math.round(hrs[0].cl) + "%") + "</div>" +
-      "<div>About " + (Math.round(sunH * 2) / 2) + " h of sun left in the next 12 h</div>" +
+      "<div>About " + (Math.round(sunH * 2) / 2) + " h of sun in the next 12 h · area estimate</div>" +
+      (astro ? "<div>" + (astro.elevation > 0 ? "☀️ Sun " + astro.elevation + "° up · " + astro.daylight.toFixed(1) + " h of daylight left · sunny for " +
+        astro.sunny.toFixed(1) + " h · clear-sky UV about " + astro.clearUv : "Sun below the horizon") + "</div>" : "") +
+      '<div>Clouds estimated from the area forecast (Open-Meteo grid).</div>' +
       "<div>🌇 Sunset " + (set ? hm(set) : "none") + " · 🌅 Sunrise " + (rise ? hm(rise) : "none") + "</div>" +
       '<div class="bc-key">Ring: 12 hours clockwise from the top. Bright blue is clear sky, white is cloud, dark is night.' +
       " Red pin is now, orange sunset, yellow sunrise.</div></div>" +
