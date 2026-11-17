@@ -647,6 +647,28 @@ async def ancient(b):
               and len(t[0]) > 10 and not errs, [t[0][:300], errs])
         print("  ", id, r["n"], t[0][:200].replace("\n", " | "), flush=True)
         await ctx.close()
+async def smells(b):
+    """t406u: Stinky map sits in Human impact, off at start, draws emoji badges by type with a legend that says strength is estimated by
+    type, draws a downwind plume over the Vancouver Landfill from the current wind, and a tap shows the source (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    off = await pg.evaluate("async()=>{await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id==='smells');return [d.group,SunnyLayers.isOn('smells')]}")
+    ids = ["smell-" + k for k in ["landfill", "sewage", "manure", "pulp", "meat", "refinery", "compost", "sulphur"]]
+    r = await pg.evaluate(WG, {"id": "smells", "c": [-123.005, 49.098], "z": 11, "l": ids})
+    pl = 0
+    for i in range(30):
+        pl = await pg.evaluate("()=>map.getLayer('smell-plume-fill')?map.queryRenderedFeatures({layers:['smell-plume-fill']}).length:0")
+        if pl: break
+        await pg.wait_for_timeout(1000)
+    check("smells in Human impact, off at start, emoji legend says estimated by type", off == ["Human impact", False] and r["n"] > 0
+          and "ls-emo" in r["leg"] and "estimated" in r["leg"], [off, r["n"], r["leg"][-300:]])
+    check("smells draw a downwind plume from the current wind", pl > 0, pl)
+    await pg.mouse.click(r["x"], r["y"])
+    await pg.wait_for_timeout(3000)
+    t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("smells tap shows the source, its strength and source link", "openstreetmap.org/" in t[1] and "strength" in t[0] and not errs, [t[0][:300], errs])
+    print("  ", r["n"], pl, t[0][:200].replace("\n", " | "), flush=True)
+    await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
   const hit=(a,b)=>!!(a&&b&&a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3]);const at=document.querySelector('.maplibregl-ctrl-attrib');
   const btn=R(at.querySelector('.maplibregl-ctrl-attrib-button'));const lag=R(document.querySelector('lag-o-meter'));const fps=document.getElementById('fps');
@@ -672,7 +694,7 @@ async def credits(b):
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

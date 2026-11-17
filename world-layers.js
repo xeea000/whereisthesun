@@ -60,9 +60,16 @@
         o.layers.forEach((l) => {
           if (map.getLayer(l.id)) return;
           var radBase = o.radius || K.size({ stops: [[1, l.r || 2.5], [8, (l.r || 2.5) * 2.2], [14, (l.r || 2.5) * 2.8]] });
-          var spec = { id: l.id, type: "circle", source: sid, filter: l.filter || ["in", ["get", "k"], ["literal", l.codes]], paint: {
+          var filt = l.filter || ["in", ["get", "k"], ["literal", l.codes]];
+          var spec = { id: l.id, type: "circle", source: sid, filter: filt, paint: {
             "circle-radius": K.markerScale.bind(map, l.id, "circle-radius", radBase),
             "circle-color": l.color, "circle-stroke-color": "#101418", "circle-stroke-width": 0.8 } };
+          /* t406u: a layer with an emoji draws round emoji badges (badge-kit.js) instead of dots */
+          if (l.emoji) {
+            var zs = ["interpolate", ["linear"], ["zoom"], 2, 0.42, 8, 0.62, 14, 0.85];
+            spec = { id: l.id, type: "symbol", source: sid, filter: filt, layout: { "icon-image": window.SunnyBadge.image(map, "b-" + l.id, l.emoji, l.color),
+              "icon-allow-overlap": true, "icon-size": K.markerScale.bind(map, l.id, "icon-size", zs, { layout: true }) } };
+          }
           if (K.gz(l.minzoom || 0)) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
         });
@@ -74,10 +81,14 @@
     var taps = o.layers.map((l) => { return l.id; });
     var pMap = null;
     /* opt220: with kids, legend lists only enabled kids (function); empty when all off */
-    var kidList = o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: true, color: l.color }; }) : undefined;
+    var kidList = o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: true, color: l.color, emoji: l.emoji }; }) : undefined;
     var leg = o.legend;
     if (o.kids && typeof o.legend !== "function") {
-      leg = () => { return K.kids.legKeys(kidList, (k) => { return k.name ? [k.color, "dot", k.name] : null; }); };
+      leg = () => {
+        var foot = o.foot ? o.foot() : "";
+        if (o.layers[0].emoji) return window.SunnyBadge.keys(K.kids.active(kidList).map((k) => { return [k.color, k.name, k.emoji]; })) + foot;
+        return K.kids.legKeys(kidList, (k) => { return k.name ? [k.color, "dot", k.name] : null; }) + foot;
+      };
     }
     L.add({ id: o.id, name: o.name, icon: o.icon, group: o.group, tip: o.tip, taps: taps, dflt: o.dflt, apply: apply, legend: leg,
       kids: kidList,
@@ -747,4 +758,6 @@
       return [k === "h" ? "Shipwreck" : "Wreck marked on sea charts", r.type ? "Type: " + K.esc(String(r.type).replace(/_/g, " ")) : "",
         r.sunk ? "Lost " + K.esc(r.sunk) : "", r.depth ? "Depth " + K.esc(r.depth) + " metres" : "", K.esc(r.desc), wikiOsm(r.wiki)];
     } });
+  /* shared with smell-layers.js: the point layer maker and the tap card helpers */
+  window.SunnyWorldKit = { pointLayer: pointLayer, cap: cap, place: place, wikiLine: wikiLine, srcOf: ancSrc };
 })();

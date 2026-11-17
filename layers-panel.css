@@ -67,6 +67,7 @@
 .ls-sw.ls-line{width:14px;height:3px;border-radius:1px;border:0;vertical-align:middle}
 .ls-sw.ls-area{border-radius:2px}
 .ls-k{display:block;font-size:10px;line-height:1.35}
+.ls-emo{display:inline-block;width:15px;height:15px;margin:1px 4px 1px 0;border:1.5px solid;border-radius:50%;background:#101418;font-style:normal;font-size:9px;line-height:15px;text-align:center;vertical-align:middle}
 /* opt191 Magic Fun & Games: compact chips, schedule panel, filter bar */
 .mtg-sched-btn{display:block;margin:6px 0 2px;border:0;border-radius:8px;padding:6px 10px;background:#3a2f6e;color:#fff;font:700 11.5px system-ui,sans-serif;cursor:pointer;width:100%;text-align:left}
 .mtg-sched-btn:hover{background:#4d3f8f}
