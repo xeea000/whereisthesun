@@ -268,8 +268,9 @@
         return [K.esc(cap(r.kind)), r.war !== w[1] ? "Part of the " + K.esc(r.war) : "", K.esc(r.year), place(r), wikiLine(r)];
       } });
   });
-  /* t396u: abandoned railways from live OpenStreetMap at zoom 9 and in (Overpass, cached a week per tile): lines whose track
-   * is gone (railway=abandoned or razed), lines still in place but out of use (disused), and former lines that are now trails */
+  /* t396u: abandoned railways from OpenStreetMap at zoom 9 and in (static files in Canada, canada-static.js; Overpass elsewhere,
+   * cached a week per tile): lines whose track is gone (railway=abandoned or razed), lines still in place but out of use
+   * (disused), and former lines that are now trails */
   var RAIL_KIND = { a: "Abandoned railway, track removed", d: "Disused railway, track still in place", t: "Rail trail on an old railway line" };
   var railKind = (t) => {
     var r = t.railway || "";
@@ -279,10 +280,11 @@
   };
   var r5 = (v) => { return Math.round(v * 1e5) / 1e5; };
   osmLayer({ id: "rail-abandoned", name: "Abandoned railways", icon: "🛤️", group: "History", src: "w-rail-ab", minZoom: 9, maxTiles: 16,
+    local: (b) => { return window.SunnyCanada ? window.SunnyCanada.rail(b) : null; },
     ids: ["rail-ab-line", "rail-ab-dash", "rail-ab-hit"], taps: ["rail-ab-hit"],
     tip: "Old railway lines from OpenStreetMap: track removed, out of use, or now a trail. Loads when you zoom in to a town or county",
     legend: K.legKeys([["#c98a5a", "line", "abandoned, track removed (dashed)"], ["#a89f92", "line", "disused, track still in place"],
-      ["#7cc576", "line", "rail trail on an old line"]]) + '<div class="ls-row"><small>Live OpenStreetMap, zoom 9 and in</small></div>',
+      ["#7cc576", "line", "rail trail on an old line"]]) + '<div class="ls-row"><small>OpenStreetMap, zoom 9 and in: built in for Canada, live elsewhere</small></div>',
     q: 'way["railway"~"^(abandoned|disused|razed)$"]BB;way["abandoned:railway"]BB;way["razed:railway"]BB;way["disused:railway"]BB;',
     item: (el) => {
       if (el.type !== "way" || !el.geometry || el.geometry.length < 2) return null;
@@ -598,7 +600,10 @@
           minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
             var bb = "(" + [b[1], b[0], b[3], b[2]].map((x) => { return x.toFixed(4); }).join(",") + ")";
-            return K.overpass("[out:json][timeout:" + K.overpassSecs + "];(" + o.q.split("BB").join(bb) + ");out geom 400;").then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });
+            var live = () => { return K.overpass("[out:json][timeout:" + K.overpassSecs + "];(" + o.q.split("BB").join(bb) + ");out geom 400;"); };
+            /* o.local: static lines for the box where the layer has them (Canada), else null; null or nothing found falls back to Overpass */
+            var loc = o.local ? o.local(b) : null;
+            return (loc ? loc.then((j) => { return j || live(); }) : live()).then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });
           },
           onData: (items) => { draw(map, items); } });
         taps.forEach((t) => {
