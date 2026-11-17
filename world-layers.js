@@ -598,7 +598,7 @@
           minZoom: K.gz(o.minZoom), maxTiles: o.maxTiles, ttlMs: 7 * 864e5, isOn: () => { return L.isOn(o.id); },
           fetchTile: (b) => {
             var bb = "(" + [b[1], b[0], b[3], b[2]].map((x) => { return x.toFixed(4); }).join(",") + ")";
-            return K.overpass("[out:json][timeout:25];(" + o.q.split("BB").join(bb) + ");out geom 400;").then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });
+            return K.overpass("[out:json][timeout:" + K.overpassSecs + "];(" + o.q.split("BB").join(bb) + ");out geom 400;").then((j) => { return (j.elements || []).map(o.item).filter(Boolean); });
           },
           onData: (items) => { draw(map, items); } });
         taps.forEach((t) => {
@@ -711,7 +711,7 @@
           fetchTile: (b) => {
             var bb = "(" + [b[1], b[0], b[3], b[2]].map((x) => { return x.toFixed(4); }).join(",") + ")";
             var q = 'way["man_made"="pipeline"]["location"="underwater"]' + bb + ';nwr["man_made"="offshore_platform"]' + bb + ';';
-            return K.overpass("[out:json][timeout:25];(" + q + ");out geom 400;").then((j) => {
+            return K.overpass("[out:json][timeout:" + K.overpassSecs + "];(" + q + ");out geom 400;").then((j) => {
               return (j.elements || []).map((el) => {
                 var t = tg(el);
                 if (el.type === "way" && el.geometry && (el.tags || {}).man_made === "pipeline") {

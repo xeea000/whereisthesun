@@ -569,7 +569,7 @@ async def label_tiers(b):
 RAIL = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id==='rail-abandoned');
   map.jumpTo({center:[-79.42,43.69],zoom:7});SunnyLayers.set('rail-abandoned',true);await s(1500);const far=typeof d.note==='function'?d.note():'';
   map.jumpTo({center:[-79.418,43.695],zoom:13});const ids=['rail-ab-line','rail-ab-dash'];let n=0,t0=Date.now();
-  for(let i=0;i<120&&!n;i++){await s(1000);n=ids.some(i=>map.getLayer(i))?map.queryRenderedFeatures({layers:ids.filter(i=>map.getLayer(i))}).length:0}
+  for(let i=0;i<200&&!n;i++){await s(1000);n=ids.some(i=>map.getLayer(i))?map.queryRenderedFeatures({layers:ids.filter(i=>map.getLayer(i))}).length:0}
   const f=n?map.queryRenderedFeatures({layers:['rail-ab-hit']}):[];const r=map.getContainer().getBoundingClientRect();
   const g=f[0]&&f[0].geometry;const c=g?(g.type==='LineString'?g.coordinates[Math.floor(g.coordinates.length/2)]:g.coordinates[0][0]):null;
   const p=c?map.project(c):{x:0,y:0};const kinds=[...new Set(map.queryRenderedFeatures({layers:ids.filter(i=>map.getLayer(i))}).map(x=>x.properties.k))].sort().join();
@@ -670,15 +670,17 @@ async def smells(b):
     print("  ", r["n"], pl, t[0][:200].replace("\n", " | "), flush=True)
     await ctx.close()
 async def reefs(b):
-    """t397u: Coral bleaching watch and Reefs & underwater sit in Ocean, off at start, draw their places, and a tap shows the NOAA alert or
-    the reef with its source link (390 px)."""
+    """t397u: Coral bleaching watch and Reefs & underwater sit in Ocean and Launch sites & rocket factories in Sky & Space, Artificial,
+    all off at start; each draws its places, and a tap shows the NOAA alert or the place with its source link (390 px)."""
     for lid, ids, c, z, want in [("bleaching", ["crw-%d" % i for i in range(5)], [146.5, -18.5], 5, "coralreefwatch.noaa.gov"),
-                                 ("reefs", ["reef-" + k for k in ["coral", "atoll", "reef", "hole", "kelp", "seep"]], [73.2, 3.5], 6, "wikidata.org/wiki/Q")]:
+                                 ("reefs", ["reef-" + k for k in ["coral", "atoll", "reef", "hole"]], [73.2, 3.5], 6, "wikidata.org/wiki/Q"),
+                                 ("space", ["space-" + k for k in ["port", "pad", "centre", "factory"]], [-80.6, 28.5], 9, "wikidata.org/wiki/Q")]:
         ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
         await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
         off = await pg.evaluate("async(id)=>{await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id===id);return [d.group,SunnyLayers.isOn(id)]}", lid)
         r = await pg.evaluate(WG, {"id": lid, "c": c, "z": z, "l": ids})
-        check(lid + " in Ocean, off at start, draws its places", off == ["Ocean", False] and r["n"] > 0, [off, r["n"]])
+        grp = "Sky & Space/Artificial" if lid == "space" else "Ocean"
+        check(lid + " in " + grp + ", off at start, draws its places", off == [grp, False] and r["n"] > 0, [off, r["n"]])
         await pg.mouse.click(r["x"], r["y"])
         await pg.wait_for_timeout(3000)
         t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")

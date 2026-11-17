@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt284"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt285"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -65,7 +65,7 @@ var PRECACHE = [
   "beach-toggle.js?h=6f8bbe8fdf",
   "side-buttons.js?h=b0ec3429d6",
   "vendor/suncalc-2.1.1.js?h=3f2bf4d522",
-  "layer-kit.js?h=3f91cd8bbe",
+  "layer-kit.js?h=9a64f14ab1",
   "frame-kit.js?h=483b24432b",
   "layer-lazy.js?h=26794f51c2",
   "layers-panel.js?h=06dcc8442a",
@@ -137,9 +137,10 @@ var PRECACHE = [
   "fire-lookout.js?h=3a7c53c59c",
   "ca-cover.js?h=c5dd186c2a",
   "badge-kit.js?h=ab2625c33c",
-  "world-layers.js?h=7d6d0894b9",
+  "world-layers.js?h=84e0cc34a0",
   "smell-layers.js?h=aea91cfb2a",
-  "reef-layers.js?h=aa9c709bb3",
+  "reef-layers.js?h=c9f78c51e5",
+  "space-layers.js?h=15516cba60",
   "outdoor-layers.js?h=a63aab75b7",
   "mtg-stores.js?h=33e5f87fee",
   "parks-ca.js?h=fb1fec2c6b",

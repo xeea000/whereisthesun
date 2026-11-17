@@ -198,10 +198,10 @@
     if (!map || map.getZoom() >= (minZoom || 0)) return "";
     return label || "";
   }
-  /* main Overpass server first, then public mirrors when it is busy; each server gets at most 45 s to answer */
-  var OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+  /* main Overpass server first, then mirrors when busy; each gets 90 s (busy, a town tile takes 45-55 s), queries ask [timeout:] the same */
+  var OVERPASS_S = 90, OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
   function overpass(ql, i = 0) {
-    var ac = new AbortController(), timer = setTimeout(() => { ac.abort(); }, 45000);
+    var ac = new AbortController(), timer = setTimeout(() => { ac.abort(); }, OVERPASS_S * 1000);
     return fetch(OVERPASS[i] + "?data=" + encodeURIComponent(ql), { signal: ac.signal }).then((r) => {
       if (!r.ok) throw new Error("overpass " + r.status);
       return r.json();
@@ -795,6 +795,6 @@
     mapBrightness: mapBrightness, field: field, magnitude: magnitude,
     size: size, overzoom: overzoom, uncapped: uncapped,
     esc: esc, telHref: telHref, callBtn: callBtn, show: show, card: card, before: before, vis: vis, getStore: getStore, putStore: putStore,
-    loadJson: loadJson, tiles: tiles, overpass: overpass, fc: fc,
+    loadJson: loadJson, tiles: tiles, overpass: overpass, overpassSecs: OVERPASS_S, fc: fc,
     zoomGate: zoomGate, setMinZoom: setMinZoom, zoomNote: zoomNote, lod: lod };
 })();

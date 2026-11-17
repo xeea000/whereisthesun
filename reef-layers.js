@@ -1,7 +1,7 @@
 // workspace/whereisthesun/reef-layers.js
 /* SUNNY reefs (t397u), in Ocean, from data/world/reefs.* (tools/build-reefs.js):
  *   Coral bleaching watch  NOAA Coral Reef Watch regional reef stations, coloured by that day's bleaching alert level (a snapshot)
- *   Reefs & underwater     coral reefs, atolls, blue holes, kelp and seagrass, cold seeps and other notable reefs (Wikidata), emoji badges
+ *   Reefs & underwater     coral reefs, atolls, blue holes and sea caves, and other notable reefs (Wikidata), emoji badges
  * Uses the point layer maker and tap card helpers that world-layers.js shares as SunnyWorldKit. */
 (() => {
   "use strict";
@@ -34,13 +34,12 @@
         c.date ? "As of " + K.esc(c.date) + " (snapshot; the NOAA page has today's)" : ""];
     } });
   var REEF = [["coral", "Coral reef (barrier, fringing or sponge)", "🪸", "#ff8a80"], ["atoll", "Atoll", "🏝️", "#4dd0e1"],
-    ["reef", "Other reef with a Wikipedia article", "🪨", "#90a4ae"], ["hole", "Blue hole or sea cave", "🕳️", "#1e88e5"],
-    ["kelp", "Kelp forest or seagrass meadow", "🌿", "#66bb6a"], ["seep", "Cold seep or brine pool", "🫧", "#b39ddb"]];
+    ["reef", "Other reef with a Wikipedia article", "🪨", "#90a4ae"], ["hole", "Blue hole or sea cave", "🕳️", "#1e88e5"]];
   var NAME = {};
   REEF.forEach((x) => { NAME[x[0]] = x[1]; });
   var RA = 'Reefs: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>';
   WK.pointLayer({ id: "reefs", file: "reefs", name: "Reefs & underwater", icon: "🪸", group: "Ocean", kids: true,
-    tip: "Coral reefs, atolls, blue holes, kelp forests, cold seeps and other notable reefs (Wikidata)",
+    tip: "Coral reefs, atolls, blue holes and sea caves, and other notable reefs (Wikidata)",
     attrib: RA, src: ["Wikidata", "https://www.wikidata.org/"], srcOf: WK.srcOf,
     layers: REEF.map((x) => { return { id: "reef-" + x[0], codes: [x[0]], color: x[3], emoji: x[2], name: x[1] }; }),
     title: (r) => { return r.name || "Reef"; },

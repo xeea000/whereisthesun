@@ -1,11 +1,11 @@
 // workspace/whereisthesun/tools/build-reefs.js
 /* SUNNY build step (t397u): data/world/reefs.* (points file + detail shards, tools/split-points.js), free and keyless.
  *   node tools/build-reefs.js <cache dir>
- * NOAA Coral Reef Watch 5 km regional virtual stations (public domain, a work of the United States government): one point per reef region with that day's
- * sea temperature, anomaly, heat stress (degree heating weeks) and bleaching alert level, a snapshot from the build day.
- * Wikidata (CC0): coral, barrier and fringing reefs, sponge reefs, atolls, blue holes and marine caves, kelp forests and seagrass
- * meadows, cold seeps and brine pools, and other reefs with an English Wikipedia article. A place already in Seafloor features or
- * Wrecks (same Wikidata id) is left out, as is a Wikidata point within 500 m of one already listed. */
+ * NOAA Coral Reef Watch 5 km regional virtual stations (public domain, a work of the United States government): one point per
+ * reef region with that day's sea temperature, anomaly, heat stress (degree heating weeks) and bleaching alert level, a snapshot
+ * from the build day. Wikidata (CC0): coral, barrier and fringing reefs, sponge reefs, atolls, blue holes and marine caves, and
+ * other reefs with an English Wikipedia article. A place already in Seafloor features or Wrecks (same Wikidata id) is left out, as
+ * is a Wikidata point within 500 m of one already listed. */
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -20,7 +20,7 @@ const get = (url, file, extra) => {
   return JSON.parse(fs.readFileSync(f, "utf8"));
 };
 const WD = { Q11292: "coral", Q4078911: "coral", Q1999990: "coral", Q7578997: "coral", Q42523: "atoll", Q7180402: "hole", Q106704395: "hole",
-  Q575913: "kelp", Q25411280: "kelp", Q1107856: "seep", Q2354300: "seep", Q184358: "reef" };
+  Q184358: "reef" };
 const wd = (name, types, enOnly) => {
   const q = "SELECT ?i ?iL ?c ?t ?coL ?w WHERE { VALUES ?t { " + types.map((t) => { return "wd:" + t; }).join(" ") + " } ?i wdt:P31 ?t; wdt:P625 ?c. " +
     (enOnly ? "" : "OPTIONAL{") + "?w schema:about ?i; schema:isPartOf <https://en.wikipedia.org/>" + (enOnly ? " " : "} ") + "OPTIONAL{?i wdt:P17 ?co} " +
