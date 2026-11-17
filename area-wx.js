@@ -49,10 +49,11 @@
       if (e.name === "AbortError" || e instanceof TypeError) e.busy = true;
       if (!e.busy || tries >= WAITS.length) { count.failed++; throw e; }
       count.retries++;
-      return sleep(Math.max(e.wait || 0, WAITS[tries])).then(() => ask(list, tries + 1));
+      return sleep(Math.min(60000, Math.max(e.wait || 0, WAITS[tries]))).then(() => ask(list, tries + 1));
     }).finally(() => { clearTimeout(timer); });
   };
-  var need = (points) => {
+  /* ms: stop waiting after that long (the requests carry on); the answer is then whatever the grid already has */
+  var need = (points, ms) => {
     var want = [], seen = {}, wait = [];
     (points || []).forEach((p) => {
       if (!p || !isFinite(p.lat) || !isFinite(p.lon)) return;
@@ -72,7 +73,9 @@
       job.catch(() => {}).then(() => { part.forEach((c) => { delete flying[key(c[0], c[1])]; }); });
       wait.push(job);
     }
-    return Promise.allSettled(wait).then((rs) => {
+    var all = Promise.allSettled(wait);
+    if (ms) all = Promise.race([all, sleep(ms).then(() => wait.map(() => ({ status: "rejected", reason: new Error("weather service slow") })))]);
+    return all.then((rs) => {
       if (rs.length && rs.every((r) => r.status === "rejected") && !(points || []).some((p) => at(p.lat, p.lon))) throw rs[0].reason;
       return want.length;
     });

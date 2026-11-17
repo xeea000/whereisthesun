@@ -253,7 +253,7 @@
     });
   }
   function fetchHourly(lat, lon) {
-    return areaWx().need([{ lat: lat, lon: lon }]).then(() => {
+    return areaWx().need([{ lat: lat, lon: lon }], 8000).then(() => {
       var data = areaWx().hourly(lat, lon);
       if (!data) throw new Error("no area forecast yet");
       try { putCachedCurrentWx(lat, lon, parseCurrent(data)); } catch (e) {}
@@ -501,22 +501,27 @@
   function forecastLine(b) {
     return fetchHourly(b.lat, b.lon).then((data) => { return sunForecast(data) + areaNote(data); }, () => { return BEACH_WX_BUSY; });
   }
+  /* the beach card is still open on this beach (a closed card is never reopened by a late answer) */
+  function openOn(b) {
+    var open = popup && typeof popup.isOpen === "function" && popup.isOpen();
+    var ll = open && popup.getLngLat();
+    return !!ll && Math.abs(ll.lat - b.lat) < 1e-6 && Math.abs(ll.lng - b.lon) < 1e-6;
+  }
   function retryBusy(b, line, withWiki) {
     if (line !== BEACH_WX_BUSY) return;
-    setTimeout(() => {
-      var open = popup && typeof popup.isOpen === "function" && popup.isOpen();
-      var ll = open && popup.getLngLat();
-      if (ll && Math.abs(ll.lat - b.lat) < 1e-6 && Math.abs(ll.lng - b.lon) < 1e-6) enrichBeach(b, withWiki);
-    }, 20000);
+    setTimeout(() => { if (openOn(b)) enrichBeach(b, withWiki); }, 20000);
   }
   function enrichBeach(b, withWiki) {
     if (withWiki === false) {
       return forecastLine(b).then((line) => {
+        if (!openOn(b)) return;
         showPopup(b, [b.lon, b.lat], line, "");
         retryBusy(b, line, false);
       });
     }
+    showPopup(b, [b.lon, b.lat], "Loading forecast…", ""); /* t409u: the card opens at once; the forecast and photo fill in */
     return Promise.all([forecastLine(b), fetchWiki(b)]).then((pair) => {
+      if (!openOn(b)) return;
       var wiki = pair[1];
       var brief = wiki && wiki.extract ? wiki.extract : b.brief;
       showPopup(Object.assign({}, b, { brief: brief }), [b.lon, b.lat], pair[0], wiki && wiki.thumb ? wiki.thumb : "");

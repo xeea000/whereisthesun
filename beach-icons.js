@@ -90,6 +90,8 @@
     }).catch(() => {});
   };
   var codeFromCloud = (c) => { return c < 20 ? 0 : c < 50 ? 1 : c < 85 ? 2 : 3; };
+  /* t409u: rain, snow, fog or storm codes stay; clear to overcast words follow the blended cloud number shown beside them */
+  var skyCode = (code, c) => { return code != null && code > 3 ? code : codeFromCloud(c); };
   /* State for one beach: clouds per hour, daylight per hour, glyph, sun up, sunrise/sunset slots. */
   var state = (b) => {
     var w = AW() ? AW().at(b.lat, b.lon) : null;
@@ -98,7 +100,7 @@
     if (w) {
       var i0 = Math.max(0, Math.floor((now - w.start) / 3600000));
       cl = w.cl.slice(i0, i0 + 12);
-      code = w.code[i0];
+      code = cl[0] == null ? null : skyCode(w.code[i0], cl[0]);
       if (cl.length < 12) cl = null;
     }
     if (!cl) {
@@ -325,7 +327,8 @@
     if (c == null && window.sunnyCachedWx) c = (window.sunnyCachedWx(b.lat, b.lon) || {}).cloud;
     for (var h = 0; h < 12; h++) {
       var ok = w && w.cl[i0 + h] != null;
-      out.push({ t: now + h * 3600000, cl: ok ? w.cl[i0 + h] : c, code: ok ? w.code[i0 + h] : (c == null ? null : codeFromCloud(c)) });
+      var cc = ok ? w.cl[i0 + h] : c;
+      out.push({ t: now + h * 3600000, cl: cc, code: cc == null ? null : skyCode(ok ? w.code[i0 + h] : null, cc) });
     }
     return out;
   };

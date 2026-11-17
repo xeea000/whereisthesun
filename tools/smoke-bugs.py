@@ -172,7 +172,8 @@ async def peek_closes(b):
     await pg.evaluate("()=>SunnyLayers.set('parks',false)")
     await pg.wait_for_timeout(1200)
     still = await pg.evaluate(PEEK_SHOWN)
-    check("peek closes with its layer", opened and not still, {"opened": opened, "still": still})
+    left = await pg.evaluate("()=>{const p=document.getElementById('ip-peek');return p?p.innerText.slice(0,200):''}") if still else ""
+    check("peek closes with its layer", opened and not still, {"opened": opened, "still": still, "left": left})
     await ctx.close()
 MTG_JS = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));await SunnyLayerLazy.load();
   map.jumpTo({center:[-90,52],zoom:3});await s(6000);
@@ -723,7 +724,9 @@ BEACH_FLOW = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));map.jumpTo(
 async def beach_flow(b):
     """t411u: Find beaches with Sunny only says what it found or what to do next; turning Sunny only off runs Find again at once
     and lists the nearest beaches; All beaches draws the beach weather icons (390 px)."""
+    from smoke_areawx import stand_in
     ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.route("**/api.open-meteo.com/**", stand_in)
     await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
     r = await pg.evaluate(BEACH_FLOW)
     check("Find beaches with Sunny only reports sunny beaches or how to see the nearest", "sunny beach" in r["a"] or "Turn off Sunny only" in r["a"], r)
@@ -755,9 +758,69 @@ async def credits(b):
         check("%d tap shows all credits with links" % w, o["open"] and o["osm"] and "Open-Meteo" in o["text"] and "NASA GIBS" in o["text"]
               and not o["fpsShown"] and not errs, [o, errs])
         await ctx.close()
+
+async def camps_split(b):
+    """opt291: Outdoors has Campsites & RV parks (campsites and RV/trailer park switches) and Lookouts &
+    viewpoints; fire lookout towers are not under Towers; a campsite, an RV park, a viewpoint and a fire
+    lookout each open a card with their source; phone status text has a dark pill behind it (390 px)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    meta = await pg.evaluate("""async()=>{await SunnyLayerLazy.load();
+      const camps=SunnyLayers.defs().find(d=>d.id==='camps');
+      const look=SunnyLayers.defs().find(d=>d.id==='lookouts');
+      const towers=SunnyLayers.defs().find(d=>d.id==='towers');
+      return {cg:camps&&camps.group, cn:camps&&camps.name, ck:(camps.kids||[]).map(k=>k.name),
+        lg:look&&look.group, ln:look&&look.name, tg:towers&&towers.group,
+        tk:(towers.kids||[]).map(k=>k.name), coff: !SunnyLayers.isOn('camps'), loff:!SunnyLayers.isOn('lookouts')}}""")
+    check("camps and lookouts sit in Outdoors, off at start, with RV and campsite switches",
+          meta["cg"]=="Outdoors" and meta["cn"]=="Campsites & RV parks" and meta["coff"]
+          and meta["ck"]==["Campsites", "RV / trailer parks"]
+          and meta["lg"]=="Outdoors" and meta["ln"]=="Lookouts & viewpoints" and meta["loff"]
+          and "Fire lookout towers" not in meta["tk"], meta)
+    # RV park: Flamboro Valley; campsite nearby stays hidden when only the RV switch is on
+    r = await pg.evaluate(WG, {"id": "camps", "c": [-80.07768, 43.36576], "z": 13, "l": ["pack-camps-dot"]})
+    check("RV parks draw at Flamboro Valley with a camps legend", r["n"]>0 and "RV / trailer parks" in (r["leg"] or ""), r)
+    await pg.mouse.click(r["x"], r["y"])
+    await pg.wait_for_timeout(3000)
+    t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("RV park tap shows the park with an OpenStreetMap link", "openstreetmap.org/" in t[1] and ("RV" in t[0] or "Flamboro" in t[0] or "trailer" in t[0].lower()) and not errs, [t[0][:300], errs])
+    # campsite: Algonquin area, campsites switch only
+    await pg.evaluate("""()=>{const k=[...document.querySelectorAll('#layers-panel input[data-kid]')];
+      const rv=k.find(i=>i.dataset.kid==='camps-rv'); const c=k.find(i=>i.dataset.kid==='camps-c');
+      if(rv&&rv.checked){rv.checked=false;rv.dispatchEvent(new Event('change'))}
+      if(c&&!c.checked){c.checked=true;c.dispatchEvent(new Event('change'))}}""")
+    await pg.wait_for_timeout(500)
+    r2 = await pg.evaluate(WG, {"id": "camps", "c": [-78.59, 45.53], "z": 10, "l": ["pack-camps-dot"]})
+    check("campsites draw in Algonquin when only the campsites switch is on", r2["n"]>0, r2)
+    await pg.mouse.click(r2["x"], r2["y"])
+    await pg.wait_for_timeout(3000)
+    t2 = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("campsite tap shows a campground with an OpenStreetMap link", "openstreetmap.org/" in t2[1] and ("Camp" in t2[0] or "camp" in t2[0]) and not errs, [t2[0][:300], errs])
+    # viewpoint in Toronto and a fire lookout tower
+    await pg.evaluate("()=>SunnyLayers.set('camps',false)")
+    r3 = await pg.evaluate(WG, {"id": "lookouts", "c": [-79.36501, 43.68583], "z": 14, "l": ["pack-lookouts-dot"]})
+    check("lookouts draw a Toronto viewpoint with a legend", r3["n"]>0 and "Viewpoint" in (r3["leg"] or ""), r3)
+    await pg.mouse.click(r3["x"], r3["y"])
+    await pg.wait_for_timeout(3000)
+    t3 = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("viewpoint tap shows the lookout with an OpenStreetMap link", "openstreetmap.org/" in t3[1] and ("Viewpoint" in t3[0] or "Lookout" in t3[0] or "Governor" in t3[0]) and not errs, [t3[0][:300], errs])
+    r4 = await pg.evaluate(WG, {"id": "lookouts", "c": [-80.02773, 45.33935], "z": 12, "l": ["fire-look-dot"]})
+    check("fire lookout towers draw on Lookouts & viewpoints, not Towers", r4["n"]>0, r4)
+    await pg.mouse.click(r4["x"], r4["y"])
+    await pg.wait_for_timeout(3000)
+    t4 = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("fire lookout tap shows the tower with a source link",
+          ("openstreetmap.org/" in t4[1] or "wikidata.org/" in t4[1]) and ("lookout" in t4[0].lower() or "Lookout" in t4[0] or "Scenic" in t4[0]) and not errs,
+          [t4[0][:300], errs])
+    st = await pg.evaluate("""()=>{const e=document.getElementById('status');e.textContent='Finding beaches…';
+      const s=getComputedStyle(e);const bg=s.backgroundColor;const m=/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/.exec(bg);
+      return {bg, color:s.color, display:s.display, pad:s.padding, dark:m&&+m[1]<40&&+m[2]<40&&+m[3]<50}}""")
+    check("phone status text sits on a dark pill so it reads over light tiles", st["dark"] and "rgb(255" in st["color"].replace(" ",""), st)
+    print("  camps_split", meta["cn"], r["n"], t[0][:80].replace("\n"," | "), r4["n"], t4[0][:80].replace("\n"," | "), flush=True)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

@@ -1,5 +1,5 @@
 // workspace/whereisthesun/tools/build-packs.js
-/* SUNNY build step (opt95): offline data packs for Campsites & lookouts and Historic plaques.
+/* SUNNY build step (opt95): offline data packs for Campsites & RV parks, Lookouts & viewpoints, and Historic plaques.
  * Source: OpenStreetMap via Overpass (ODbL), one query per province or state, retried patiently
  * when the servers are busy; raw answers are kept in a cache folder so a rerun resumes.
  * Plaques also merge the Ontario Heritage Trust plaque inventory (pdftotext -layout of the 2021
@@ -40,7 +40,7 @@ function usCode(s) {
   return "US-" + s;
 }
 var Q = {
-  camps: '(nwr["tourism"="camp_site"](area.a);nwr["man_made"="tower"]["tower:type"~"fire_lookout|observation"](area.a););',
+  camps: '(nwr["tourism"="camp_site"](area.a);nwr["tourism"="caravan_site"](area.a);nwr["tourism"="viewpoint"](area.a);nwr["man_made"="tower"]["tower:type"~"fire_lookout|observation"](area.a););',
   plaques: '(nwr["historic"~"^(plaque|blue_plaque|monument|memorial|fort|battlefield|castle|ruins|archaeological_site)$"]["name"](area.a);' +
     'nwr["memorial"="plaque"](area.a);nwr["tourism"="information"]["board_type"="history"](area.a););'
 };
@@ -92,13 +92,21 @@ function cut(s, n) {
 function r5(v) {
   return Math.round(v * 1e5) / 1e5;
 }
-/* rows: camps [lon, lat, name, kind c|l, backcountry 0|1, fee, website, operator, osm id like n123] */
+/* rows: camps [lon, lat, name, kind c|r|l|v, backcountry 0|1, fee, website, operator, osm id like n123] */
+function campKind(t) {
+  var tour = String(t.tourism || "");
+  if (/(^|;)viewpoint(;|$)/.test(tour)) return "v";
+  if (/(^|;)caravan_site(;|$)/.test(tour)) return "r";
+  if (t.man_made === "tower" && /fire_lookout|observation/.test(t["tower:type"] || "")) return "l";
+  if (/(^|;)camp_site(;|$)/.test(tour) && /\b(r\.?\s*v\.?|rv|trailer|caravan)\s+parks?\b/i.test(t.name || "")) return "r";
+  return "c";
+}
 function campRow(el) {
   var t = el.tags || {};
   var c = el.center || el;
-  var look = t.man_made === "tower";
-  var nm = t.name || (look ? (t["tower:type"] === "fire_lookout" ? "Fire lookout tower" : "Lookout tower") : "Campsite");
-  return [r5(c.lon), r5(c.lat), cut(nm, 80), look ? "l" : "c", t.backcountry === "yes" ? 1 : 0, cut(t.fee, 20), cut(t.website, 120), cut(t.operator, 60), el.type[0] + el.id];
+  var k = campKind(t);
+  var nm = t.name || (k === "v" ? "Viewpoint" : k === "r" ? "RV / trailer park" : k === "l" ? (t["tower:type"] === "fire_lookout" ? "Fire lookout tower" : "Lookout tower") : "Campsite");
+  return [r5(c.lon), r5(c.lat), cut(nm, 80), k, t.backcountry === "yes" ? 1 : 0, cut(t.fee, 20), cut(t.website, 120), cut(t.operator, 60), el.type[0] + el.id];
 }
 /* rows: plaques [lon, lat, name, kind, inscription, date, website, source o|h|p] */
 function plaqueRow(el) {

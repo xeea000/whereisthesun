@@ -337,7 +337,7 @@
   var tFilter = () => {
     return K.kids.inFilter(["slice", ["get", "k"], 0, 1], K.kids.activeCodes(TOWER_KIDS, (k) => { return k.code; }));
   };
-  /* opt219: legend lists only enabled kids (type + CA cell + fire lookout) */
+  /* opt219: legend lists only enabled kids (type + CA cell); fire lookouts moved to Lookouts in opt291 */
   var tLegend = () => {
     var rows = K.kids.active(TOWER_KIDS).map((k) => {
       var t = TT.filter((x) => { return x[0] === k.code; })[0];
@@ -345,7 +345,6 @@
     }).filter(Boolean);
     var html = rows.length ? K.legKeys(rows) : "";
     if (window.SunnyLayers && K.kids.layerOn(window.SunnyLayers.isOn("towers"), "towers-ca", true) && window.SunnyCaCell) html += window.SunnyCaCell.legend;
-    if (window.SunnyLayers && K.kids.layerOn(window.SunnyLayers.isOn("towers"), "towers-fl", true) && window.SunnyFireLook) html += window.SunnyFireLook.legend;
     return html;
   };
   var tColor = ["match", ["slice", ["get", "k"], 0, 1]].concat([].concat.apply([], TT.map((t) => [t[0], t[2]])), ["#ffc2a6"]);
@@ -427,7 +426,6 @@
   var tApply = (map, on) => {
     tMap = map;
     K.vis(map, ["tower-dot"], on && tTypeOn());
-    if (window.SunnyFireLook) window.SunnyFireLook.apply();
     if (window.SunnyCaCell) window.SunnyCaCell.apply(); /* opt159: Canadian cell sites (ca-cell.js) follow the Towers switch */
     if (!on) return;
     if (!map.getSource("w-towers")) {
@@ -449,11 +447,10 @@
     tLoad("big");
   };
   var tDetail = (f) => { var k = f.properties.t; return P.detail(tBase(k), tMeta[k], f.properties.i, V); };
-  L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot", "fire-look-dot"], apply: tApply,
+  L.add({ id: "towers", name: "Towers", icon: "🗼", group: "Transmission", taps: ["tower-dot", "ca-cell-dot"], apply: tApply,
     note: (map, on) => { return on && tOvLoading ? K.lod.note(true) : ""; },
     tip: "Broadcast masts, cell towers, microwave and other towers; bigger dot = taller. 150 m+ always; shorter towers as corridor clusters far out, each tower when closer. Types are guessed from the owner.",
-    kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true },
-      { id: "towers-fl", name: "Fire lookout towers", dflt: true }]),
+    kids: TT.map((t) => { return { id: "towers-" + t[0], name: t[1], dflt: true }; }).concat([{ id: "towers-ca", name: "Canada cell sites (ISED), by carrier", dflt: true }]),
     kidSet: () => {
       if (tMap && tMap.getLayer("tower-dot")) {
         tMap.setFilter("tower-dot", tFilter());
@@ -463,14 +460,12 @@
       else tView();
       if (K.magnitude) K.magnitude.request("towers");
       if (window.SunnyCaCell) window.SunnyCaCell.apply();
-      if (window.SunnyFireLook) window.SunnyFireLook.apply();
     },
     legend: () => {
       return (typeof tLegend === "function" ? tLegend() : tLegend) + (K.magnitude ? K.magnitude.legend("towers") : "");
     },
     attach: (map) => {
       if (window.SunnyCaCell) window.SunnyCaCell.attach(map);
-      if (window.SunnyFireLook) window.SunnyFireLook.attach(map);
       idle(map, "towers", "tower-dot", tApply);
       map.on("click", "tower-dot", (e) => {
         var f = e.features[0];

@@ -9,7 +9,9 @@ ICON = """()=>{const c=map.getContainer().getBoundingClientRect();
  for(const f of fs){const q=map.project(f.geometry.coordinates);if(q.y>100&&q.y<c.height-160&&q.x>70&&q.x<c.width-70&&
  document.elementFromPoint(c.left+q.x,c.top+q.y)===map.getCanvas())return {x:c.left+q.x,y:c.top+q.y}}return null}"""
 async def pointer_only(b):
+    from smoke_areawx import stand_in
     ctx, pg, errs = await T.boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"})
+    await pg.route("**/api.open-meteo.com/**", stand_in)
     await pg.evaluate("""()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click();
       map.jumpTo({center:[-79.45,43.63],zoom:10})}""")
     await pg.wait_for_timeout(1000)

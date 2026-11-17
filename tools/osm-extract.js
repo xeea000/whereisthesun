@@ -31,7 +31,8 @@ function usJob(k) {
 }
 var PLQ = /^(plaque|blue_plaque|monument|memorial|fort|battlefield|castle|ruins|archaeological_site)$/;
 function isCamp(t) {
-  return t.tourism === "camp_site" || (t.man_made === "tower" && /fire_lookout|observation/.test(t["tower:type"] || ""));
+  var tour = String(t.tourism || "");
+  return /(^|;)(camp_site|caravan_site|viewpoint)(;|$)/.test(tour) || (t.man_made === "tower" && /fire_lookout|observation/.test(t["tower:type"] || ""));
 }
 function isPlaque(t) {
   return (PLQ.test(t.historic || "") && t.name) || t.memorial === "plaque" || (t.tourism === "information" && t.board_type === "history");
@@ -61,7 +62,7 @@ function runJob(j) {
   var small = path.join(CACHE, iso + "-f.osm.pbf");
   var seq = path.join(CACHE, iso + ".geojsonseq");
   sh("curl", ["-sSfL", "--retry", "5", "-o", pbf, "https://download.geofabrik.de/" + j[1] + "-latest.osm.pbf"]);
-  sh("osmium", ["tags-filter", "-O", "-o", small, pbf, "nwr/tourism=camp_site,information", "nwr/tower:type", "nwr/historic", "nwr/memorial=plaque"]);
+  sh("osmium", ["tags-filter", "-O", "-o", small, pbf, "nwr/tourism=camp_site,caravan_site,viewpoint,information", "nwr/tower:type", "nwr/historic", "nwr/memorial=plaque"]);
   fs.unlinkSync(pbf);
   sh("osmium", ["export", "-O", "-f", "geojsonseq", "-u", "type_id", "-o", seq, small]);
   var camps = [];
