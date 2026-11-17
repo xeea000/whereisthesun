@@ -190,7 +190,7 @@
   };
   pointLayer({ id: "ghost", file: "ghost", name: "Ghost towns & abandoned places", icon: "🏚️", group: "History",
     tip: "Ghost towns and abandoned villages worldwide (Wikidata), with abandoned camps and settlements in Canada from OpenStreetMap. " +
-      "Ruins are under Historic plaques & sites",
+      "Ruins are under Ancient cities, ruins & digs and, in Canada, Historic plaques & sites",
     attrib: OSMA, src: ["Wikidata", "https://www.wikidata.org/"], srcOf: osmSrc,
     title: (r) => { return r.name || "Abandoned place"; },
     legend: K.legKeys([["#c9a27e", "dot", "ghost town or abandoned village"], ["#8d8d8d", "dot", "other abandoned place, Canada (camp, hamlet, farm…)"]]) +
@@ -200,6 +200,41 @@
       return [k === "t" ? "Ghost town or abandoned village" : "Abandoned place" + (r.kind ? " (" + K.esc(String(r.kind).replace(/_/g, " ")) + ")" : ""),
         r.date ? "Abandoned " + K.esc(r.date) : "", K.esc(r.desc), wikiOsm(r.wiki)];
     } });
+  /* t397u-t398u: ancient places and Viking sites (tools/build-ancient.js, Wikidata; OpenStreetMap adds runestones and Viking-tagged
+   * places), each place once; Heritage & ancient sites, Ghost towns and the Wars rows keep theirs */
+  var ANC = [["city", "Ancient city", "#ffb74d", 3], ["settle", "Ancient or prehistoric village", "#d7a86e", 2.4],
+    ["ruin", "Ruins", "#bcaaa4", 2.2], ["arch", "Archaeological site or dig", "#80cbc4", 2.2]];
+  var VIK = [["vsite", "Viking settlement, port, fort or grave", "#4fc3f7", 3], ["vstone", "Runestone or picture stone", "#b39ddb", 2.2]];
+  var ancSrc = (r) => {
+    if (r.qid) return ["Wikidata " + r.qid, "https://www.wikidata.org/wiki/" + r.qid];
+    var t = { n: "node", w: "way", r: "relation" }[String(r.osm || "").charAt(0)];
+    return ["OpenStreetMap (ODbL)", t ? "https://www.openstreetmap.org/" + t + "/" + String(r.osm).slice(1) : "https://www.openstreetmap.org/"];
+  };
+  var ancYear = (y) => {
+    if (y === "" || y == null || isNaN(+y)) return "";
+    return +y < 0 ? "Dated about " + (-y) + " BC (Wikidata)" : "Dated " + K.esc(y) + " (Wikidata)";
+  };
+  var ancLines = (r) => { return [K.esc(cap(r.kind)), ancYear(r.year), place(r), wikiLine(r) || wikiOsm(r.wiki)]; };
+  var ANCA = 'Ancient: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, ' +
+    '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
+  pointLayer({ id: "ancient", file: "ancient", name: "Ancient cities, ruins & digs", icon: "🏺", group: "History", kids: true,
+    tip: "Ancient cities, prehistoric and ancient villages no one lives in now, ruins, and archaeological sites with a Wikipedia article (Wikidata)",
+    attrib: ANCA, src: ["Wikidata", "https://www.wikidata.org/"], srcOf: ancSrc,
+    layers: ANC.map((a) => { return { id: "anc-" + a[0], codes: [a[0]], color: a[2], r: a[3], name: a[1] }; }), lines: ancLines });
+  pointLayer({ id: "vikings", file: "ancient", name: "Viking sites", icon: "🛡️", group: "History", kids: true,
+    tip: "Viking Age settlements, trading towns and ports, ring forts, ship graves and landing sites such as L'Anse aux Meadows, plus runestones (Wikidata, OpenStreetMap)",
+    attrib: ANCA, src: ["Wikidata", "https://www.wikidata.org/"], srcOf: ancSrc,
+    layers: VIK.map((a) => { return { id: "vik-" + a[0], codes: [a[0]], color: a[2], r: a[3], name: a[1] }; }), lines: ancLines });
+  /* t397u: expeditions: the Antarctic Treaty's Historic Sites and Monuments (huts, graves, landing places) and places that
+   * commemorate an expedition, a voyage of discovery or a first landing (Wikidata); no routes, as no mapped route data is free */
+  var EXPA = 'Expeditions: <a href="https://doi.org/10.5285/7a6fddc4-291c-4673-af87-0a040616e812" target="_blank" rel="noopener">British Antarctic Survey</a> (CC BY 4.0), Wikidata';
+  pointLayer({ id: "expeditions", file: "expeditions", name: "Expeditions & first landings", icon: "🧭", group: "History", kids: true,
+    tip: "Antarctic Historic Sites and Monuments (huts, graves and landing places of the polar expeditions) and places that mark an expedition, " +
+      "a voyage of discovery or a first landing, such as Plymouth Rock",
+    attrib: EXPA, src: ["Antarctic historic sites and monuments, British Antarctic Survey (CC BY 4.0)", "https://doi.org/10.5285/7a6fddc4-291c-4673-af87-0a040616e812"],
+    layers: [{ id: "exp-hsm", codes: ["hsm"], color: "#e1f5fe", r: 3, name: "Antarctic Historic Site or Monument" },
+      { id: "exp-land", codes: ["land"], color: "#ff8a65", r: 3, name: "Expedition or first landing place" }],
+    lines: (r) => { return [K.esc(cap(r.kind)), ancYear(r.year), place(r), K.esc(r.desc), wikiLine(r)]; } });
   /* t399u-t401u: Wars under History (tools/build-wars.js, Wikidata): battles, landings, forts and bunkers, memorials, war cemeteries
    * and other places that are part of a war. Each war, or group of wars, is its own row with one switch per kind;
    * each place is on one row only, and places already on Heritage & ancient sites stay there */
