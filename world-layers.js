@@ -448,6 +448,26 @@
     }).catch(() => {});
     return "<b>" + K.esc(o.name) + "</b>";
   };
+  /* t404u: Wi-Fi spots in Canada (tools/osm-wifi.py, tools/build-wifi.js): OpenStreetMap places with internet access, by fee,
+   * plus Ville de Montréal MTLWiFi spots not already on OpenStreetMap */
+  var WIFI = [["f", "Free", "#43a047"], ["c", "Free for customers or students", "#29b6f6"], ["p", "Paid", "#ef6c00"],
+    ["u", "Fee not stated", "#9e9e9e"], ["m", "MTLWiFi, City of Montréal (free)", "#00e5a0"]];
+  var FEE_TXT = { no: "Free", customers: "Free for customers", students: "Free for students", yes: "Paid" };
+  var WIFIA = 'Wi-Fi: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, ' +
+    '<a href="https://donnees.montreal.ca/dataset/couverture-du-reseau-wifi-mtlwifi" target="_blank" rel="noopener">Ville de Montréal</a> (CC BY 4.0; spots already on OpenStreetMap left out)';
+  pointLayer({ id: "wifi", file: "wifi", name: "Wi-Fi spots, Canada", icon: "🛜", group: "Transmission", kids: true,
+    tip: "Cafés, libraries, hotels and other places in Canada with Wi-Fi, by fee (OpenStreetMap), and the City of Montréal's free MTLWiFi spots",
+    attrib: WIFIA, src: ["OpenStreetMap (ODbL)", "https://www.openstreetmap.org/"],
+    srcOf: (r) => {
+      if (r.osm) return ["OpenStreetMap " + r.osm, "https://www.openstreetmap.org/" + r.osm];
+      return ["Ville de Montréal, MTLWiFi (CC BY 4.0)", "https://donnees.montreal.ca/dataset/couverture-du-reseau-wifi-mtlwifi"];
+    },
+    title: (r) => { return r.name || "Wi-Fi spot"; },
+    layers: WIFI.map((w) => { return { id: "wifi-" + w[0], codes: [w[0]], color: w[2], r: 2.4, name: w[1] }; }),
+    lines: (r) => {
+      return [K.esc(cap(r.kind)), "Wi-Fi: " + (FEE_TXT[r.fee] || "fee not stated"), r.op ? "Run by " + K.esc(r.op) : "",
+        r.ssid ? "Network " + K.esc(r.ssid) : "", K.esc(r.city)];
+    } });
   pointLayer({ id: "radioscopes", file: "transmission", name: "Radio telescopes", icon: "📡", group: "Transmission",
     tip: "Radio telescopes and arrays (Wikidata)", attrib: TXA, src: ["Wikidata", "https://www.wikidata.org/"],
     layers: [{ id: "tx-scope", codes: ["scope"], color: "#c08bff", r: 3.2 }], lines: txLines("Opened") });
