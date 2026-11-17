@@ -1,15 +1,12 @@
 // workspace/whereisthesun/hover-tips.js
-/* SUNNY desktop hover tooltips (opt100). Only on mouse devices (hover:hover and pointer:fine).
- * opt102: other modules may supply a label via window.SunnyHoverExt(feature, update).
- * Shows name and type of the map feature or button under the mouse, from data already loaded (no fetch). */
+/* SUNNY desktop hover (opt100). Only on mouse devices (hover:hover and pointer:fine).
+ * t417u: hover opens nothing. Over a map item that a click would open, the cursor turns into a hand.
+ * SunnyHoverTip.label(feature, update) still names an item (name and type, from loaded data); modules may
+ * add names via window.SunnyHoverExt(feature, update). Buttons get a title for the browser tooltip. */
 (() => {
   "use strict";
   if (!window.matchMedia || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
   var SKIP = { ofm: 1, "iem-vis": 1, "sky-grid": 1, "sunh-omt": 1 }, SKIPL = { "sky-night": 1, "sky-grid-line": 1 };
-  var tip = document.createElement("div");
-  tip.id = "hover-tip";
-  tip.style.cssText = "position:fixed;z-index:9999;pointer-events:none;display:none;max-width:260px;padding:4px 8px;" +
-    "border-radius:6px;background:rgba(20,24,32,.92);color:#fff;font:12px/1.35 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35)";
   var esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   var nice = (s) => String(s || "")
     .replace(/^(w|pack)-/, "").replace(/[-_]+/g, " ").replace(/\b(dot|dots|sym|pts|fill|line|layer)\b/g, "").trim().replace(/^./, (c) => c.toUpperCase());
@@ -31,40 +28,30 @@
     "obs-cluster": (p) => [p.point_count + " places", "Observatories · tap cluster"],
     "storm-track": (p) => [(p.n || "Storm") + (p.y ? " " + p.y : ""), "Storm track"]
   };
-  var show = (x, y, html) => {
-    tip.innerHTML = html; tip.style.display = "block";
-    var w = tip.offsetWidth, h = tip.offsetHeight;
-    tip.style.left = Math.max(4, Math.min(x - w / 2, innerWidth - w - 4)) + "px";
-    tip.style.top = (y - h - 12 < 4 ? Math.min(y + 18, innerHeight - h - 4) : y - h - 12) + "px";
-  };
-  var hide = () => { tip.style.display = "none"; cur = ""; };
-  var cur = "", lx = 0, ly = 0; /* opt102: async labels (SunnyHoverExt) only refresh the tip still under the mouse */
-  var label = (f) => {
-    var ex = window.SunnyHoverExt && window.SunnyHoverExt(f, (html) => { if (cur === f.layer.id + ":" + (f.properties || {}).i) show(lx, ly, html); });
+  var label = (f, upd) => {
+    upd = upd || (() => {});
+    var ex = window.SunnyHoverExt && window.SunnyHoverExt(f, upd);
     if (ex) return ex;
     var cp = f.properties || {}, src = window.map && f.source && window.map.getSource(f.source);
     if (cp.cluster_id != null && cp.point_count <= 4 && src && src.getClusterLeaves) { /* opt172: small cluster hover lists the real names */
-      var ck = f.layer.id + ":" + cp.i;
       var lf = (window.SunnyLeafName || {})[f.source]; /* optional per-source resolver: props => Promise<name> */
       Promise.resolve(src.getClusterLeaves(cp.cluster_id, 4, 0)).then((lv) => Promise.all((lv || []).map((x) => {
         var q = x.properties || {}; return q.name || q.n || (lf ? lf(q).catch(() => "") : ""); }))).then((ns) => {
         ns = ns.filter(Boolean);
-        if (ns.length && cur === ck) show(lx, ly, "<b>" + ns.map(esc).join("<br>") + "</b><br><small>" + esc(cp.point_count + " places · tap cluster") + "</small>");
+        if (ns.length) upd("<b>" + ns.map(esc).join("<br>") + "</b><br><small>" + esc(cp.point_count + " places · tap cluster") + "</small>");
       }).catch(() => {});
     }
-    var reg = window.SunnyHoverName && window.SunnyHoverName[f.layer.id], key = f.layer.id + ":" + (f.properties || {}).i;
+    var reg = window.SunnyHoverName && window.SunnyHoverName[f.layer.id];
     if (reg) { /* async name from the layer's detail file; the hint shows until it arrives */
-      reg(f).then((r) => { if (r && cur === key) show(lx, ly, "<b>" + esc(r[0]) + "</b><br><small>" + esc(r[1]) + "</small>"); }).catch(() => {});
+      reg(f).then((r) => { if (r) upd("<b>" + esc(r[0]) + "</b><br><small>" + esc(r[1]) + "</small>"); }).catch(() => {});
       return "<b>" + esc((window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id)) + "</b>";
     }
     var own = OWN[f.layer.id] && OWN[f.layer.id](f.properties || {});
     if (own) return "<b>" + esc(own[0]) + "</b><br><small>" + esc(own[1]) + "</small>";
-    var hb = window.SunnyHoverBox && window.SunnyHoverBox.label(f.layer.id);
     var p = f.properties || {};
     var name = p.name || p.n || p.title || p.NAME || p.Name || p.label || p.nm || "";
     if (typeof name !== "string" || name.length < 2) name = "";
     /* the item's own name first; the layer's short label is only a type hint, or the title when there is no name */
-    if (hb) return name ? "<b>" + esc(name) + "</b><br><small>" + esc(hb) + "</small>" : "<b>" + esc(hb) + "</b>";
     if (f.layer.id === "famous-star") return "<b>" + esc(name) + "</b><br><small>Famous</small>";
     var type = (window.SunnyLayers && window.SunnyLayers.nameOf && window.SunnyLayers.nameOf(f.layer.id)) || nice(f.layer.id) || nice(f.source); /* opt105 */
     if (p.point_count) return "<b>" + p.point_count + " places</b><br><small>" + esc(type) + " · tap cluster</small>";
@@ -75,9 +62,8 @@
   var hook = () => {
     var m = window.map;
     if (!m || !m.on || !m.getCanvas) return setTimeout(hook, 500);
-    document.body.appendChild(tip);
     var cv = m.getCanvas(), dragging = false, raf = 0;
-    m.on("dragstart", () => { dragging = true; hide(); });
+    m.on("dragstart", () => { dragging = true; });
     m.on("dragend", () => { dragging = false; });
     var le = null; /* the last move wins: a move during a pending frame is not dropped */
     m.on("mousemove", (ev) => {
@@ -96,24 +82,13 @@
         if (f && f.layer.id === "famous-star") { /* opt166: the star stands for the dot under it; name that dot, as a tap does */
           var dot = ok.find((g) => g !== f && g.layer.type === "circle"); if (dot) f = dot;
         }
-        if (f && f.layer.id === "sunh-hit" && window.SunnySunHours) { /* the value under the pointer, not a name */
-          var sv = window.SunnySunHours.at(m.unproject(e.point));
-          if (sv == null) { hide(); return; }
-          var st = "<b>About " + window.SunnySunHours.fmt(sv) + " of direct sun today</b><br><small>Sun hours estimate</small>";
-          return show(e.originalEvent.clientX, e.originalEvent.clientY, st);
-        }
-        if (!f && window.SunnyAurora) {
-          var ll = m.unproject(e.point), v = window.SunnyAurora.at(ll.lng, ll.lat);
-          if (v >= 5) { cv.style.cursor = "pointer"; return show(e.originalEvent.clientX, e.originalEvent.clientY, "<b>Aurora chance " + Math.round(v) + " %</b><br><small>NOAA aurora forecast</small>"); }
-        }
-        if (!f) { hide(); cv.style.cursor = ""; return; }
-        cv.style.cursor = "pointer";
-        cur = f.layer.id + ":" + (f.properties || {}).i; lx = e.originalEvent.clientX; ly = e.originalEvent.clientY;
-        show(e.originalEvent.clientX, e.originalEvent.clientY, label(f));
+        /* t417u: hover never opens anything; a hand cursor says a click here opens a card */
+        var aur = false;
+        if (!f && window.SunnyAurora) { var ll = m.unproject(e.point); aur = window.SunnyAurora.at(ll.lng, ll.lat) >= 5; }
+        cv.style.cursor = f || aur ? "pointer" : "";
       });
     });
-    cv.addEventListener("mouseleave", () => { hide(); cv.style.cursor = ""; });
-    m.on("movestart", hide);
+    cv.addEventListener("mouseleave", () => { cv.style.cursor = ""; });
   };
   /* Buttons: give a title from aria-label or text, so the browser shows its own tooltip. */
   var titles = () => {

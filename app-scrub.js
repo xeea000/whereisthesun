@@ -154,7 +154,6 @@ function sunnyStep14() {
       if (!e.features || !e.features.length) return;
       var b = beachById(e.features[0].properties.id);
       if (!b) return;
-      if (dwellTimer) clearTimeout(dwellTimer);
       enrichBeach(b);
     });
   });

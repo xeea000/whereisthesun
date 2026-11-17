@@ -84,7 +84,7 @@
     var orig = M.prototype.fire, on = M.prototype.on;
     Object.assign(M.prototype, {
       fire(ev, props) {
-        var c = typeof ev === "string" ? props : ev; /* hover-box fires ("click", props) */
+        var c = typeof ev === "string" ? props : ev; /* fire("click", props) form */
         if (c && typeof c === "object" && (c.type === "click" || ev === "click") && c.point) {
           try { snap(this, c); } catch (e) {}
         }

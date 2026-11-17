@@ -716,7 +716,7 @@ BEACH_FLOW = """async()=>{const s=t=>new Promise(r=>setTimeout(r,t));map.jumpTo(
   document.getElementById('lp-tab').click();await s(1000);const st=()=>document.getElementById('status').textContent;
   const sun=document.getElementById('toggle-sunny');if(!sun.checked){sun.checked=true;sun.dispatchEvent(new Event('change'))}
   document.getElementById('btn-sun').click();for(let i=0;i<40&&!/sunny beach|No beaches/.test(st());i++)await s(500);const a=st();
-  sun.checked=false;sun.dispatchEvent(new Event('change'));for(let i=0;i<40&&!/beach(es)? found/.test(st());i++)await s(500);const b=st();
+  sun.checked=false;sun.dispatchEvent(new Event('change'));for(let i=0;i<40&&!/beach(es)? found|Nearest:/.test(st());i++)await s(500);const b=st();
   const shown=SunnyBeachToggle.isShown();document.getElementById('btn-all').click();
   let n=0;for(let i=0;i<40&&!n;i++){await s(500);n=map.getLayer('beaches-sun')?map.queryRenderedFeatures({layers:['beaches-sun']}).length:0}
   return {a,b,shown,n,all:st()}}"""
@@ -727,7 +727,7 @@ async def beach_flow(b):
     await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
     r = await pg.evaluate(BEACH_FLOW)
     check("Find beaches with Sunny only reports sunny beaches or how to see the nearest", "sunny beach" in r["a"] or "Turn off Sunny only" in r["a"], r)
-    check("turning Sunny only off runs Find again and lists the nearest beaches", "found" in r["b"] and r["shown"], r)
+    check("turning Sunny only off runs Find again and lists the nearest beaches", ("found" in r["b"] or "Nearest:" in r["b"]) and r["shown"], r)
     check("All beaches draws beach weather icons, no page errors", r["n"] > 0 and not errs, [r, errs])
     await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
@@ -736,6 +736,7 @@ CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();r
   return {open:at.classList.contains('maplibregl-compact-show'),btn:!!btn,lagHit:hit(btn,lag),fpsHit:hit(btn,R(fps)),
     fpsShown:getComputedStyle(fps).visibility!=='hidden',osm:!!at.querySelector('a[href*="openstreetmap.org/copyright"]'),
     text:at.querySelector('.maplibregl-ctrl-attrib-inner').textContent}}"""
+from smoke_pointer import pointer_only
 async def credits(b):
     """t390u: map credits sit behind one small "i" button, closed at load on phone and desktop, clear of the Lag-O-Meter and
     FPS; a tap shows every credit with its links."""
@@ -755,7 +756,7 @@ async def credits(b):
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

@@ -176,8 +176,6 @@
           fs.length > 1 ? "Also here: " + fs.slice(1).map((q) => { return K.esc(q.date); }).join(", ") : ""], ["NASA GSFC eclipse page", eclUrl(p.date)]];
       };
       map.on("click", "eclipse-fill", (e) => { var c = eclCard(e.features); K.show(map, e.lngLat, c[0], c[1], c[2]); });
-      if (window.SunnyHoverBox) window.SunnyHoverBox.add({ "eclipse-centre": "Eclipse centre line", "eclipse-fill": "Eclipse path", "eclipse-line": "Eclipse path" },
-        (fs) => { var p = fs.filter((f) => f.layer.id === "eclipse-fill"), c = eclCard(p.length ? p : fs); return K.card(c[0], c[1], c[2]); });
       eclApply(map, on);
     } });
 })();

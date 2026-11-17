@@ -596,19 +596,12 @@
     var f = e.features[0];
     var b = beachById(f.properties.id);
     if (!b) return;
-    map.getCanvas().style.cursor = "pointer";
-    if (hoverId === b.id) return;
-    setHover(b.id);
-    showPopup(b, e.lngLat);
-    if (dwellTimer) clearTimeout(dwellTimer);
-    dwellTimer = setTimeout(() => {
-      enrichBeach(b);
-    }, DWELL_MS);
+    map.getCanvas().style.cursor = "pointer"; /* t417u: hover only marks the beach; its card opens on a click */
+    if (hoverId !== b.id) setHover(b.id);
   }
   function onBeachLeave() {
     map.getCanvas().style.cursor = "";
     setHover(null);
-    if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; }
   }
   function beachCountryCode(b) {
     if (b && b.country) {

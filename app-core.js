@@ -2,13 +2,13 @@
 /* SUNNY app, part 1 of 14: status line, distance helpers, GOES satellite time and shared settings.
  * Names here are page-wide and shared by every app-*.js file; startSunny in app.js runs each part's step in order. */
 "use strict";
-var st, BEACH_RADIUS_M, BEACH_CAP, SUNNY_CLOUD, SUNNY_PICK_CAP, DWELL_MS, PLAY_MS, FRAME_MIN;
+var st, BEACH_RADIUS_M, BEACH_CAP, SUNNY_CLOUD, SUNNY_PICK_CAP, PLAY_MS, FRAME_MIN;
 var HOURS_BACK, PLAY_WINDOW_MS, SLIDER_RES, METEO_URL, WIKI_URL, GEOCODE_URL, statusEl, btnLocate;
 var btnAll, btnSun, toggleSunny, sunnySheet, sunnySheetTitle, sunnySheetList, sunnySheetSub, sunnySheetClose;
 var btnPlay, btnSpeed, toggleLoop, loopBtn, playSpeedEl, slider, timeLabel, timeTicksEl;
 var cloudOpacityEl, toggleMap, toggleIntl, toggleWind, windVisInput, WIND_VIS_KEY, WIND_VIS_DEFAULT, windVisK;
 var overlaySeg, rangeSeg, sunnyApp_origin, homeCountry, beaches, waitingForTap, locateWatchId, locateDeadlineTimer;
-var userMarker, destMarker, popup, hoverId, dwellTimer, playTimer, cloudTimes, cloudIndex;
+var userMarker, destMarker, popup, hoverId, playTimer, cloudTimes, cloudIndex;
 var hourlyCache, currentWxCache, CURRENT_WX_TTL_MS, wikiCache, cloudOpacity, _co, searchingSunny, overlayIds;
 var BASEMAP_KEY, OPACITY_KEY, LABELS_KEY, INTL_KEY, RADAR_KEY, OVERLAY_KEY, WIND_KEY, LOOP_KEY;
 var overlayNone = false; /* opt96/opt201: Clouds and Radar both off; fresh profile starts none */
@@ -399,7 +399,6 @@ function sunnyStep01() {
   BEACH_CAP = 60;
   SUNNY_CLOUD = 20;
   SUNNY_PICK_CAP = 12;
-  DWELL_MS = 850;
   PLAY_MS = 450;
   FRAME_MIN = 10;
   HOURS_BACK = 24;
@@ -462,7 +461,6 @@ function sunnyStep01() {
   destMarker = null;
   popup = null;
   hoverId = null;
-  dwellTimer = null;
   playTimer = null;
   cloudTimes = [];
   cloudIndex = 0;
