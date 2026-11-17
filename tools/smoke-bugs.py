@@ -669,6 +669,22 @@ async def smells(b):
     check("smells tap shows the source, its strength and source link", "openstreetmap.org/" in t[1] and "strength" in t[0] and not errs, [t[0][:300], errs])
     print("  ", r["n"], pl, t[0][:200].replace("\n", " | "), flush=True)
     await ctx.close()
+async def reefs(b):
+    """t397u: Coral bleaching watch and Reefs & underwater sit in Ocean, off at start, draw their places, and a tap shows the NOAA alert or
+    the reef with its source link (390 px)."""
+    for lid, ids, c, z, want in [("bleaching", ["crw-%d" % i for i in range(5)], [146.5, -18.5], 5, "coralreefwatch.noaa.gov"),
+                                 ("reefs", ["reef-" + k for k in ["coral", "atoll", "reef", "hole", "kelp", "seep"]], [73.2, 3.5], 6, "wikidata.org/wiki/Q")]:
+        ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=390)
+        await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+        off = await pg.evaluate("async(id)=>{await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id===id);return [d.group,SunnyLayers.isOn(id)]}", lid)
+        r = await pg.evaluate(WG, {"id": lid, "c": c, "z": z, "l": ids})
+        check(lid + " in Ocean, off at start, draws its places", off == ["Ocean", False] and r["n"] > 0, [off, r["n"]])
+        await pg.mouse.click(r["x"], r["y"])
+        await pg.wait_for_timeout(3000)
+        t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+        check(lid + " tap shows the place with its source link", want in t[1] and not errs, [t[0][:300], errs])
+        print("  ", lid, r["n"], t[0][:220].replace("\n", " | "), flush=True)
+        await ctx.close()
 CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height?[r.left,r.top,r.right,r.bottom]:null};
   const hit=(a,b)=>!!(a&&b&&a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3]);const at=document.querySelector('.maplibregl-ctrl-attrib');
   const btn=R(at.querySelector('.maplibregl-ctrl-attrib-button'));const lag=R(document.querySelector('lag-o-meter'));const fps=document.getElementById('fps');
@@ -694,7 +710,7 @@ async def credits(b):
         await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
