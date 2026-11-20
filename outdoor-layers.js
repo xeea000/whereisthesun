@@ -161,7 +161,8 @@
     { id: "camps-rv", name: "RV / trailer parks", dflt: true, kinds: ["r"], color: "#c36b1e" }
   ];
   packLayer({ id: "camps", name: "Campsites & RV parks", icon: "⛺", group: "Outdoors", cuts: K.lod.CUT_PACK, attr: OSM_ATTR,
-    tip: "Campgrounds and backcountry sites (OpenStreetMap), saved per province or region, plus RV and trailer parks in Canada from the same map. Overview clusters far out; each place when closer. Switches for campsites and RV parks",
+    tip: "Campgrounds and backcountry sites (OpenStreetMap), saved per province or region, plus RV and trailer parks in " +
+      "Canada from the same map, and campsites in Iceland. Overview clusters far out; each place when closer. Switches for campsites and RV parks",
     kids: CAMP_KIDS,
     kinds: ["c", "r"],
     paint: { "circle-radius": K.size({ stops: [[2, 2.5], [7, 4], [15, 7]], cluster: { prop: "sites", max: 1.6 } }),
@@ -177,7 +178,8 @@
     } });
   packLayer({ id: "lookouts", file: "camps", name: "Lookouts & viewpoints", icon: "🌄", group: "Outdoors", cuts: K.lod.CUT_PACK,
     attr: OSM_ATTR + ', <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>',
-    tip: "Lookout towers and viewpoints (OpenStreetMap), plus fire lookout towers worldwide (OpenStreetMap and Wikidata). Viewpoints are mapped in Canada; towers also cover the United States. Overview clusters far out; each place when closer",
+    tip: "Lookout towers and viewpoints (OpenStreetMap), plus fire lookout towers worldwide (OpenStreetMap and Wikidata). " +
+      "Viewpoints are mapped in Canada and Iceland; towers also cover the United States. Overview clusters far out; each place when closer",
     kinds: ["l", "v"], taps: ["fire-look-dot"],
     paint: { "circle-radius": K.size({ stops: [[2, 2.5], [7, 4], [15, 7]], cluster: { prop: "sites", max: 1.6 } }),
       "circle-color": ["match", ["get", "k"], "v", "#2a7de0", "#e0482a"],
