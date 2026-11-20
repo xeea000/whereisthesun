@@ -259,39 +259,23 @@ var labelsIdleHealArmed, labelsHealBusy;
   function applyHires() {
     if (tabHidden || playMode || radarOn() || overlayXfadeActive) return;
     removeLegacyDailyHires();
-    var z = map.getZoom();
     var atNow = !cloudTimes.length || playheadFrac >= sliderMax() - 1e-6 || cloudIndex >= sliderMax();
     var ll = cloudLonLat();
     var daytime = isVisDaytime(ll.lon, ll.lat);
-    /*
-     * opt33 XOR cloud picture (stop muddy dual-blend):
-     * - Far / night / scrub history: GeoColor only @ gibsEffectiveOpacity()
-     * - Zoomed NOW + daytime: IEM VIS primary (~0.85–0.95×slider), GeoColor down/out
-     * Short crossfade from ~z5.5 → z6.5 once daytime.
-     */
-    var IEM_Z0 = 5.5;
-    var IEM_Z1 = 6.5;
-    var wantIem = atNow && daytime && z >= IEM_Z0;
+    /* opt293: daylight uses the latest 1 km visible tiles (IEM) at every zoom. GeoColor is
+     * hidden while those tiles are on, so a softer picture is not left on top. After dark,
+     * during Play history, and when the sun is too low, GeoColor is the only picture. */
+    var wantIem = atNow && daytime;
     if (wantIem) {
       addHiresSources();
-      var t = Math.max(0, Math.min(1, (z - IEM_Z0) / (IEM_Z1 - IEM_Z0)));
-      t = t * t * (3 - 2 * t); /* smoothstep */
-      var iemTarget = Math.min(0.95, 0.85 + 0.10 * t) * cloudOpacity;
-      var iemOp = iemTarget * (0.20 + 0.80 * t); /* rise into primary */
-      var gibsOp = gibsEffectiveOpacity() * (1 - t);
-      if (t >= 0.92) gibsOp = 0;
+      var iemOp = 0.95 * cloudOpacity;
       if (map.getLayer("iem-vis")) {
-        map.setLayoutProperty("iem-vis", "visibility", iemOp > 0.02 ? "visible" : "none");
+        map.setLayoutProperty("iem-vis", "visibility", "visible");
         applyCloudPaintMain("iem-vis", iemOp);
       }
       if (map.getLayer(GIBS_LAYER)) {
-        if (gibsOp <= 0.02) {
-          try { map.setLayoutProperty(GIBS_LAYER, "visibility", "none"); } catch (eHideG) {}
-          applyCloudPaint(GIBS_LAYER, 0);
-        } else {
-          try { map.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eShowG) {}
-          applyCloudPaint(GIBS_LAYER, gibsOp);
-        }
+        try { map.setLayoutProperty(GIBS_LAYER, "visibility", "none"); } catch (eHideG) {}
+        applyCloudPaint(GIBS_LAYER, 0);
       }
     } else {
       ["iem-vis"].forEach((id) => {

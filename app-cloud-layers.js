@@ -122,6 +122,10 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
   }
   function applyCloudSolidMode() {
     /* opt63: one cloud-only look for Play and static (cloud-key.js); no blend-mode switch */
+    /* opt293: when the 1 km visible layer is on, leave GeoColor hidden */
+    var iemOn = false;
+    try { iemOn = !!(map && map.getLayer("iem-vis") && map.getLayoutProperty("iem-vis", "visibility") === "visible"); } catch (eI) {}
+    if (iemOn) return;
     if (map && map.getLayer(GIBS_LAYER) && !playMode) {
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
     }
