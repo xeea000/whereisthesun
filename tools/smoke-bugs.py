@@ -741,6 +741,73 @@ CRED = """()=>{const R=e=>{if(!e)return null;const r=e.getBoundingClientRect();r
     text:at.querySelector('.maplibregl-ctrl-attrib-inner').textContent}}"""
 from smoke_pointer import pointer_only
 from smoke_areawx import area_wx
+
+async def land_value(b):
+    """t435u: Land value sits in Human impact, off at start, has a legend with source and year, draws the
+    overview at low zoom and each area at z7+, a tap shows a real assessed or census figure with its source,
+    blank ground is no data, and the layer still draws with the Stinky map on (under the plume)."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"})
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    off = await pg.evaluate("""async()=>{await SunnyLayerLazy.load();const d=SunnyLayers.defs().find(d=>d.id==='landvalue');
+      return [d&&d.group, d&&SunnyLayers.isOn('landvalue'), typeof d.legend==='function'?d.legend():(d&&d.legend)||'']}""")
+    check("land value in Human impact, off at start", off[0] == "Human impact" and off[1] is False, off[:2])
+    # overview at Canada z4
+    ov = await pg.evaluate("""async()=>{const s=t=>new Promise(r=>setTimeout(r,t));
+      map.jumpTo({center:[-96,56],zoom:4});SunnyLayers.set('landvalue',true);
+      for(let i=0;i<30;i++){if(map.getLayer('land-ov-land-raster')&&map.getLayoutProperty('land-ov-land-raster','visibility')!=='none')break;await s(400)}
+      await s(800);
+      const vis=id=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';
+      const d=SunnyLayers.defs().find(d=>d.id==='landvalue');
+      return {ov:vis('land-ov-land-raster'),fill:!!map.getLayer('land-fill')&&vis('land-fill'),
+        leg:typeof d.legend==='function'?d.legend():'',note:typeof d.note==='function'?d.note():''}}""")
+    leg = (ov.get("leg") or "") + (off[2] or "")
+    check("land value overview draws at z4", ov["ov"] is True, ov)
+    low = leg.lower()
+    check("land value legend cites Quebec 2026, Vancouver 2025, FHFA 2022, Census 2021, and no data",
+          "quebec" in low and "2026" in leg and "vancouver" in low and "2025" in leg
+          and ("fhfa" in low or "2022" in leg) and "2021" in leg and "census" in low
+          and ("no data" in low or "blank" in low), leg[-500:])
+    # Montreal Ville-Marie: real land value, tap card
+    card = await pg.evaluate("""async()=>{const s=t=>new Promise(r=>setTimeout(r,t));
+      map.jumpTo({center:[-73.56513,45.50157],zoom:12});
+      for(let i=0;i<40;i++){const n=map.getLayer('land-fill')?map.queryRenderedFeatures({layers:['land-fill']}).length:0;if(n>0)break;await s(500)}
+      await s(800);
+      const n=map.getLayer('land-fill')?map.queryRenderedFeatures({layers:['land-fill']}).length:0;
+      const vis=id=>!!map.getLayer(id)&&map.getLayoutProperty(id,'visibility')!=='none';
+      return {n,ov:vis('land-ov-land-raster'),fill:vis('land-fill')}}""")
+    check("land value fills draw in Montreal at z12 and the overview is off", card["n"] > 0 and card["fill"] and not card["ov"], card)
+    pt = await pg.evaluate("()=>{const p=map.project([-73.56513,45.50157]);const r=map.getContainer().getBoundingClientRect();return [r.left+p.x,r.top+p.y]}")
+    await pg.mouse.click(pt[0], pt[1])
+    await pg.wait_for_timeout(3000)
+    t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c&&!c.hidden?[c.innerText,c.innerHTML]:['','']}")
+    lowt = (t[0] or "").lower()
+    check("land value tap shows a Quebec land figure, CAD per m², market date and source link",
+          "per m" in lowt and ("cad" in lowt or "$" in t[0]) and "donneesquebec.ca" in (t[1] or "")
+          and "no data" not in lowt and not errs, [t[0][:400], errs])
+    # Stinky map together: a Montreal landfill, land stays under the plume
+    both = await pg.evaluate("""async()=>{const s=t=>new Promise(r=>setTimeout(r,t));
+      SunnyLayers.set('smells',true);
+      map.jumpTo({center:[-73.62727,45.51842],zoom:12});
+      let pl=0,n=0;
+      for(let i=0;i<40;i++){
+        n=map.getLayer('land-fill')?map.queryRenderedFeatures({layers:['land-fill']}).length:0;
+        pl=map.getLayer('smell-plume-fill')?map.queryRenderedFeatures({layers:['smell-plume-fill']}).length:0;
+        if(n>0&&(pl>0||map.getLayer('smell-landfill')))break;await s(500)
+      }
+      await s(1500);
+      n=map.getLayer('land-fill')?map.queryRenderedFeatures({layers:['land-fill']}).length:0;
+      pl=map.getLayer('smell-plume-fill')?map.queryRenderedFeatures({layers:['smell-plume-fill']}).length:0;
+      const ids=map.getStyle().layers.map(l=>l.id);
+      const li=ids.indexOf('land-fill'), pi=ids.indexOf('smell-plume-fill');
+      const badges=['smell-landfill','smell-sewage','smell-manure','smell-pulp','smell-meat','smell-refinery','smell-compost','smell-sulphur'];
+      const bn=badges.filter(id=>map.getLayer(id)).reduce((a,id)=>a+map.queryRenderedFeatures({layers:[id]}).length,0);
+      return {n,pl,bn,order:li+' < '+pi,under:li>=0&&pi>=0?li<pi:null,landOn:SunnyLayers.isOn('landvalue'),smellOn:SunnyLayers.isOn('smells')}}""")
+    check("land value and Stinky map both stay on and draw, land under the plume",
+          both["landOn"] and both["smellOn"] and both["n"] > 0 and (both["pl"] > 0 or both["bn"] > 0)
+          and (both["under"] is True or both["pl"] <= 0), both)
+    print("  ", card, t[0][:180].replace("\n"," | ") if t else "", both, flush=True)
+    await ctx.close()
+
 from smoke_taps import taps_card
 async def credits(b):
     """t390u: map credits sit behind one small "i" button, closed at load on phone and desktop, clear of the Lag-O-Meter and
@@ -821,7 +888,7 @@ async def camps_split(b):
     await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, taps_card]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, land_value, taps_card]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:
