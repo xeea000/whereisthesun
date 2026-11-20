@@ -67,26 +67,22 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     if (!iso || typeof iso !== "string") return;
     var ms = goesIsoMs(iso);
     if (!isFinite(ms)) return;
-    if (ms > goesWallLatestMs()) return;
+    if (ms > Date.now()) return;
     goesLastGoodIso = iso;
     goesTimeCache = { iso: iso, t: Date.now() };
   }
   function goesLatestIsoSync() {
-    var wallMs = goesWallLatestMs();
-    var wallIso = toGoesIso(wallMs);
-    /* opt40: once probed, NEVER tip newer than last successful slot */
+    /* opt294: a probed slot is the tip, including when it is newer than wall minus 55
+     * minutes. A 55-minute lag can land on a 10-minute hole. */
     if (goesLastGoodIso) {
       var gMs = goesIsoMs(goesLastGoodIso);
-      if (isFinite(gMs)) {
-        var tipMs = Math.min(gMs, wallMs);
-        return toGoesIso(tipMs);
-      }
+      if (isFinite(gMs) && gMs <= Date.now()) return goesLastGoodIso;
     }
     if (goesTimeCache && goesTimeCache.iso) {
       var cMs = goesIsoMs(goesTimeCache.iso);
-      if (isFinite(cMs) && cMs <= wallMs) return goesTimeCache.iso;
+      if (isFinite(cMs) && cMs <= Date.now()) return goesTimeCache.iso;
     }
-    return wallIso;
+    return toGoesIso(goesWallLatestMs());
   }
   /* opt243: GIBS skips some GOES slots (for example 13:40 and 13:50 missing between 13:30 and 14:00) and can
    * publish more than 55 min late, so a plain 10-min grid asked for frames that do not exist (404 tiles).
@@ -177,7 +173,8 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     var y = 6;
     var x = (lon != null && lon <= -105) ? 2 : 4;
     return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer +
-      "/default/" + iso + "/GoogleMapsCompatible_Level7/" + z + "/" + y + "/" + x + ".png";
+      "/default/" + iso + "/GoogleMapsCompatible_Level7/" + z + "/" + y + "/" + x +
+      ".png?sunnyprobe=1";
   }
   function probeGoesWmtsTile(iso, lon) {
     var url = goesProbeTileUrl(iso, lon);
@@ -215,28 +212,29 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
       return Promise.resolve(goesTimeCache.iso);
     }
     if (goesTimeProbe) return goesTimeProbe;
-    var startMs = goesWallLatestMs();
+    /* opt294: DescribeDomains can list a slot whose tiles 404 and lack CORS.
+     * The domain latest is only a start time. A real tile is probed with sunnyprobe=1
+     * so the service worker does not substitute a different frame. Each 10-minute TIME
+     * is probed until a tile with a real picture is remembered. */
+    var startMs = snapGoesMs(Date.now());
     var viaDomain = fetchGoesDomain(lon).then((d) => {
       var last = d ? goesDomainLatestMs(lon) : NaN;
-      if (!isFinite(last)) return null;
-      var iso = toGoesIso(last);
-      goesLastGoodIso = iso;
-      goesTimeCache = { iso: iso, t: Date.now() };
-      return iso;
-    });
-    /* opt52: probe several 10-min slots in parallel instead of serial walk-back */
+      /* start at the domain's newest published end when it is known; on 404, continue through adjacent 10-minute TIMEs */
+      if (isFinite(last) && last <= Date.now()) startMs = snapGoesMs(last);
+      return d;
+    }).catch(() => { return null; });
     var PROBE_BATCH = 4;
-    function tryBatch(startStep) {
+    function tryBatch(fromMs, startStep) {
       if (startStep > GOES_PROBE_BACK_STEPS) {
-        var fb = goesLatestIsoSync();
-        rememberGoesGood(fb);
+        var fb = goesLastGoodIso || toGoesIso(fromMs);
+        if (fb) rememberGoesGood(fb);
         return Promise.resolve(fb);
       }
       var probes = [];
       var s;
       for (s = startStep; s <= GOES_PROBE_BACK_STEPS && probes.length < PROBE_BATCH; s++) {
         ((step) => {
-          var iso = toGoesIso(startMs - step * GOES_STEP_MS);
+          var iso = toGoesIso(fromMs - step * GOES_STEP_MS);
           probes.push({ step: step, iso: iso, p: probeGoesWmtsTile(iso, lon) });
         })(s);
       }
@@ -248,21 +246,20 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
             return probes[j].iso;
           }
         }
-        return tryBatch(startStep + probes.length);
+        return tryBatch(fromMs, startStep + probes.length);
       });
     }
-    goesTimeProbe = viaDomain.then((iso) => { return iso || tryBatch(0); }).then((iso) => {
+    goesTimeProbe = viaDomain.then(() => { return tryBatch(startMs, 0); }).then((iso) => {
       goesTimeProbe = null;
       return iso;
     }).catch(() => {
       goesTimeProbe = null;
-      return goesLatestIsoSync();
+      return goesLastGoodIso || goesLatestIsoSync();
     });
     return goesTimeProbe;
   }
   function applyGoesLatestToTimeline(iso) {
     if (!iso) return;
-    rememberGoesGood(iso);
     var atEnd = !cloudTimes.length || cloudIndex >= sliderMax();
     var keepIso = (!atEnd && cloudTimes[cloudIndex]) ? cloudTimes[cloudIndex] : null;
     cloudTimes = buildCloudTimes();

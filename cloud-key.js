@@ -79,11 +79,37 @@
     if (!res.ok) throw new Error("tile " + res.status);
     return res.blob();
   }
+  function shiftGoesTime(url, stepsBack) {
+    var m = /([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}):([0-9]{2}):00Z/.exec(url);
+    if (!m) return "";
+    var t = Date.parse(m[0]);
+    if (!isFinite(t)) return "";
+    var d = new Date(t - stepsBack * 600000);
+    function pad(n) { return n < 10 ? "0" + n : String(n); }
+    var iso = d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) +
+      "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00Z";
+    return url.replace(m[0], iso);
+  }
+  function blobOk(blob) {
+    return !!(blob && blob.size > 2000);
+  }
+  function fetchKeyedBlob(url, signal, left) {
+    return fetch(url, { signal: signal, mode: "cors" }).then(readBlob).then((blob) => {
+      if (blobOk(blob) || left <= 0) return blob;
+      var prev = shiftGoesTime(url, 1);
+      return prev ? fetchKeyedBlob(prev, signal, left - 1) : blob;
+    }).catch(() => {
+      if (left <= 0) throw new Error("tile");
+      var prev = shiftGoesTime(url, 1);
+      if (!prev) throw new Error("tile");
+      return fetchKeyedBlob(prev, signal, left - 1);
+    });
+  }
   function loadKeyedTile(params, abort) {
     var url = "https://" + params.url.slice("sunnykey://".length);
     var signal = abort && abort.signal;
-    return fetch(url, { signal: signal, mode: "cors" }).then(readBlob)
-      .then(createImageBitmap).then(keyBitmap).then(wrapData);
+    /* opt294: a missing GIBS slot (404, no CORS) shifts TIME by 10 minutes, up to 12 times, until a real picture is returned */
+    return fetchKeyedBlob(url, signal, 12).then(createImageBitmap).then(keyBitmap).then(wrapData);
   }
   function register() {
     if (registered) return true;

@@ -47,12 +47,17 @@ var labelsIdleHealArmed, labelsHealBusy;
       presentStaticGibs(url);
       setMapLibreCloudsHidden(false);
       applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
-      /* hide IEM hires during play history — only GOES for current play index */
-      ["iem-vis"].forEach((id) => {
-        if (map.getLayer(id)) {
-          try { map.setLayoutProperty(id, "visibility", "none"); } catch (eH) {}
-        }
-      });
+      /* hide the 1 km visible layer during play history; keep it at the latest frame */
+      var atEnd = cloudIndex >= sliderMax();
+      if (atEnd) {
+        try { applyHires(); } catch (eAh) {}
+      } else {
+        ["iem-vis"].forEach((id) => {
+          if (map.getLayer(id)) {
+            try { map.setLayoutProperty(id, "visibility", "none"); } catch (eH) {}
+          }
+        });
+      }
     } catch (eLock) {}
   }
   function beginPlayMapLock() {
@@ -178,10 +183,11 @@ var labelsIdleHealArmed, labelsHealBusy;
       paintContinuousClouds();
       p = Promise.resolve(true);
     } else {
-      /* paused: never snap to latest unless the playhead is at NOW */
-      var isoStatic = (atNow ? goesLatestIsoSync() : iso);
-      var url = gibsTiles(isoStatic, sunnyApp_origin ? sunnyApp_origin.lon : null);
-      p = presentStaticGibs(url);
+      /* paused: never snap to latest unless the playhead is at the end of the timeline */
+      var lonS = sunnyApp_origin ? sunnyApp_origin.lon : null;
+      p = (atNow ? resolveGoesLatestIso(lonS) : Promise.resolve(iso)).then((isoStatic) => {
+        return presentStaticGibs(gibsTiles(isoStatic || iso, lonS));
+      });
     }
     return p.then((shown) => {
       void shown;

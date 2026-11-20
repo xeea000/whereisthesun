@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt293"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt294"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -52,7 +52,7 @@ var PRECACHE = [
   "label-tiers.js?h=76e5cf6417",
   "vector-base.js?h=d38449997d",
   "light-clouds.js?h=3eec306776",
-  "cloud-key.js?h=5d5b626b3c",
+  "cloud-key.js?h=6fc11a55af",
   "msg-clouds.js?h=64a9d75088",
   "play-handoff.js?h=b695a52a77",
   "radar-key.js?h=f5fb81876e",
@@ -84,12 +84,12 @@ var PRECACHE = [
   "sw-ready.js?h=66b3059850",
   "beach-data-v.js?h=6226beb469",
   "play-pin.js?h=d91f012835",
-  "app-core.js?h=c8e2ba1683",
+  "app-core.js?h=feb21cf597",
   "app-timeline.js?h=cfc2a3086a",
   "app-cloud-layers.js?h=a040758c03",
   "app-play-buffers.js?h=f67069c191",
   "app-play-blend.js?h=2d35ed038e",
-  "app-cloud-frames.js?h=6de044b6ad",
+  "app-cloud-frames.js?h=88d2610503",
   "app-beach-store.js?h=2f443c94e4",
   "app-beach-fetch.js?h=d75875d4bb",
   "app-beach-search.js?h=b7bf9d26f1",
@@ -381,8 +381,62 @@ function route(req, u, ev) {
   }
   return routeOld(req, u, ev);
 }
+/* opt294: a GIBS time that 404s (often with no CORS) shifts TIME by 10 minutes, up to 12 times, until a tile is returned */
+function shiftGoesTime(url, stepsBack) {
+  var m = /([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}):([0-9]{2}):00Z/.exec(url);
+  if (!m) return "";
+  var t = Date.parse(m[0]);
+  if (!isFinite(t)) return "";
+  var d = new Date(t - stepsBack * 600000);
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+  var iso = d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate()) +
+    "T" + pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":00Z";
+  return url.replace(m[0], iso);
+}
+function isGoesProbe(url) {
+  try {
+    return new URL(url).searchParams.get("sunnyprobe") === "1";
+  } catch (eP) {
+    return false;
+  }
+}
+function fetchGoesOrEarlier(req, step) {
+  var url = typeof req === "string" ? req : req.url;
+  if (isGoesProbe(url)) return netFetch(req);
+  if (step > 12) return Promise.reject(new Error("goes"));
+  var next = step ? shiftGoesTime(url, step) : url;
+  if (!next) return Promise.reject(new Error("goes"));
+  var r = step ? next : req;
+  return netFetch(r).then((res) => {
+    if (res && res.ok) return res;
+    return fetchGoesOrEarlier(req, step + 1);
+  }).catch(() => {
+    return fetchGoesOrEarlier(req, step + 1);
+  });
+}
+function cacheFirstGoes(req, ev) {
+  function lookup(cache) { return cache.match(req); }
+  return openCache(FRAMES).then(lookup).then((hit) => {
+    if (hit) return hit;
+    return fetchGoesOrEarlier(req, 0).then((res) => {
+      later(ev, putIn(FRAMES, FRAMES_MAX, req, res));
+      return res;
+    });
+  });
+}
 function routeOld(req, u, ev) {
   if (u.pathname.slice(-13) === "/version.json") return netFetch(req, { cache: "no-store" });
+  if (u.host === "gibs.earthdata.nasa.gov") {
+    if (isGoesProbe(u.href || String(u))) return netFetch(req);
+    if (isSettledFrame(u)) {
+      if (Date.now() - lastAgeOut > 600000) {
+        lastAgeOut = Date.now();
+        ageOutFrames();
+      }
+      return cacheFirstGoes(req, ev);
+    }
+    return fetchGoesOrEarlier(req, 0);
+  }
   if (isSettledFrame(u)) {
     if (Date.now() - lastAgeOut > 600000) {
       lastAgeOut = Date.now();
