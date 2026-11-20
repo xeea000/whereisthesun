@@ -1,6 +1,6 @@
 // workspace/whereisthesun/trails.js
-/* SUNNY Trails & hikes (opt299/opt300): prebuilt hiking, walking, cycling and mountain-bike
- * routes plus summits, in region packs (Scotland, Ontario). Type switches and a difficulty
+/* SUNNY Trails & hikes (opt299–opt301): prebuilt hiking, walking, cycling and mountain-bike
+ * routes plus summits, in region packs (Scotland, Canada). Type switches and a difficulty
  * legend; a grade is shown only when the source states one (sac_scale, mtb:scale, or an
  * explicit grade), otherwise not graded. Named-route pins farther out, lines from zoom 8.
  * Tap a line or pin for its card. OpenStreetMap (ODbL) and Wikidata. */
@@ -9,7 +9,7 @@
   var K = window.SunnyKit;
   var L = window.SunnyLayers;
   if (!K || !L) return;
-  var V = "opt300";
+  var V = "opt301";
   var ID = "trails";
   var SRC = "trails-src";
   var DOT = "trails-dot";
@@ -213,7 +213,7 @@
     var pop = K.show(mapRef, ll, p.n || "Trail", [], "Trails & hikes");
     if (pop && pop.setHTML) pop.setHTML(cardFor(p));
   }
-  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland and Ontario, plus Munros, Corbetts, Grahams and other summits. " +
+  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland and Canada, plus Munros, Corbetts, Grahams and other summits. " +
     "Graded only where the source states a grade; otherwise marked not graded. Lines when closer, named routes as pins farther out";
   L.add({ id: ID, name: "Trails & hikes", icon: "🥾", group: "Outdoors", tip: TIP,
     taps: [DOT, LINE, HIT], kids: KIDS, apply: apply,
