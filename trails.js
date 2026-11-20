@@ -1,6 +1,6 @@
 // workspace/whereisthesun/trails.js
-/* SUNNY Trails & hikes (opt299): prebuilt hiking, walking, cycling and mountain-bike routes
- * plus Munros, Corbetts and Grahams, starting with Scotland. Type switches and a difficulty
+/* SUNNY Trails & hikes (opt299/opt300): prebuilt hiking, walking, cycling and mountain-bike
+ * routes plus summits, in region packs (Scotland, Ontario). Type switches and a difficulty
  * legend; a grade is shown only when the source states one (sac_scale, mtb:scale, or an
  * explicit grade), otherwise not graded. Named-route pins farther out, lines from zoom 8.
  * Tap a line or pin for its card. OpenStreetMap (ODbL) and Wikidata. */
@@ -9,7 +9,7 @@
   var K = window.SunnyKit;
   var L = window.SunnyLayers;
   if (!K || !L) return;
-  var V = "opt299";
+  var V = "opt300";
   var ID = "trails";
   var SRC = "trails-src";
   var DOT = "trails-dot";
@@ -81,10 +81,10 @@
     return keys;
   }
   function pinProps(p) {
-    return { k: p[2], g: p[3], n: p[4] || "", gd: p[5] || "", src: p[6] || "o", ref: p[7] || "", extra: p[8] || 0, net: p[9] || "" };
+    return { k: p[2], g: p[3], n: p[4] || "", gd: p[5] || "", src: p[6] || "o", ref: p[7] || "", extra: p[8] || 0, net: p[9] || "", alt: p[10] || "" };
   }
   function lineProps(r) {
-    return { k: r[1], g: r[2], n: r[3] || "", gd: r[4] || "", src: r[5] || "o", ref: r[0] || "", extra: r[6] || 0, net: r[7] || "" };
+    return { k: r[1], g: r[2], n: r[3] || "", gd: r[4] || "", src: r[5] || "o", ref: r[0] || "", extra: r[6] || 0, net: r[7] || "", alt: r[9] || "" };
   }
   function inView(lon, lat, v, pad) {
     return lon >= v.getWest() - pad && lon <= v.getEast() + pad && lat >= v.getSouth() - pad && lat <= v.getNorth() + pad;
@@ -194,7 +194,8 @@
     var measure = "";
     if (p.k === "p" && extra) measure = Math.round(extra) + " m";
     if (p.k !== "p" && extra) measure = (extra / 10).toFixed(1).replace(/\.0$/, "") + " km";
-    var gd = p.gd && p.gd !== p.n ? "Gaelic: " + K.esc(p.gd) : "";
+    var altLab = p.alt === "fr" ? "French: " : "Gaelic: ";
+    var gd = p.gd && p.gd !== p.n ? altLab + K.esc(p.gd) : "";
     var srcLine = ["OpenStreetMap (ODbL)", osmUrl(p.ref)];
     if (String(p.ref || "").charAt(0) === "Q") srcLine = ["Wikidata", "https://www.wikidata.org/wiki/" + p.ref];
     if (p.src === "b" && p.ref && p.ref.indexOf("|") >= 0) {
@@ -212,7 +213,7 @@
     var pop = K.show(mapRef, ll, p.n || "Trail", [], "Trails & hikes");
     if (pop && pop.setHTML) pop.setHTML(cardFor(p));
   }
-  var TIP = "Hiking, walking, cycling and mountain-bike trails, plus Munros, Corbetts and Grahams. Scotland first. " +
+  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland and Ontario, plus Munros, Corbetts, Grahams and other summits. " +
     "Graded only where the source states a grade; otherwise marked not graded. Lines when closer, named routes as pins farther out";
   L.add({ id: ID, name: "Trails & hikes", icon: "🥾", group: "Outdoors", tip: TIP,
     taps: [DOT, LINE, HIT], kids: KIDS, apply: apply,
