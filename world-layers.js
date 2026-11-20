@@ -20,7 +20,7 @@
   if (!K || !L || !P) return;
   var NOW = new Date().getFullYear();
   var BASE = "data/world/";
-  var V = "opt296"; /* bump when tools/build-world.js or build-cables.js output changes */
+  var V = "opt298"; /* bump when tools/build-world.js or build-cables.js output changes */
   var meta = {};
   var cap = (s) => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
   var age = (verb, y) => {
@@ -192,12 +192,22 @@
     ["hillfort", "Hillforts", "#5e8a3a", 2.5], ["abbey", "Abbeys, priories & monasteries", "#8d6bb8", 2.5],
     ["battle", "Battlefields", "#c4544a", 2.6], ["stone", "Standing stones & circles", "#7d838f", 2.4],
     ["cairn", "Cairns", "#9a8060", 2.4], ["roman", "Roman sites", "#b55a32", 2.5],
-    ["site", "Other ancient sites", "#7fc6a4", 2.4],
+    ["kirk", "Parish churches & kirks", "#5b7c9a", 2.5],
+    ["religious", "Chapels, crosses & religious ruins", "#9b7eb8", 2.4],
+    ["burial", "Burial sites, kirkyards & graveyards", "#8a6e55", 2.4],
+    ["manor", "Manors, country houses & estates", "#a67c52", 2.4],
+    ["ruins", "Ruins", "#8a8a7a", 2.3],
+    ["industrial", "Industrial heritage (mills, mines, kilns)", "#6b6b6b", 2.3],
+    ["digs", "Archaeological digs & settlements", "#7fc6a4", 2.4],
+    ["site", "Other ancient sites", "#b0b0b0", 2.2],
     ["nhsca", "National Historic Sites of Canada", "#e53935", 2.6]];
   /* opt166: for a designation (monument, park, historic site...) the Wikidata date is when it was designated, not built */
   var DESIG = /archaeolog|monument|park|historic site|historic district|heritage|reserve|protected|landmark|national historic/i;
   pointLayer({ id: "history", file: "history", name: "Heritage & ancient sites", icon: "🏛️", group: "History", dflt: true, kids: true,
-    tip: "World Heritage, the Wonders, temples, castles and forts by age, towers, brochs, hillforts, abbeys, battlefields, standing stones, cairns, Roman sites, other ancient sites, and National Historic Sites of Canada. Each place listed once (Wikidata, with OpenStreetMap for the United Kingdom)", attrib: OSMA,
+    tip: "World Heritage, the Wonders, temples, castles and forts by age, towers, brochs, hillforts, abbeys, " +
+      "battlefields, standing stones, cairns, Roman sites, parish churches and kirks, chapels and crosses, " +
+      "burial sites and kirkyards, manors, ruins, industrial heritage, archaeological digs, a small other group, " +
+      "and National Historic Sites of Canada. Each place listed once (Wikidata, with OpenStreetMap for the United Kingdom)", attrib: OSMA,
     src: ["Wikidata", "https://www.wikidata.org/"], srcOf: osmSrc, legend: K.legKeys(HIST.map((h) => { return [h[2], "dot", h[1]]; })),
     layers: HIST.map((h) => { return { id: "hist-" + h[0], codes: [h[0]], color: h[2], r: h[3], name: h[1] }; }),
     lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year >= 0 && DESIG.test(r.kind || "") ? (r.year ? "Designated or founded " + K.esc(r.year) + " (Wikidata; not the build date)" : "") :
