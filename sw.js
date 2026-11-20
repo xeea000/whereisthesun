@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt296"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt297"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -35,7 +35,7 @@ var PRECACHE = [
   "styles.css?h=64f8fad1bf",
   "settings-panel.css?h=b668a1b572",
   "side-buttons.css?h=629d800453",
-  "layers-panel.css?h=090f68bd31",
+  "layers-panel.css?h=898bf7a065",
   "info-panel.css?h=f27269beca",
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
@@ -69,10 +69,10 @@ var PRECACHE = [
   "layer-kit.js?h=9a64f14ab1",
   "frame-kit.js?h=483b24432b",
   "layer-lazy.js?h=26794f51c2",
-  "layers-panel.js?h=06dcc8442a",
+  "layers-panel.js?h=5729720cc6",
   "tap-card.js?h=d87ba924cd",
   "overzoom.js?h=1dc114f61d",
-  "share-link.js?h=0eeccab808",
+  "share-link.js?h=e7245a2c51",
   "bar-toggles.js?h=68ff6400e3",
   "legend-stack.js?h=4554a57966",
   "existing-layers.js?h=6bd6be1684",

@@ -405,5 +405,12 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { bind(); bootRestore(); });
   else { bind(); bootRestore(); }
-  window.SunnyShare = { build: buildState, apply: applyState, parse: parseHash };
+  function syncHash() {
+    if (restoring) return;
+    var h = location.hash || "";
+    if (h.indexOf("s=") < 0) return;
+    var st = buildState();
+    if (st) writeHash(st);
+  }
+  window.SunnyShare = { build: buildState, apply: applyState, parse: parseHash, sync: syncHash };
 })();

@@ -55,6 +55,13 @@
     document.querySelectorAll(".lp-ov").forEach((b) => {
       b.classList.toggle("is-on", b.getAttribute("data-ov") === cur);
     });
+    if (panel) {
+      panel.querySelectorAll(".lp-sec-input").forEach((i) => {
+        var path = i.dataset.section, on = !!(sectionOn[path] || sectionLit(path));
+        i.checked = on;
+        if (i.closest(".lp-sec")) i.closest(".lp-sec").classList.toggle("is-on", on);
+      });
+    }
   }
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -158,11 +165,61 @@
   /* opt192/opt231: Fold all collapses every group and every layer twisty (hides .lp-ctrls) */
   function foldAll() {
     if (!panel) return;
-    panel.querySelectorAll(".lp-head[aria-expanded='true']").forEach((h) => { h.click(); });
+    panel.querySelectorAll(".lp-sec-fold[aria-expanded='true']").forEach((h) => { h.click(); });
     panel.querySelectorAll(".lp-twisty[aria-expanded='true']").forEach((tw) => { tw.click(); });
   }
   /* opt103: sections and sub-groups fold with twisty triangles (state saved per path, open by default).
    * PLACE moves a layer into a "Section/Sub" path without touching the layer's own file. */
+  var sectionOn = {};
+  function pathOf(d) {
+    return PLACE[d.id] || d.group || "";
+  }
+  function inSection(d, path) {
+    var p = pathOf(d);
+    return p === path || p.indexOf(path + "/") === 0;
+  }
+  function overlayOn() {
+    var b = document.querySelector("#overlay-seg .seg-btn.is-on");
+    return !!(b && b.getAttribute("data-overlay"));
+  }
+  function sectionLit(path) {
+    if ((path === "Weather" || path.indexOf("Weather/") === 0) && overlayOn()) return true;
+    return defs.some((d) => { return d.name && inSection(d, path) && isOn(d); });
+  }
+  function clearKids(d) {
+    if (!d.kids) return;
+    d.kids.forEach((k) => {
+      try { localStorage.setItem("sunny-L-" + k.id, "0"); } catch (e) {}
+    });
+    if (panel) {
+      panel.querySelectorAll(".lp-kid input[data-kid]").forEach((i) => {
+        if (d.kids.some((k) => { return k.id === i.dataset.kid; })) i.checked = false;
+      });
+    }
+    if (d.kidSet) d.kidSet();
+    if (d._legEl && typeof d.legend === "function") d._legEl.innerHTML = d.legend() || "";
+  }
+  /* opt297: one switch per section; off clears every layer and kid in that section, and does not restore them */
+  function setSection(path, on) {
+    if (!on) {
+      defs.forEach((d) => {
+        if (!d.name || !inSection(d, path)) return;
+        clearKids(d);
+        if (isOn(d)) setOn(d, false);
+      });
+      if (path === "Weather" || path.indexOf("Weather/") === 0) {
+        var b = document.querySelector("#overlay-seg .seg-btn.is-on");
+        if (b) b.click();
+      }
+      Object.keys(sectionOn).forEach((k) => {
+        if (k === path || k.indexOf(path + "/") === 0) sectionOn[k] = false;
+      });
+    } else {
+      sectionOn[path] = true;
+    }
+    refresh();
+    if (window.SunnyShare && window.SunnyShare.sync) window.SunnyShare.sync();
+  }
   var PLACE = { skyglow: "Sky & Space/Tonight's sky", airbursts: "Sky & Space", nuclear: "Human impact", spacecraft: "Sky & Space", oceangarbage: "Human impact", aurora: "Sky & Space", eclipses: "Sky & Space", moon: "Sky & Space/Tonight's sky", showers: "Sky & Space/Tonight's sky",
     nightscore: "Sky & Space/Tonight's sky", goldenhour: "Sky & Space", observatories: "Sky & Space/Artificial", radioscopes: "Sky & Space/Artificial", sats: "Sky & Space/Artificial",
     craters: "Earth", meteorites: "Earth", geology: "Earth/Geology", rockage: "Earth/Geology", cratons: "Earth/Geology",
@@ -177,13 +234,31 @@
       var v = localStorage.getItem(key);
       if (v != null) open = v === "1";
     } catch (e) {}
-    var h = el("button", "lp-head lp-fold-h lp-l" + lvl);
+    var wrap = el("div", "lp-head lp-sec lp-l" + lvl);
+    var h = el("button", "lp-sec-fold lp-fold-h lp-l" + lvl);
     h.type = "button";
     var box = el("div", "lp-grp");
-    var set = (o) => { box.hidden = !o; h.textContent = (o ? "▾ " : "▸ ") + label; h.setAttribute("aria-expanded", o ? "true" : "false"); };
+    var set = (o) => {
+      box.hidden = !o;
+      h.textContent = (o ? "▾ " : "▸ ") + label;
+      h.setAttribute("aria-expanded", o ? "true" : "false");
+    };
     set(open);
     h.addEventListener("click", () => { open = !open; set(open); try { localStorage.setItem(key, open ? "1" : "0"); } catch (e) {} });
-    parent.appendChild(h);
+    var inp = el("input");
+    inp.type = "checkbox";
+    inp.className = "lp-input lp-sec-input";
+    inp.dataset.section = path;
+    inp.setAttribute("aria-label", label + " section");
+    inp.addEventListener("change", () => { setSection(path, inp.checked); });
+    inp.addEventListener("click", (ev) => { ev.stopPropagation(); });
+    var sl = el("label", "lp-swhit");
+    sl.addEventListener("click", (ev) => { ev.stopPropagation(); });
+    sl.appendChild(inp);
+    sl.appendChild(el("span", "lp-sw"));
+    wrap.appendChild(h);
+    wrap.appendChild(sl);
+    parent.appendChild(wrap);
     parent.appendChild(box);
     return box;
   }
@@ -332,7 +407,7 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
-  window.SunnyLayers = { add: add, attach: attach, refresh: refresh, foldAll: foldAll, clearAll: clearAll, set: (id, on) => {
+  window.SunnyLayers = { add: add, attach: attach, refresh: refresh, foldAll: foldAll, clearAll: clearAll, setSection: setSection, set: (id, on) => {
     var d = defs.filter((x) => { return x.id === id; })[0];
     if (d) setOn(d, !!on);
   }, isOn: (id) => {
