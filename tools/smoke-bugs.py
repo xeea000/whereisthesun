@@ -886,9 +886,61 @@ async def camps_split(b):
     check("phone status text sits on a dark pill so it reads over light tiles", st["dark"] and "rgb(255" in st["color"].replace(" ",""), st)
     print("  camps_split", meta["cn"], r["n"], t[0][:80].replace("\n"," | "), r4["n"], t4[0][:80].replace("\n"," | "), flush=True)
     await ctx.close()
+
+async def civic(b):
+    """t435u: Civic section has Capitals (national and provincial/state switches) and Population density,
+    all off at start; Ottawa and Toronto open cards; density draws a GHSL 2020 legend and an opacity slider."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=1366)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    meta = await pg.evaluate("""async()=>{await SunnyLayerLazy.load();
+      const cap=SunnyLayers.defs().find(d=>d.id==='capitals');
+      const dens=SunnyLayers.defs().find(d=>d.id==='popdens');
+      return {cg:cap&&cap.group, cn:cap&&cap.name, ck:(cap&&cap.kids||[]).map(k=>k.name),
+        coff:!SunnyLayers.isOn('capitals'),
+        dg:dens&&dens.group, dn:dens&&dens.name, doff:!SunnyLayers.isOn('popdens'),
+        groups:[...document.querySelectorAll('#layers-panel .lp-sec-input')].map(i=>i.dataset.section)}}""")
+    check("Civic section has Capitals and Population density, off at start, with two capital switches",
+          meta["cg"]=="Civic" and meta["cn"]=="Capitals" and meta["coff"]
+          and meta["ck"]==["National capitals", "Provincial & state capitals"]
+          and meta["dg"]=="Civic" and meta["dn"]=="Population density" and meta["doff"]
+          and "Civic" in (meta["groups"] or []), meta)
+    r = await pg.evaluate(WG, {"id": "capitals", "c": [-75.6972, 45.4215], "z": 8, "l": ["cap-nat"]})
+    check("national capitals draw at Ottawa with a Civic legend", r["n"]>0 and "National capitals" in (r["leg"] or ""), r)
+    await pg.mouse.click(r["x"], r["y"])
+    await pg.wait_for_timeout(3000)
+    t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("Ottawa tap shows the national capital of Canada and a source link",
+          ("wikidata.org/" in t[1] or "naturalearthdata.com" in t[1]) and "Ottawa" in t[0]
+          and "Canada" in t[0] and "National capital" in t[0] and not errs, [t[0][:300], errs])
+    await pg.evaluate("()=>{SunnyLayers.set('capitals',false);const k=[...document.querySelectorAll('#layers-panel input[data-kid]')];"+
+      "const nat=k.find(i=>i.dataset.kid==='capitals-cap-nat');const a=k.find(i=>i.dataset.kid==='capitals-cap-adm1');"+
+      "if(nat&&nat.checked){nat.checked=false;nat.dispatchEvent(new Event('change'))}"+
+      "if(a&&!a.checked){a.checked=true;a.dispatchEvent(new Event('change'))}}")
+    r2 = await pg.evaluate(WG, {"id": "capitals", "c": [-79.3832, 43.6532], "z": 8, "l": ["cap-adm1"]})
+    check("provincial capitals draw at Toronto", r2["n"]>0, r2)
+    await pg.mouse.click(r2["x"], r2["y"])
+    await pg.wait_for_timeout(3000)
+    t2 = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("Toronto tap shows the capital of Ontario and a source link",
+          ("wikidata.org/" in t2[1] or "naturalearthdata.com" in t2[1]) and "Toronto" in t2[0]
+          and "Ontario" in t2[0] and not errs, [t2[0][:300], errs])
+    await pg.evaluate("()=>SunnyLayers.set('capitals',false)")
+    dens = await pg.evaluate("""async()=>{
+      const s=t=>new Promise(r=>setTimeout(r,t));
+      await SunnyLayerLazy.load();map.jumpTo({center:[-79.4,43.7],zoom:5});
+      SunnyLayers.set('popdens',true);
+      for(let i=0;i<30;i++){if(map.getLayer('popdens-raster')&&map.getLayoutProperty('popdens-raster','visibility')!=='none')break;await s(400)}
+      const d=SunnyLayers.defs().find(x=>x.id==='popdens');
+      const vis=!!map.getLayer('popdens-raster')&&map.getLayoutProperty('popdens-raster','visibility')!=='none';
+      const slider=!!document.querySelector('.popdens-opa input[type=range]');
+      return {vis, leg: typeof d.legend==='function'?d.legend():d.legend, slider, tip:d.tip}}""")
+    check("population density draws, names GHSL and 2020 in the legend, and has an opacity slider",
+          dens["vis"] and "GHSL" in (dens["leg"] or "") and "2020" in (dens["leg"] or "") and dens["slider"], dens)
+    print("  civic", meta["cn"], r["n"], t[0][:80].replace("\n"," | "), r2["n"], t2[0][:80].replace("\n"," | "), flush=True)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, land_value, taps_card]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, land_value, civic, taps_card]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

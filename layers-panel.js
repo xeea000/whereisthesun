@@ -5,7 +5,7 @@
  * switches map layers. Open/closed and each layer's state are saved. */
 (() => {
   "use strict";
-  var GROUPS = ["Weather", "Sky & Space", "Earth", "Human impact", "Ocean", "Science", "Transmission", "Travel", "Outdoors", "History", "Fun & Games"];
+  var GROUPS = ["Weather", "Sky & Space", "Earth", "Human impact", "Ocean", "Science", "Transmission", "Travel", "Civic", "Outdoors", "History", "Fun & Games"];
   var defs = [];
   var map = null;
   var panel = null;

@@ -1,0 +1,19 @@
+{
+  "built": "2026-11-20",
+  "counts": {
+    "nat": 217,
+    "adm1": 3088
+  },
+  "split": {
+    "n": 3305,
+    "bytes": 49900,
+    "gz": 20579,
+    "shards": 17,
+    "dbytes": 278293,
+    "dgz": 84351
+  },
+  "sources": {
+    "ne": "Natural Earth 10m populated places (public domain)",
+    "wd": "Wikidata P36 capitals (CC0)"
+  }
+}
