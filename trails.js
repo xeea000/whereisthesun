@@ -1,15 +1,16 @@
 // workspace/whereisthesun/trails.js
-/* SUNNY Trails & hikes (opt299–opt301): prebuilt hiking, walking, cycling and mountain-bike
- * routes plus summits, in region packs (Scotland, Canada). Type switches and a difficulty
- * legend; a grade is shown only when the source states one (sac_scale, mtb:scale, or an
- * explicit grade), otherwise not graded. Named-route pins farther out, lines from zoom 8.
- * Tap a line or pin for its card. OpenStreetMap (ODbL) and Wikidata. */
+/* SUNNY Trails & hikes (opt299–opt302): prebuilt hiking, walking, cycling and mountain-bike
+ * routes plus summits, in region packs for Scotland, Canada and the rest of the UK.
+ * Type switches and a difficulty legend; a grade is shown only when the source states
+ * one (sac_scale, mtb:scale, or an explicit grade), otherwise not graded. Named-route
+ * pins farther out, lines from zoom 8. Tap a line or pin for its card.
+ * OpenStreetMap (ODbL) and Wikidata. */
 (() => {
   "use strict";
   var K = window.SunnyKit;
   var L = window.SunnyLayers;
   if (!K || !L) return;
-  var V = "opt301";
+  var V = "opt302";
   var ID = "trails";
   var SRC = "trails-src";
   var DOT = "trails-dot";
@@ -194,7 +195,7 @@
     var measure = "";
     if (p.k === "p" && extra) measure = Math.round(extra) + " m";
     if (p.k !== "p" && extra) measure = (extra / 10).toFixed(1).replace(/\.0$/, "") + " km";
-    var altLab = p.alt === "fr" ? "French: " : "Gaelic: ";
+    var altLab = p.alt === "fr" ? "French: " : p.alt === "cy" ? "Welsh: " : p.alt === "ga" ? "Irish: " : "Gaelic: ";
     var gd = p.gd && p.gd !== p.n ? altLab + K.esc(p.gd) : "";
     var srcLine = ["OpenStreetMap (ODbL)", osmUrl(p.ref)];
     if (String(p.ref || "").charAt(0) === "Q") srcLine = ["Wikidata", "https://www.wikidata.org/wiki/" + p.ref];
@@ -213,7 +214,7 @@
     var pop = K.show(mapRef, ll, p.n || "Trail", [], "Trails & hikes");
     if (pop && pop.setHTML) pop.setHTML(cardFor(p));
   }
-  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland and Canada, plus Munros, Corbetts, Grahams and other summits. " +
+  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland, Canada and the rest of the UK, plus named summits. " +
     "Graded only where the source states a grade; otherwise marked not graded. Lines when closer, named routes as pins farther out";
   L.add({ id: ID, name: "Trails & hikes", icon: "🥾", group: "Outdoors", tip: TIP,
     taps: [DOT, LINE, HIT], kids: KIDS, apply: apply,
