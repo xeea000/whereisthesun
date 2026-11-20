@@ -10,7 +10,7 @@
   var day = () => { return new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10); };
   var low = (map) => {
     var ls = map.getStyle().layers, top = -1;
-    ls.forEach((l, i) => { if (/^(gibs|iem-vis|radar|light-cloud|lc-)/.test(l.id)) top = i; });
+    ls.forEach((l, i) => { if (/^(gibs|iem-vis|vis-fill|msg-clouds|radar|light-cloud|lc-)/.test(l.id)) top = i; });
     var i = ls.findIndex((l) => l.id === "sst"), nxt = ls[top + 1] && ls[top + 1].id;
     if (top >= 0 && i > top + 1 && nxt) { try { map.moveLayer("sst", nxt); } catch (e) {} } /* above clouds, under every dot and line */
   };

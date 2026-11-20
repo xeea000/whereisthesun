@@ -20,7 +20,7 @@
   }
   /* the night-lights tint sits above the base map, the cloud pictures, the night shade and the night-sky squares (they hid it),
    * and under every other overlay */
-  var COVER = /^(gibs|iem-vis|light-cloud|lc-|sky-night|sky-grid|shower-band)/;
+  var COVER = /^(gibs|iem-vis|vis-fill|msg-clouds|light-cloud|lc-|sky-night|sky-grid|shower-band)/;
   function beforeId() {
     var ls = map.getStyle().layers || [], from = 0;
     ls.forEach((l, i) => { if (COVER.test(l.id) || l.type === "background" || l.source === "ofm") from = i + 1; });

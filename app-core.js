@@ -149,12 +149,10 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     var latest = goesIsoMs(goesLatestIsoSync());
     if (!isFinite(latest)) latest = goesWallLatestMs();
     latest = snapGoesMs(latest);
-    var wall = goesWallLatestMs();
-    if (latest > wall) latest = wall;
-    /* opt40: never include times newer than last successful probe */
+    /* opt295: a probed slot is the tip even when it is newer than wall minus 55 minutes */
     if (goesLastGoodIso) {
       var gMs = snapGoesMs(goesIsoMs(goesLastGoodIso));
-      if (isFinite(gMs) && latest > gMs) latest = gMs;
+      if (isFinite(gMs) && gMs <= Date.now()) latest = gMs;
     }
     var lon = typeof sunnyApp_origin !== "undefined" && sunnyApp_origin ? sunnyApp_origin.lon : null;
     var pub = goesPublishedAtOrBefore(latest, lon);
@@ -362,6 +360,13 @@ var map, GOES_STEP_MS, GOES_AVAIL_LAG_MS, GOES_PROBE_TTL_MS, GOES_PROBE_BACK_STE
     var layer = (lon != null && lon <= -105) ? "goes-west-vis-1km" : "goes-east-vis-1km";
     var u = "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/" + layer + "/{z}/{x}/{y}.png";
     return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u; /* opt63: cloud-only */
+  }
+  function visFillTiles(west, iso) {
+    var layer = west ? "GOES-West_ABI_Band2_Red_Visible_1km" : "GOES-East_ABI_Band2_Red_Visible_1km";
+    var t = iso || goesLatestIsoSync();
+    var u = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer + "/default/" + t +
+      "/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png?iemmask=1";
+    return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u;
   }
   function formatFrameLabel(iso) {
     return window.SunnyKit.fmt.frameTime(Date.parse(iso));

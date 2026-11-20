@@ -12,22 +12,47 @@
     return window.SunnyCloudKey ? window.SunnyCloudKey.tileUrl(u) : u;
   };
   var nowSlot = () => { var d = new Date(Math.floor(Date.now() / 900000) * 900000 - 1800000); return d.toISOString().slice(0, 16) + ":00Z"; };
-  var below = (map) => { var ls = map.getStyle().layers, a = -1, b = -1; ls.forEach((l, i) => { if (l.id === ID) a = i; if (l.id === "gibs") b = i; }); return a === b - 1; };
+  var parents = ["iem-vis", "vis-fill-east", "vis-fill-west", "gibs"];
+  var beforeId = (map) => {
+    if (map.getLayer("iem-vis")) return "iem-vis";
+    if (map.getLayer("vis-fill-east")) return "vis-fill-east";
+    if (map.getLayer("gibs")) return "gibs";
+    return undefined;
+  };
+  var parentPaint = (map) => {
+    var vis = "none", op = 0, i, id, v, o;
+    for (i = 0; i < parents.length; i++) {
+      id = parents[i];
+      if (!map.getLayer(id)) continue;
+      try { v = map.getLayoutProperty(id, "visibility") || "visible"; } catch (eV) { v = "none"; }
+      try { o = map.getPaintProperty(id, "raster-opacity"); } catch (eO) { o = 0; }
+      if (v !== "none" && o) { vis = "visible"; op = o; break; }
+    }
+    return { vis: vis, op: op };
+  };
+  var below = (map) => {
+    var ls = map.getStyle().layers, a = -1, b = -1, bid = beforeId(map);
+    ls.forEach((l, i) => { if (l.id === ID) a = i; if (l.id === bid) b = i; });
+    return bid && a === b - 1;
+  };
   var sync = (map) => {
-    var g = map.getLayer("gibs");
-    if (!g) { if (map.getLayer(ID)) map.setLayoutProperty(ID, "visibility", "none"); return; }
+    var paint = parentPaint(map);
+    if (paint.vis === "none" && !map.getLayer("gibs") && !map.getLayer("iem-vis") && !map.getLayer("vis-fill-east")) {
+      if (map.getLayer(ID)) map.setLayoutProperty(ID, "visibility", "none");
+      return;
+    }
     var t = nowSlot();
+    var before = beforeId(map);
     if (!map.getSource(ID)) {
       slot = t;
       map.addSource(ID, K.overzoom({ type: "raster", tiles: [url(t)], bounds: BOUNDS, tileSize: 256, attribution: "Meteosat clouds: EUMETSAT EUMETView" }, 6));
     } else if (t !== slot && Date.now() - Date.parse(slot) > 3600000 /* each slot lags 30 min; refresh hourly */) {
       slot = t; var s = map.getSource(ID); if (s.setTiles) s.setTiles([url(t)]);
     }
-    if (!map.getLayer(ID)) { map.addLayer({ id: ID, type: "raster", source: ID, paint: { "raster-fade-duration": 300 } }, "gibs"); K.uncapped(map, [ID]); }
-    else if (!below(map)) { try { map.moveLayer(ID, "gibs"); } catch (e) {} }
-    var vis = map.getLayoutProperty("gibs", "visibility") || "visible", op = map.getPaintProperty("gibs", "raster-opacity");
-    if (map.getLayoutProperty(ID, "visibility") !== vis) map.setLayoutProperty(ID, "visibility", vis);
-    if (JSON.stringify(map.getPaintProperty(ID, "raster-opacity")) !== JSON.stringify(op)) map.setPaintProperty(ID, "raster-opacity", op);
+    if (!map.getLayer(ID)) { map.addLayer({ id: ID, type: "raster", source: ID, paint: { "raster-fade-duration": 300 } }, before); K.uncapped(map, [ID]); }
+    else if (!below(map)) { try { map.moveLayer(ID, before); } catch (e) {} }
+    if (map.getLayoutProperty(ID, "visibility") !== paint.vis) map.setLayoutProperty(ID, "visibility", paint.vis);
+    if (JSON.stringify(map.getPaintProperty(ID, "raster-opacity")) !== JSON.stringify(paint.op)) map.setPaintProperty(ID, "raster-opacity", paint.op);
   };
   var start = () => {
     var map = window.map;

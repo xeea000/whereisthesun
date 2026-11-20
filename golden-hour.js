@@ -44,7 +44,7 @@
   /* the band sits right above the clouds and under every dot, line and other tint */
   var low = (map) => {
     var ls = map.getStyle().layers, top = -1;
-    ls.forEach((l, i) => { if (/^(gibs|iem-vis|radar|light-cloud|lc-)/.test(l.id)) top = i; });
+    ls.forEach((l, i) => { if (/^(gibs|iem-vis|vis-fill|msg-clouds|radar|light-cloud|lc-)/.test(l.id)) top = i; });
     var i = ls.findIndex((l) => l.id === "gold-fill"), nxt = ls[top + 1] && ls[top + 1].id;
     if (top >= 0 && i > top + 1 && nxt) { try { map.moveLayer("gold-fill", nxt); } catch (e) {} }
   };

@@ -6,7 +6,7 @@
 (() => {
   "use strict";
   if (!window.matchMedia || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-  var SKIP = { ofm: 1, "iem-vis": 1, "sky-grid": 1, "sunh-omt": 1 }, SKIPL = { "sky-night": 1, "sky-grid-line": 1 };
+  var SKIP = { ofm: 1, "iem-vis": 1, "vis-fill-east": 1, "vis-fill-west": 1, "sky-grid": 1, "sunh-omt": 1 }, SKIPL = { "sky-night": 1, "sky-grid-line": 1 };
   var esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   var nice = (s) => String(s || "")
     .replace(/^(w|pack)-/, "").replace(/[-_]+/g, " ").replace(/\b(dot|dots|sym|pts|fill|line|layer)\b/g, "").trim().replace(/^./, (c) => c.toUpperCase());

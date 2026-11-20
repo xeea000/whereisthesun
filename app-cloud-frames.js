@@ -52,11 +52,7 @@ var labelsIdleHealArmed, labelsHealBusy;
       if (atEnd) {
         try { applyHires(); } catch (eAh) {}
       } else {
-        ["iem-vis"].forEach((id) => {
-          if (map.getLayer(id)) {
-            try { map.setLayoutProperty(id, "visibility", "none"); } catch (eH) {}
-          }
-        });
+        hideHiresClouds();
       }
     } catch (eLock) {}
   }
@@ -156,7 +152,7 @@ var labelsIdleHealArmed, labelsHealBusy;
     var iso = cloudTimes[cloudIndex];
     var atNow = playheadFrac >= sliderMax() - 1e-6 || cloudIndex >= sliderMax();
     var suffix = atNow ? " · NOW" : "";
-    timeLabel.textContent = formatFrameLabel(iso) + suffix;
+    if (timeLabel) timeLabel.textContent = formatFrameLabel(iso) + suffix;
     if (tabHidden) return Promise.resolve();
     /* opt19: radar overlay → no GIBS/hires/Play tile work (mutex) */
     if (radarOn()) {
@@ -185,27 +181,25 @@ var labelsIdleHealArmed, labelsHealBusy;
     } else {
       /* paused: never snap to latest unless the playhead is at the end of the timeline */
       var lonS = sunnyApp_origin ? sunnyApp_origin.lon : null;
-      p = (atNow ? resolveGoesLatestIso(lonS) : Promise.resolve(iso)).then((isoStatic) => {
-        return presentStaticGibs(gibsTiles(isoStatic || iso, lonS));
+      p = (atNow ? resolveGoesLatestIso(lonS).then((isoStatic) => {
+        applyGoesLatestToTimeline(isoStatic);
+        return isoStatic;
+      }) : Promise.resolve(iso)).then((isoStatic) => {
+        return presentStaticGibs(gibsTiles(isoStatic || iso, lonS)).then(() => isoStatic);
       });
     }
-    return p.then((shown) => {
-      void shown;
-      if (playMode) return shown;
-      /* Hires (IEM VIS) only at NOW — not while scrubbing history / play */
+    return p.then((isoStatic) => {
+      if (playMode) return isoStatic;
+      /* Hires visible tiles only at the latest time — not while scrubbing history / play */
       if (atNow) {
         refreshHiresRaster("iem-vis", iemVisTiles(sunnyApp_origin ? sunnyApp_origin.lon : null));
         applyHires();
-      } else {
-        ["iem-vis"].forEach((id) => {
-          if (map.getLayer(id)) {
-            map.setLayoutProperty(id, "visibility", "none");
-            applyCloudPaintMain(id, 0);
-          }
-        });
-        applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+        return paintPictureClock(isoStatic || iso);
       }
-      return shown;
+      hideHiresClouds();
+      applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
+      if (timeLabel) timeLabel.textContent = formatFrameLabel(isoStatic || iso);
+      return isoStatic;
     });
   }
   function applyCloudPaintMain(layerId, opacity) {
@@ -262,15 +256,38 @@ var labelsIdleHealArmed, labelsHealBusy;
     /* VIS needs sun well up; ~8° keeps dusk/dawn from painting a black overlay */
     return approxSolarElevationDeg(lon, lat, whenMs) >= 8;
   }
+  function visFillLayerIds() {
+    return ["vis-fill-east", "vis-fill-west"];
+  }
+  function visFillNativeMax() {
+    return (window.SunnyDataSaver && window.SunnyDataSaver.low()) ? 5 : 7;
+  }
+  function hideHiresClouds() {
+    ["iem-vis", "vis-fill-east", "vis-fill-west"].forEach((id) => {
+      if (map.getLayer(id)) {
+        try { map.setLayoutProperty(id, "visibility", "none"); } catch (eH) {}
+        try { applyCloudPaintMain(id, 0); } catch (eP) {}
+      }
+    });
+  }
+  function showVisFillLayers(op) {
+    visFillLayerIds().forEach((id) => {
+      if (!map.getLayer(id)) return;
+      try { map.setLayoutProperty(id, "visibility", "visible"); } catch (eV) {}
+      applyCloudPaintMain(id, op);
+    });
+  }
   function applyHires() {
     if (tabHidden || playMode || radarOn() || overlayXfadeActive) return;
     removeLegacyDailyHires();
     var atNow = !cloudTimes.length || playheadFrac >= sliderMax() - 1e-6 || cloudIndex >= sliderMax();
     var ll = cloudLonLat();
     var daytime = isVisDaytime(ll.lon, ll.lat);
-    /* opt293: daylight uses the latest 1 km visible tiles (IEM) at every zoom. GeoColor is
-     * hidden while those tiles are on, so a softer picture is not left on top. After dark,
-     * during Play history, and when the sun is too low, GeoColor is the only picture. */
+    /* opt295: in daylight at the latest time, IEM 1 km visible covers its sector
+     * and a full-disk visible fill (RealEarth Band 2, native cap) covers the rest.
+     * The fill is masked to IEM transparent pixels with a feathered seam, so the
+     * two pictures are not stacked. GeoColor stays hidden in that mode. After dark,
+     * during Play history, and when the sun is too low, GeoColor is the picture. */
     var wantIem = atNow && daytime;
     if (wantIem) {
       addHiresSources();
@@ -279,17 +296,13 @@ var labelsIdleHealArmed, labelsHealBusy;
         map.setLayoutProperty("iem-vis", "visibility", "visible");
         applyCloudPaintMain("iem-vis", iemOp);
       }
+      showVisFillLayers(iemOp);
       if (map.getLayer(GIBS_LAYER)) {
         try { map.setLayoutProperty(GIBS_LAYER, "visibility", "none"); } catch (eHideG) {}
         applyCloudPaint(GIBS_LAYER, 0);
       }
     } else {
-      ["iem-vis"].forEach((id) => {
-        if (map.getLayer(id)) {
-          map.setLayoutProperty(id, "visibility", "none");
-          applyCloudPaintMain(id, 0);
-        }
-      });
+      hideHiresClouds();
       if (map.getLayer(GIBS_LAYER)) {
         try { map.setLayoutProperty(GIBS_LAYER, "visibility", "visible"); } catch (eG2) {}
         applyCloudPaint(GIBS_LAYER, gibsEffectiveOpacity());
@@ -361,10 +374,54 @@ var labelsIdleHealArmed, labelsHealBusy;
     applyHires();
     if (typeof applyBaseMap === "function") applyBaseMap();
   }
+  function paintPictureClock(gibsIso) {
+    var fallback = gibsIso || goesLatestIsoSync();
+    var apply = (iso) => {
+      if (timeLabel && iso) timeLabel.textContent = formatFrameLabel(iso) + " · NOW";
+      return iso;
+    };
+    refreshHiresRaster("vis-fill-east", visFillTiles(false, fallback));
+    refreshHiresRaster("vis-fill-west", visFillTiles(true, fallback));
+    return Promise.resolve(apply(fallback));
+  }
+  function addVisFillSource(id, west) {
+    var before = cloudStackBefore();
+    var maxZ = visFillNativeMax();
+    var bounds = west ? [-180, -81, -105, 81] : [-105, -81, -20, 81];
+    var url = visFillTiles(west, goesLatestIsoSync());
+    var attr = "NASA GIBS / NOAA GOES ABI Band 2";
+    if (!map.getSource(id)) {
+      map.addSource(id, {
+        type: "raster",
+        tiles: [url],
+        bounds: bounds,
+        tileSize: 256,
+        maxzoom: maxZ,
+        attribution: attr
+      });
+    }
+    if (!map.getLayer(id)) {
+      map.addLayer({
+        id: id,
+        type: "raster",
+        source: id,
+        paint: {
+          "raster-opacity": 0,
+          "raster-resampling": "linear",
+          "raster-fade-duration": 0
+        }
+      }, before);
+      try {
+        if (map.setLayerZoomRange) map.setLayerZoomRange(id, 0, maxZ);
+      } catch (eZ) {}
+    }
+  }
   function addHiresSources() {
     if (tabHidden || radarOn()) return;
     removeLegacyDailyHires();
     var before = cloudStackBefore();
+    addVisFillSource("vis-fill-east", false);
+    addVisFillSource("vis-fill-west", true);
     if (!map.getSource("iem-vis")) {
       map.addSource("iem-vis", {
         type: "raster",

@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt294"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt295"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -52,8 +52,8 @@ var PRECACHE = [
   "label-tiers.js?h=76e5cf6417",
   "vector-base.js?h=d38449997d",
   "light-clouds.js?h=3eec306776",
-  "cloud-key.js?h=6fc11a55af",
-  "msg-clouds.js?h=64a9d75088",
+  "cloud-key.js?h=49bff0fef1",
+  "msg-clouds.js?h=45aecae5fc",
   "play-handoff.js?h=b695a52a77",
   "radar-key.js?h=f5fb81876e",
   "radar-source.js?h=be24bccbbb",
@@ -84,18 +84,18 @@ var PRECACHE = [
   "sw-ready.js?h=66b3059850",
   "beach-data-v.js?h=6226beb469",
   "play-pin.js?h=d91f012835",
-  "app-core.js?h=feb21cf597",
+  "app-core.js?h=a126461522",
   "app-timeline.js?h=cfc2a3086a",
-  "app-cloud-layers.js?h=a040758c03",
-  "app-play-buffers.js?h=f67069c191",
+  "app-cloud-layers.js?h=78ed2c4db1",
+  "app-play-buffers.js?h=a550b415e0",
   "app-play-blend.js?h=2d35ed038e",
-  "app-cloud-frames.js?h=88d2610503",
+  "app-cloud-frames.js?h=cf7eff963a",
   "app-beach-store.js?h=2f443c94e4",
   "app-beach-fetch.js?h=d75875d4bb",
   "app-beach-search.js?h=b7bf9d26f1",
   "app-wind-data.js?h=2ae6af874a",
   "app-wind-draw.js?h=ad70f6723c",
-  "app-radar.js?h=a70bdb5d8e",
+  "app-radar.js?h=66b5519407",
   "geo-ask.js?h=3531b4d856",
   "app-play-clock.js?h=638b075435",
   "app-scrub.js?h=9f2cdc41f9",
@@ -104,7 +104,7 @@ var PRECACHE = [
   "settings-panel.js?h=0e2b6b8551",
   "lagmeter.js?h=3ed84b3cb2",
   "craters.js?h=62aa51af7f",
-  "sky-glow.js?h=06356a2a64",
+  "sky-glow.js?h=6ce48deb13",
   "observatories.js?h=dd917d3367",
   "crown-land.js?h=34bb143216",
   "vendor/satellite-5.0.0.min.js?h=272c249d24",
@@ -113,7 +113,7 @@ var PRECACHE = [
   "aurora-dev.js?h=e819e98e39",
   "aurora-top.js?h=d5ed39088c",
   "sky-layers.js?h=fbbf741f6b",
-  "smoke-aq.js?h=3dc0835e01",
+  "smoke-aq.js?h=d56613e09e",
   "earth-layers.js?h=30237759c5",
   "forest-loss.js?h=ade90b3739",
   "oil-spills.js?h=2d5c0335c0",
@@ -126,12 +126,12 @@ var PRECACHE = [
   "volcanoes.js?h=bbd8b6d5a8",
   "storms.js?h=acd4e567c3",
   "tornadoes.js?h=e268aebfac",
-  "golden-hour.js?h=16bf01063e",
+  "golden-hour.js?h=75a29551ef",
   "sun-card.js?h=f5194300bd",
   "sun-hours.js?h=cb04d37309",
   "coord-grid.js?h=c49f678b9e",
   "currents.js?h=6eb08ffcef",
-  "water-temp.js?h=a0005ad2e5",
+  "water-temp.js?h=73f3d7d10d",
   "waves.js?h=c1631fca41",
   "ships.js?h=d8e3cb9ff4",
   "ca-cell.js?h=f203aa492e",
@@ -150,9 +150,9 @@ var PRECACHE = [
   "parks-ca.js?h=fb1fec2c6b",
   "sky-card.js?h=fed062b4f6",
   "sats.js?h=ea5fdb3a67",
-  "sky-draw.js?h=f6be89a4e3",
+  "sky-draw.js?h=dd01052914",
   "dark-spot.js?h=5273815ee5",
-  "hover-tips.js?h=cb8029f8d8",
+  "hover-tips.js?h=ad7b69bbaf",
   "manifest.webmanifest?h=3122f023bd",
   "icon-192.png?h=737599b667",
   "icon-512.png?h=52a83ea426"
@@ -426,6 +426,7 @@ function cacheFirstGoes(req, ev) {
 }
 function routeOld(req, u, ev) {
   if (u.pathname.slice(-13) === "/version.json") return netFetch(req, { cache: "no-store" });
+  if (u.host === "realearth.ssec.wisc.edu") return netFetch(req);
   if (u.host === "gibs.earthdata.nasa.gov") {
     if (isGoesProbe(u.href || String(u))) return netFetch(req);
     if (isSettledFrame(u)) {

@@ -45,6 +45,36 @@
     }
     return d;
   }
+  /* Band 2 is darker than IEM visible. Lift only values above the ocean floor so
+   * cloud tops brighten, then key with a lower threshold than GeoColor. The same
+   * numbers are used on every tile so adjacent tiles match. */
+  var VIS_FLOOR = 80;
+  var VIS_LIFT = 1.7;
+  var VIS_LO = 0.31;
+  var VIS_HI = 0.56;
+  function liftVis(d) {
+    var i, v, floor = VIS_FLOOR;
+    for (i = 0; i < d.length; i += 4) {
+      v = d[i];
+      if (v > floor) {
+        v = Math.round(floor + (v - floor) * VIS_LIFT);
+        if (v > 255) v = 255;
+        d[i] = v;
+        d[i + 1] = v;
+        d[i + 2] = v;
+      }
+    }
+  }
+  function keyPixelsBand2(d) {
+    var span = VIS_HI - VIS_LO, j, t, k;
+    for (j = 0; j < d.length; j += 4) {
+      t = (d[j] / 255 - VIS_LO) / span;
+      if (t < 0) t = 0;
+      else if (t > 1) t = 1;
+      k = t * t * (3 - 2 * t);
+      d[j + 3] = Math.round(k * d[j + 3]);
+    }
+  }
   function makeCanvas(w, h) {
     if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(w, h);
     var c = document.createElement("canvas");
@@ -105,11 +135,132 @@
       return fetchKeyedBlob(prev, signal, left - 1);
     });
   }
+  function tileLon(z, x) {
+    return ((x + 0.5) / Math.pow(2, z)) * 360 - 180;
+  }
+  function parseXyz(url) {
+    var g = /GoogleMapsCompatible_Level[0-9]+\/([0-9]+)\/([0-9]+)\/([0-9]+)\.png/.exec(url);
+    if (g) return { z: Number(g[1]), y: Number(g[2]), x: Number(g[3]) };
+    var m = /\/([0-9]+)\/([0-9]+)\/([0-9]+)\.png/.exec(url);
+    if (!m) return null;
+    return { z: Number(m[1]), x: Number(m[2]), y: Number(m[3]) };
+  }
+  function iemRawUrl(z, x, y) {
+    var layer = tileLon(z, x) <= -105 ? "goes-west-vis-1km" : "goes-east-vis-1km";
+    return "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/" + layer + "/" + z + "/" + x + "/" + y + ".png";
+  }
+  function blurAlpha(alpha, w, h, radius) {
+    var out = new Uint8ClampedArray(w * h);
+    var tmp = new Uint16Array(w * h);
+    var r = radius < 1 ? 1 : radius;
+    var x, y, i, s, n, k, row;
+    for (y = 0; y < h; y++) {
+      row = y * w;
+      s = 0;
+      n = 0;
+      for (k = 0; k <= r && k < w; k++) { s += alpha[row + k]; n++; }
+      for (x = 0; x < w; x++) {
+        tmp[row + x] = s / n;
+        if (x - r >= 0) { s -= alpha[row + x - r]; n--; }
+        if (x + r + 1 < w) { s += alpha[row + x + r + 1]; n++; }
+      }
+    }
+    for (x = 0; x < w; x++) {
+      s = 0;
+      n = 0;
+      for (k = 0; k <= r && k < h; k++) { s += tmp[k * w + x]; n++; }
+      for (y = 0; y < h; y++) {
+        out[y * w + x] = s / n;
+        if (y - r >= 0) { s -= tmp[(y - r) * w + x]; n--; }
+        if (y + r + 1 < h) { s += tmp[(y + r + 1) * w + x]; n++; }
+      }
+    }
+    return out;
+  }
+  function applyIemFootprintMask(fillData, maskData, w, h) {
+    var a = new Uint8ClampedArray(w * h);
+    var i, p;
+    for (i = 0, p = 3; i < w * h; i++, p += 4) a[i] = maskData[p];
+    var soft = blurAlpha(a, w, h, 12);
+    for (i = 0, p = 3; i < w * h; i++, p += 4) {
+      fillData[p] = Math.round(fillData[p] * (255 - soft[i]) / 255);
+    }
+  }
+  function keyAndMask(fillBmp, maskBmp) {
+    var c = makeCanvas(fillBmp.width, fillBmp.height);
+    var ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(fillBmp, 0, 0);
+    var img = ctx.getImageData(0, 0, fillBmp.width, fillBmp.height);
+    liftVis(img.data);
+    keyPixelsBand2(img.data);
+    if (maskBmp && (maskBmp.width !== fillBmp.width || maskBmp.height !== fillBmp.height)) {
+      var mc = makeCanvas(fillBmp.width, fillBmp.height);
+      var mctx = mc.getContext("2d", { willReadFrequently: true });
+      mctx.drawImage(maskBmp, 0, 0, fillBmp.width, fillBmp.height);
+      applyIemFootprintMask(img.data, mctx.getImageData(0, 0, fillBmp.width, fillBmp.height).data, fillBmp.width, fillBmp.height);
+    } else if (maskBmp) {
+      var mc2 = makeCanvas(maskBmp.width, maskBmp.height);
+      var mctx2 = mc2.getContext("2d", { willReadFrequently: true });
+      mctx2.drawImage(maskBmp, 0, 0);
+      applyIemFootprintMask(img.data, mctx2.getImageData(0, 0, maskBmp.width, maskBmp.height).data, fillBmp.width, fillBmp.height);
+    }
+    ctx.putImageData(img, 0, 0);
+    if (fillBmp.close) fillBmp.close();
+    if (maskBmp && maskBmp.close) maskBmp.close();
+    return canvasToBuffer(c);
+  }
+  function gibsBand2FallbackUrl(url) {
+    var xyz = parseXyz(url);
+    if (!xyz || xyz.z > 7) return "";
+    var iso = window.goesLastGoodIso || (typeof goesLatestIsoSync === "function" ? goesLatestIsoSync() : "");
+    if (!iso) return "";
+    var west = tileLon(xyz.z, xyz.x) <= -105;
+    var layer = west ? "GOES-West_ABI_Band2_Red_Visible_1km" : "GOES-East_ABI_Band2_Red_Visible_1km";
+    return "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" + layer + "/default/" + iso +
+      "/GoogleMapsCompatible_Level7/" + xyz.z + "/" + xyz.y + "/" + xyz.x + ".png";
+  }
+  function loadFillBitmap(url, signal, left) {
+    return fetchKeyedBlob(url, signal, left).then(createImageBitmap).catch((err) => {
+      var fb = /realearth\.ssec\.wisc\.edu/.test(url) ? gibsBand2FallbackUrl(url) : "";
+      if (!fb) throw err;
+      return fetchKeyedBlob(fb, signal, 12).then(createImageBitmap);
+    });
+  }
   function loadKeyedTile(params, abort) {
     var url = "https://" + params.url.slice("sunnykey://".length);
     var signal = abort && abort.signal;
     /* opt294: a missing GIBS slot (404, no CORS) shifts TIME by 10 minutes, up to 12 times, until a real picture is returned */
-    return fetchKeyedBlob(url, signal, 12).then(createImageBitmap).then(keyBitmap).then(wrapData);
+    var wantMask = url.indexOf("iemmask=1") !== -1;
+    var p = loadFillBitmap(url, signal, 12);
+    var isBand2 = url.indexOf("Band2_Red_Visible") !== -1;
+    if (!wantMask) {
+      return p.then((bmp) => {
+        if (!isBand2) return keyBitmap(bmp);
+        var c = makeCanvas(bmp.width, bmp.height);
+        var ctx = c.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(bmp, 0, 0);
+        var img = ctx.getImageData(0, 0, bmp.width, bmp.height);
+        liftVis(img.data);
+        keyPixelsBand2(img.data);
+        ctx.putImageData(img, 0, 0);
+        if (bmp.close) bmp.close();
+        return canvasToBuffer(c);
+      }).then(wrapData);
+    }
+    return p.then((bmp) => {
+      var xyz = parseXyz(url);
+      if (!xyz) {
+        if (!isBand2) return keyBitmap(bmp);
+        return keyAndMask(bmp, null);
+      }
+      return fetch(iemRawUrl(xyz.z, xyz.x, xyz.y), { mode: "cors", signal: signal }).then((res) => {
+        if (!res.ok) return null;
+        return res.blob();
+      }).then((blob) => {
+        if (!blob || blob.size < 400) return keyAndMask(bmp, null);
+        return createImageBitmap(blob).then((mask) => keyAndMask(bmp, mask));
+      }).catch(() => keyAndMask(bmp, null));
+    }).then(wrapData);
   }
   function register() {
     if (registered) return true;

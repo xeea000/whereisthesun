@@ -4,7 +4,7 @@
 "use strict";
 var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
   /* clouds and radar sit right above the base map, under every data layer (dots, lines, tints), so nothing is hidden by them */
-  var WX = /^(gibs|iem-vis|radar|light-cloud|lc-)/;
+  var WX = /^(gibs|iem-vis|vis-fill|msg-clouds|radar|light-cloud|lc-)/;
   function firstData() {
     var ls = map.getStyle().layers || [], i;
     for (i = 0; i < ls.length; i++) {
@@ -51,7 +51,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
   function restackCloudRasters() {
     if (!map) return;
     var before = cloudStackBefore();
-    var ids = [GIBS_LAYER, "iem-vis"];
+    var ids = [GIBS_LAYER, "vis-fill-east", "vis-fill-west", "msg-clouds", "iem-vis"];
     var i;
     for (i = 0; i < ids.length; i++) {
       if (map.getLayer(ids[i])) {
@@ -79,7 +79,7 @@ var GIBS_GEOCOLOR_NATIVE_M_PER_PX, GIBS_NATIVE_OVERSAMPLE;
   }
   function applyCloudRasterResampling() {
     if (!map) return;
-    var ids = [GIBS_LAYER, "iem-vis"];
+    var ids = [GIBS_LAYER, "vis-fill-east", "vis-fill-west", "msg-clouds", "iem-vis"];
     var i, id, mode;
     for (i = 0; i < ids.length; i++) {
       id = ids[i];

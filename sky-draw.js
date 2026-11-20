@@ -298,7 +298,7 @@
   /* score squares and meteor bands sit just above the cloud pictures and under the data layers */
   function above() {
     var ls = map.getStyle().layers, top = -1;
-    ls.forEach((l, i) => { if (/^(gibs|iem-vis|light-cloud|lc-)/.test(l.id)) top = i; });
+    ls.forEach((l, i) => { if (/^(gibs|iem-vis|vis-fill|msg-clouds|light-cloud|lc-)/.test(l.id)) top = i; });
     if (top < 0) return;
     var nxt = ls[top + 1] && ls[top + 1].id;
     ["sky-grid", "sky-grid-line", "shower-band"].forEach((id) => {

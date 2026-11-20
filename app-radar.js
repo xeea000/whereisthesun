@@ -416,6 +416,9 @@ var radarTweenSource;
       try { stopRadarRefresh(); } catch (eS) {}
       setMapLibreCloudsHidden(true);
       if (map && map.getLayer("iem-vis")) try { map.setLayoutProperty("iem-vis", "visibility", "none"); } catch (eI) {}
+      ["vis-fill-east", "vis-fill-west"].forEach((id) => {
+        if (map && map.getLayer(id)) try { map.setLayoutProperty(id, "visibility", "none"); } catch (eF) {}
+      });
       if (!silent) setStatus("Clouds and Radar off.");
     } else {
       overlayNone = false;

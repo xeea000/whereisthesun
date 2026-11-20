@@ -118,7 +118,7 @@ var swGateOpen, swGateUrl, cloudTweenSource;
     if (!m) return;
     var i, id;
     if (hidden) {
-      var idsHide = [GIBS_LAYER, "iem-vis", "msg-clouds"];
+      var idsHide = [GIBS_LAYER, "iem-vis", "vis-fill-east", "vis-fill-west", "msg-clouds"];
       for (i = 0; i < idsHide.length; i++) {
         id = idsHide[i];
         if (!m.getLayer(id)) continue;
