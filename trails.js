@@ -1,5 +1,5 @@
 // workspace/whereisthesun/trails.js
-/* SUNNY Trails & hikes (opt299–opt302): prebuilt hiking, walking, cycling and mountain-bike
+/* SUNNY Trails & hikes (opt299–opt303): prebuilt hiking, walking, cycling and mountain-bike
  * routes plus summits, in region packs for Scotland, Canada and the rest of the UK.
  * Type switches and a difficulty legend; a grade is shown only when the source states
  * one (sac_scale, mtb:scale, or an explicit grade), otherwise not graded. Named-route
@@ -10,7 +10,7 @@
   var K = window.SunnyKit;
   var L = window.SunnyLayers;
   if (!K || !L) return;
-  var V = "opt302";
+  var V = "opt303";
   var ID = "trails";
   var SRC = "trails-src";
   var DOT = "trails-dot";
@@ -24,9 +24,11 @@
     { id: "trails-cycle", name: "Cycling", dflt: true, kinds: ["c"], color: "#1e6bb8" },
     { id: "trails-mtb", name: "Mountain bike", dflt: true, kinds: ["b"], color: "#8a3d9c" },
     { id: "trails-long", name: "Long-distance routes", dflt: true, kinds: ["l"], color: "#b03a2e" },
-    { id: "trails-peak", name: "Summits & Munros", dflt: true, kinds: ["p"], color: "#6b3a1a" }
+    { id: "trails-peak", name: "Summits & Munros", dflt: true, kinds: ["p"], color: "#6b3a1a" },
+    { id: "trails-tour", name: "Tourist & heritage routes", dflt: true, kinds: ["t"], color: "#8c4a16" }
   ];
-  var TYPE = { h: "Hiking / walking", c: "Cycling", b: "Mountain bike", l: "Long-distance route", p: "Summit" };
+  var TYPE = { h: "Hiking / walking", c: "Cycling", b: "Mountain bike", l: "Long-distance route", p: "Summit",
+    t: "Tourist & heritage route" };
   var GRADE = { e: "Easy", d: "Moderate", r: "Hard", x: "Expert", n: "Not graded" };
   var GCOL = { e: "#2a9d4a", d: "#d4a017", r: "#d45500", x: "#c02828", n: "#5a7a9a" };
   var PEAK = { munro: "Munro", corbett: "Corbett", graham: "Graham", top: "Munro Top", peak: "Summit" };
@@ -127,7 +129,7 @@
     K.vis(map, [DOT, LINE, HIT], false);
   }
   function colorPaint() {
-    return ["case", ["==", ["get", "k"], "p"], "#6b3a1a",
+    return ["case", ["==", ["get", "k"], "p"], "#6b3a1a", ["==", ["get", "k"], "t"], "#8c4a16",
       ["match", ["get", "g"], "e", GCOL.e, "d", GCOL.d, "r", GCOL.r, "x", GCOL.x, GCOL.n]];
   }
   function ensure(map) {
@@ -214,13 +216,15 @@
     var pop = K.show(mapRef, ll, p.n || "Trail", [], "Trails & hikes");
     if (pop && pop.setHTML) pop.setHTML(cardFor(p));
   }
-  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland, Canada and the rest of the UK, plus named summits. " +
-    "Graded only where the source states a grade; otherwise marked not graded. Lines when closer, named routes as pins farther out";
+  var TIP = "Hiking, walking, cycling and mountain-bike trails in Scotland, Canada and the rest of the UK, plus named summits " +
+    "and UK tourist and heritage routes. Graded only where the source states a grade; otherwise not graded. " +
+    "Lines when closer, named routes as pins farther out";
   L.add({ id: ID, name: "Trails & hikes", icon: "🥾", group: "Outdoors", tip: TIP,
     taps: [DOT, LINE, HIT], kids: KIDS, apply: apply,
     kidSet: () => { shown = ""; if (mapRef) apply(mapRef, L.isOn(ID)); },
     legend: () => { return K.legKeys([[GCOL.e, "line", "Easy"], [GCOL.d, "line", "Moderate"], [GCOL.r, "line", "Hard"],
-      [GCOL.x, "line", "Expert"], [GCOL.n, "line", "Not graded"], ["#6b3a1a", "dot", "Summit"]]); },
+      [GCOL.x, "line", "Expert"], [GCOL.n, "line", "Not graded"], ["#8c4a16", "line", "Tourist & heritage route"],
+      ["#6b3a1a", "dot", "Summit"]]); },
     attach: (map, on) => {
       mapRef = map;
       map.on("moveend", () => { refresh(map); });
