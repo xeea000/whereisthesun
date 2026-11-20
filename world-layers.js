@@ -20,7 +20,7 @@
   if (!K || !L || !P) return;
   var NOW = new Date().getFullYear();
   var BASE = "data/world/";
-  var V = "opt212"; /* bump when tools/build-world.js or build-cables.js output changes */
+  var V = "opt296"; /* bump when tools/build-world.js or build-cables.js output changes */
   var meta = {};
   var cap = (s) => { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); };
   var age = (verb, y) => {
@@ -171,34 +171,39 @@
     legend: K.legKeys(LABS.map((c) => { return [c[2], "dot", c[1]]; })),
     layers: LABS.map((c) => { return { id: "lab-" + c[0], codes: [c[0]], color: c[2], r: 2.4, name: c[1] }; }),
     lines: (r) => { return sciLines(r).concat(r.field ? ["Field: " + K.esc(r.field)] : []); } });
-  /* History: one place per point, in the first group that claims it (tools/build-history.js) */
-  var HIST = [["wonder", "Ancient Wonders (original sites)", "#ffd34d", 5], ["new7", "New 7 Wonders", "#ffb000", 5], ["whs", "UNESCO World Heritage", "#3f8cff", 3],
-    ["temple", "Temples & shrines, 800+ years", "#c08bff", 2.8], ["c200", "Castles & forts, under 200 years", "#f6d6a8", 2.4],
-    ["c500", "Castles & forts, 201–500 years", "#e8a25c", 2.4], ["c1000", "Castles & forts, 501–1,000 years", "#c46a2a", 2.6],
-    ["c1500", "Castles & forts, 1,001–1,500 years", "#8e3b1a", 2.8], ["cold", "Castles & forts, over 1,500 years", "#5a1d0c", 3],
-    ["cnone", "Castles & forts, age not known", "#9a9a9a", 2.2], ["site", "Other ancient sites", "#7fc6a4", 2.4],
-    ["nhsca", "National Historic Sites of Canada", "#e53935", 2.6]];
-  /* opt166: for a designation (monument, park, historic site...) the Wikidata date is when it was designated, not built */
-  var DESIG = /archaeolog|monument|park|historic site|historic district|heritage|reserve|protected|landmark|national historic/i;
-  pointLayer({ id: "history", file: "history", name: "Heritage & ancient sites", icon: "🏛️", group: "History", dflt: true, kids: true,
-    tip: "World Heritage, the Wonders, old temples, castles and forts by age, ancient sites and National Historic Sites of Canada, each place listed once (Wikidata)", attrib: WD,
-    src: ["Wikidata", "https://www.wikidata.org/"], legend: K.legKeys(HIST.map((h) => { return [h[2], "dot", h[1]]; })),
-    layers: HIST.map((h) => { return { id: "hist-" + h[0], codes: [h[0]], color: h[2], r: h[3], name: h[1] }; }),
-    lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year >= 0 && DESIG.test(r.kind || "") ? (r.year ? "Designated or founded " + K.esc(r.year) + " (Wikidata; not the build date)" : "") :
-      +r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
-  /* t388u: ghost towns and abandoned places (tools/build-wrecks-ghost.js): Wikidata worldwide, OpenStreetMap adds Canada.
-   * Ruins stay with Historic plaques & sites */
   var OSMA = '<a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, ' +
     '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>';
   var osmSrc = (r) => {
     if (r.qid) return ["Wikidata " + r.qid, "https://www.wikidata.org/wiki/" + r.qid];
-    var t = { n: "node", w: "way" }[String(r.osm || "").charAt(0)];
+    var t = { n: "node", w: "way", r: "relation" }[String(r.osm || "").charAt(0)];
     return ["OpenStreetMap (ODbL)", t ? "https://www.openstreetmap.org/" + t + "/" + String(r.osm).slice(1) : "https://www.openstreetmap.org/"];
   };
   var wikiOsm = (w) => {
     var m = /^([a-z]{2,3}):(.+)$/.exec(w || "");
     return m ? '<a href="https://' + m[1] + ".wikipedia.org/wiki/" + encodeURIComponent(m[2]) + '" target="_blank" rel="noopener">Wikipedia article</a>' : "";
   };
+  /* History: one place per point, in the first group that claims it (tools/build-history.js) */
+  var HIST = [["wonder", "Ancient Wonders (original sites)", "#ffd34d", 5], ["new7", "New 7 Wonders", "#ffb000", 5], ["whs", "UNESCO World Heritage", "#3f8cff", 3],
+    ["temple", "Temples & shrines, 800+ years", "#c08bff", 2.8], ["c200", "Castles & forts, under 200 years", "#f6d6a8", 2.4],
+    ["c500", "Castles & forts, 201–500 years", "#e8a25c", 2.4], ["c1000", "Castles & forts, 501–1,000 years", "#c46a2a", 2.6],
+    ["c1500", "Castles & forts, 1,001–1,500 years", "#8e3b1a", 2.8], ["cold", "Castles & forts, over 1,500 years", "#5a1d0c", 3],
+    ["cnone", "Castles & forts, age not known", "#9a9a9a", 2.2],
+    ["tower", "Towers", "#6f7f99", 2.3], ["broch", "Brochs", "#b07a2a", 2.6],
+    ["hillfort", "Hillforts", "#5e8a3a", 2.5], ["abbey", "Abbeys, priories & monasteries", "#8d6bb8", 2.5],
+    ["battle", "Battlefields", "#c4544a", 2.6], ["stone", "Standing stones & circles", "#7d838f", 2.4],
+    ["cairn", "Cairns", "#9a8060", 2.4], ["roman", "Roman sites", "#b55a32", 2.5],
+    ["site", "Other ancient sites", "#7fc6a4", 2.4],
+    ["nhsca", "National Historic Sites of Canada", "#e53935", 2.6]];
+  /* opt166: for a designation (monument, park, historic site...) the Wikidata date is when it was designated, not built */
+  var DESIG = /archaeolog|monument|park|historic site|historic district|heritage|reserve|protected|landmark|national historic/i;
+  pointLayer({ id: "history", file: "history", name: "Heritage & ancient sites", icon: "🏛️", group: "History", dflt: true, kids: true,
+    tip: "World Heritage, the Wonders, temples, castles and forts by age, towers, brochs, hillforts, abbeys, battlefields, standing stones, cairns, Roman sites, other ancient sites, and National Historic Sites of Canada. Each place listed once (Wikidata, with OpenStreetMap for the United Kingdom)", attrib: OSMA,
+    src: ["Wikidata", "https://www.wikidata.org/"], srcOf: osmSrc, legend: K.legKeys(HIST.map((h) => { return [h[2], "dot", h[1]]; })),
+    layers: HIST.map((h) => { return { id: "hist-" + h[0], codes: [h[0]], color: h[2], r: h[3], name: h[1] }; }),
+    lines: (r) => { return [K.esc(cap(r.kind)), place(r), (+r.year >= 0 && DESIG.test(r.kind || "") ? (r.year ? "Designated or founded " + K.esc(r.year) + " (Wikidata; not the build date)" : "") :
+      +r.year < 0 ? "Built about " + (-r.year) + " BC · " + (NOW - r.year) + " years old" : age("Built", r.year)), wikiLine(r)]; } });
+  /* t388u: ghost towns and abandoned places (tools/build-wrecks-ghost.js): Wikidata worldwide, OpenStreetMap adds Canada.
+   * Ruins stay with Historic plaques & sites */
   pointLayer({ id: "ghost", file: "ghost", name: "Ghost towns & abandoned places", icon: "🏚️", group: "History",
     tip: "Ghost towns and abandoned villages worldwide (Wikidata), with abandoned camps and settlements in Canada from OpenStreetMap. " +
       "Ruins are under Ancient cities, ruins & digs and, in Canada, Historic plaques & sites",
