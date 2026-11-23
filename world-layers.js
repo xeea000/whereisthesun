@@ -53,7 +53,7 @@
       K.vis(map, o.extraIds || [], on);
       kidVis(map, on);
       if (!on) return;
-      K.loadJson(BASE + o.file + ".p.json?h=" + V).then((d) => {
+      K.loadJson(BASE + o.file + ".p.json?h=" + (o.v || V)).then((d) => {
         meta[o.file] = d;
         var sid = "w-" + o.file;
         if (!map.getSource(sid)) map.addSource(sid, { type: "geojson", data: K.fc(P.toFeatures(d)), attribution: o.attrib });
@@ -102,7 +102,7 @@
           map.on("click", t, (e) => {
             var f = e.features[0];
             var pp = K.show(map, f.geometry.coordinates, "", [P.skeleton(o.name)], o.src);
-            P.detail(BASE + o.file, meta[o.file], f.properties.i, V).then((r) => {
+            P.detail(BASE + o.file, meta[o.file], f.properties.i, o.v || V).then((r) => {
               if (pp.isOpen()) pp.setHTML(K.card(o.title ? o.title(r) : r.name, o.lines(r, f.properties.k), o.srcOf ? o.srcOf(r) : src(r, o.src)));
             }).catch(() => { if (pp.isOpen()) pp.setHTML(K.card(o.name, ["Could not load details. Tap again when online."], o.src)); });
           });
@@ -502,7 +502,7 @@
     }
     var o = hoverOf[id];
     if (!o || !meta[o.file]) return prevExt ? prevExt(f, upd) : null;
-    P.detail(BASE + o.file, meta[o.file], f.properties.i, V).then((r) => {
+    P.detail(BASE + o.file, meta[o.file], f.properties.i, o.v || V).then((r) => {
       var ty = o.id === "platforms" ? (k === "boem" ? BT[r.kind] || "Offshore platform" : cap(r.kind || "offshore platform")) : cap(r.kind || o.name);
       upd("<b>" + K.esc((o.title ? o.title(r) : r.name) || o.name) + "</b><br><small>" + K.esc(ty) + (r.operator ? " · " + K.esc(r.operator) : "") + "</small>");
     }).catch(() => {});

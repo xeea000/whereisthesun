@@ -260,9 +260,9 @@ def main():
         elif ispub:
             code = "pub"
             if q in holding or (isheld and nsubs.get(q, 0) < 3):
-                why = "Holding company that owns %d of the game companies on this map" % held[q]
+                why = "owns %d of the game companies on this map" % held[q]
             else:
-                why = "Publisher or holding company with %d subsidiaries on Wikidata" % nsubs.get(q, 0) if nsubs.get(q, 0) >= 3 else "Publisher"
+                why = "%d subsidiaries on Wikidata" % nsubs.get(q, 0) if nsubs.get(q, 0) >= 3 else ""
         elif emp and emp[1] >= 250:
             code = "aaa"
         elif major:
@@ -402,7 +402,7 @@ def main():
     js = ("const {split}=require('%s/tools/split-points.js');const fs=require('fs');const d=JSON.parse(fs.readFileSync('%s','utf8'));"
           "fs.unlinkSync('%s');console.log(JSON.stringify(split('%s',d.items,d.cols,200)))") % (ROOT, tmp, tmp, OUT)
     print(subprocess.check_output(["node", "-e", js]).decode().strip())
-    meta = {"built": "opt306", "counts": dict(stats),
+    meta = {"built": "opt307", "counts": dict(stats),
             "countries": collections.Counter(it["row"][3] for it in items if it["code"] != "former").most_common(15)}
     json.dump(meta, open(OUT + ".meta.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(meta, ensure_ascii=False))
