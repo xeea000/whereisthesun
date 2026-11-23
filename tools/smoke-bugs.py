@@ -938,9 +938,31 @@ async def civic(b):
           dens["vis"] and "GHSL" in (dens["leg"] or "") and "2020" in (dens["leg"] or "") and dens["slider"], dens)
     print("  civic", meta["cn"], r["n"], t[0][:80].replace("\n"," | "), r2["n"], t2[0][:80].replace("\n"," | "), flush=True)
     await ctx.close()
+async def gamedev(b):
+    """t436u/t437u: Fun & Games has Game dev studios, off at start, with tier switches (Closed and Former locations off);
+    a studio near Montreal opens a card with its tier and a source link; Reykjavik shows CCP's former harbour office."""
+    ctx, pg, errs = await boot(b, {"sunny-layers-off-v1": "1", "sunny-geo-ask": "done"}, w=1366)
+    await pg.evaluate("()=>{const d=document.querySelector('.geo-ask.is-on .geo-ask-deny');if(d)d.click()}")
+    meta = await pg.evaluate("""async()=>{await SunnyLayerLazy.load();const g=SunnyLayers.defs().find(d=>d.id==='gamedev');
+      return {g:g&&g.group, off:!SunnyLayers.isOn('gamedev'), k:(g&&g.kids||[]).map(k=>k.name+':'+k.dflt)}}""")
+    check("Game dev studios sits in Fun & Games, off, with publisher to former-location switches",
+          meta["g"]=="Fun & Games" and meta["off"] and len(meta["k"])==8 and meta["k"][0].startswith("Publishers")
+          and meta["k"][-1]=="Former locations:false", meta)
+    r = await pg.evaluate(WG, {"id": "gamedev", "c": [-73.6, 45.52], "z": 9, "l": ["gd-aaa"]})
+    check("AAA studios draw in Montreal with the tier rule in the legend", r["n"]>0 and "250+" in (r["leg"] or ""), r)
+    await pg.mouse.click(r["x"], r["y"])
+    await pg.wait_for_timeout(3000)
+    t = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("Montreal studio tap shows the AAA tier and a source link", "AAA" in t[0] and ("wikidata.org/" in t[1] or "openstreetmap.org/" in t[1]) and not errs, [t[0][:300], errs])
+    await pg.evaluate("()=>{const k=[...document.querySelectorAll('#layers-panel input[data-kid]')].find(i=>i.dataset.kid==='gamedev-gd-former');"
+      "if(k&&!k.checked){k.checked=true;k.dispatchEvent(new Event('change'))}}")
+    r2 = await pg.evaluate(WG, {"id": "gamedev", "c": [-21.9487, 64.1533], "z": 15, "l": ["gd-former"]})
+    check("CCP's former Grandagarður office draws as a former location", r2["n"]>0, r2)
+    print("  gamedev", meta["k"], r["n"], t[0][:90].replace("\n"," | "), r2["n"], flush=True)
+    await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")
-    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, land_value, civic, taps_card]
+    tests = [lazy_legacy, share_restore, goes_slots, pixel_same, peek_closes, mtg_honest, labels_bar, radar_span, labels_base, beach_blade, share_more, maxdetail_boot, obs_kids, forest_404, undersea_state, update_flow, beach_size, sun_card, tonight_sky, smoke_aq, currents, volc_recent, ships_live, wrecks_ghost, label_tiers, credits, rail_abandoned, wars, wifi, ancient, smells, reefs, flight_pin, beach_flow, pointer_only, area_wx, camps_split, land_value, civic, gamedev, taps_card]
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=EXE, args=["--use-gl=angle", "--use-angle=swiftshader"])
         for t in tests:

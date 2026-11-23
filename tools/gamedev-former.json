@@ -1,0 +1,65 @@
+{
+ "former": [
+  {
+   "name": "CCP Games (now Fenris Creations)",
+   "addr": "Grandagarður 8, Reykjavík",
+   "lat": 64.15325,
+   "lon": -21.94867,
+   "note": "Former HQ of CCP Games (until February 2020), by the old harbour at Grandi. CCP moved its head office to Gróska in Vatnsmýri in February 2020. OpenStreetMap lists the Reykjavík Maritime Museum at this address.",
+   "src": "https://isat.is/fyrirtaeki/ccp-hf/",
+   "qid": "Q1023055"
+  },
+  {
+   "name": "Bungie",
+   "addr": "434 Kirkland Way, Kirkland, Washington",
+   "lat": 47.6759,
+   "lon": -122.20004,
+   "note": "Former HQ of Bungie. Bungie moved here in 2005 and announced its move to Bellevue in April 2009 (Kirkland Reporter). 343 Industries used the building next; in October 2015 it was moving to Redmond and Tableau had leased the space from 2016 (Seattle Times). OpenStreetMap now calls the site Boardwalk Kirkland.",
+   "src": "https://www.seattletimes.com/business/technology/tableau-leases-kirkland-space-that-housed-game-studio-2/",
+   "qid": "Q735267"
+  },
+  {
+   "qid": "",
+   "name": "Nintendo of Europe",
+   "addr": "Großostheim, Bavaria",
+   "prec": "c",
+   "lat": 49.91325,
+   "lon": 9.06847,
+   "note": "Former European HQ of Nintendo, in Großostheim until 2014, when Nintendo closed the office and warehouse and moved to Frankfurt. Town-level pin.",
+   "src": "https://www.theguardian.com/technology/2014/jun/06/nintendo-to-close-european-headquarters-games"
+  }
+ ],
+ "fixes": [
+  {
+   "qid": "Q1023055",
+   "lat": 64.13634,
+   "lon": -21.94664,
+   "addr": "Gróska, Vatnsmýri, Reykjavík",
+   "formerly": "CCP Games (until May 2026)",
+   "note": "Head office at Gróska in Vatnsmýri since February 2020. Renamed from CCP Games in May 2026.",
+   "src": "https://fenris.com/news/2026/studio-behind-eve-online-goes-independent-rebrands-as-fenris-creations-enters-research-partnership-with-google-deepmind"
+  },
+  {
+   "qid": "Q24228",
+   "formerly": "343 Industries (until 2024)",
+   "src": "https://en.wikipedia.org/wiki/Halo_Studios"
+  }
+ ],
+ "adds": [
+  {
+   "name": "Nintendo of Europe",
+   "lat": 50.08373,
+   "lon": 8.62126,
+   "addr": "Goldsteinstraße 235, Frankfurt am Main",
+   "country": "Germany",
+   "code": "aaa",
+   "why": "Owned by Nintendo",
+   "parent": "Nintendo",
+   "pq": "Q8093",
+   "formerly": "Nintendo of Europe GmbH (until 2024)",
+   "web": "https://www.nintendo.com/en-gb/",
+   "note": "Nintendo's European head office. Moved into this building in August 2020.",
+   "src": "https://www.nintendo.co.jp/ir/pdf/2022/221108_6e.pdf"
+  }
+ ]
+}

@@ -44,7 +44,7 @@
     /* opt199: per-sublayer visibility via SunnyKit.kids (zero kids on → all hidden) */
     var kidVis = (map, on) => {
       o.layers.forEach((l) => {
-        var show = !o.kids ? !!on : K.kids.layerOn(on, o.id + "-" + l.id, true);
+        var show = !o.kids ? !!on : K.kids.layerOn(on, o.id + "-" + l.id, l.dflt !== false);
         K.vis(map, [l.id], show);
       });
     };
@@ -69,6 +69,8 @@
             var zs = ["interpolate", ["linear"], ["zoom"], 2, 0.42, 8, 0.62, 14, 0.85];
             spec = { id: l.id, type: "symbol", source: sid, filter: filt, layout: { "icon-image": window.SunnyBadge.image(map, "b-" + l.id, l.emoji, l.color),
               "icon-allow-overlap": true, "icon-size": K.markerScale.bind(map, l.id, "icon-size", zs, { layout: true }) } };
+            /* a faded badge (l.opacity) marks places that are no longer in use */
+            if (l.opacity) spec.paint = { "icon-opacity": l.opacity };
           }
           if (K.gz(l.minzoom || 0)) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
@@ -81,7 +83,7 @@
     var taps = o.layers.map((l) => { return l.id; });
     var pMap = null;
     /* opt220: with kids, legend lists only enabled kids (function); empty when all off */
-    var kidList = o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: true, color: l.color, emoji: l.emoji }; }) : undefined;
+    var kidList = o.kids ? o.layers.map((l) => { return { id: o.id + "-" + l.id, name: l.name, dflt: l.dflt !== false, color: l.color, emoji: l.emoji }; }) : undefined;
     var leg = o.legend;
     if (o.kids && typeof o.legend !== "function") {
       leg = () => {

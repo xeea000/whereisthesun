@@ -1,0 +1,79 @@
+{
+ "built": "opt306",
+ "counts": {
+  "noloc": 4999,
+  "unk": 3276,
+  "closed": 825,
+  "aaa": 269,
+  "dropped": 476,
+  "indie": 85,
+  "mid": 53,
+  "out": 29,
+  "pub": 59,
+  "osm_upgrade": 35,
+  "osm_only": 83,
+  "former": 65
+ },
+ "countries": [
+  [
+   "United States",
+   1166
+  ],
+  [
+   "Japan",
+   770
+  ],
+  [
+   "United Kingdom",
+   517
+  ],
+  [
+   "France",
+   229
+  ],
+  [
+   "Canada",
+   220
+  ],
+  [
+   "Germany",
+   169
+  ],
+  [
+   "People's Republic of China",
+   147
+  ],
+  [
+   "Netherlands",
+   122
+  ],
+  [
+   "Spain",
+   112
+  ],
+  [
+   "Poland",
+   109
+  ],
+  [
+   "Sweden",
+   107
+  ],
+  [
+   "Australia",
+   83
+  ],
+  [
+   "",
+   79
+  ],
+  [
+   "South Korea",
+   73
+  ],
+  [
+   "Russia",
+   68
+  ]
+ ]
+}
