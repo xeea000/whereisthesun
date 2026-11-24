@@ -66,11 +66,12 @@
             "circle-color": l.color, "circle-stroke-color": "#101418", "circle-stroke-width": 0.8 } };
           /* t406u: a layer with an emoji draws round emoji badges (badge-kit.js) instead of dots */
           if (l.emoji) {
-            var zs = ["interpolate", ["linear"], ["zoom"], 2, 0.42, 8, 0.62, 14, 0.85];
             spec = { id: l.id, type: "symbol", source: sid, filter: filt, layout: { "icon-image": window.SunnyBadge.image(map, "b-" + l.id, l.emoji, l.color),
-              "icon-allow-overlap": true, "icon-size": K.markerScale.bind(map, l.id, "icon-size", zs, { layout: true }) } };
-            /* a faded badge (l.opacity) marks places that are no longer in use */
-            if (l.opacity) spec.paint = { "icon-opacity": l.opacity };
+              "icon-allow-overlap": true, "icon-size": K.markerScale.bind(map, l.id, "icon-size", badgeSize(), { layout: true }) } };
+            /* o.scale: per-feature size factor; bigger badges sort under smaller ones */
+            if (o.scale) spec.layout["symbol-sort-key"] = ["-", 0, o.scale()];
+            /* a faded badge (l.opacity) marks places that are no longer in use; o.fade dims some features */
+            if (l.opacity || o.fade) spec.paint = { "icon-opacity": l.opacity || o.fade() };
           }
           if (K.gz(l.minzoom || 0)) spec.minzoom = l.minzoom;
           map.addLayer(spec, K.before(map));
@@ -80,6 +81,23 @@
         kidVis(map, L.isOn(o.id));
       }).catch(() => {});
     }
+    /* badge size curve; o.scale() (a data expression) multiplies every stop */
+    function badgeSize() {
+      var S = o.scale ? o.scale() : 1;
+      return ["interpolate", ["linear"], ["zoom"], 2, S === 1 ? 0.42 : ["*", 0.42, S], 8, S === 1 ? 0.62 : ["*", 0.62, S], 14, S === 1 ? 0.85 : ["*", 0.85, S]];
+    }
+    /* re-read o.scale / o.fade after a mode change */
+    o.restyle = () => {
+      if (!pMap) return;
+      o.layers.forEach((l) => {
+        if (!l.emoji || !pMap.getLayer(l.id)) return;
+        try {
+          pMap.setLayoutProperty(l.id, "icon-size", K.markerScale.bind(pMap, l.id, "icon-size", badgeSize(), { layout: true }));
+          if (o.scale) pMap.setLayoutProperty(l.id, "symbol-sort-key", ["-", 0, o.scale()]);
+          if (o.fade && !l.opacity) pMap.setPaintProperty(l.id, "icon-opacity", o.fade());
+        } catch (e) {}
+      });
+    };
     var taps = o.layers.map((l) => { return l.id; });
     var pMap = null;
     /* opt220: with kids, legend lists only enabled kids (function); empty when all off */

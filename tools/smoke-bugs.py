@@ -958,7 +958,30 @@ async def gamedev(b):
       "if(k&&!k.checked){k.checked=true;k.dispatchEvent(new Event('change'))}}")
     r2 = await pg.evaluate(WG, {"id": "gamedev", "c": [-21.9487, 64.1533], "z": 15, "l": ["gd-former"]})
     check("CCP's former Grandagarður office draws as a former location", r2["n"]>0, r2)
-    print("  gamedev", meta["k"], r["n"], t[0][:90].replace("\n"," | "), r2["n"], flush=True)
+    # opt308 (t442u): Scale by Headcount (default) or Game revenue; badges grow on log10 steps; legend follows
+    sc = await pg.evaluate("""async()=>{const s=t=>new Promise(r=>setTimeout(r,t));
+      const d=SunnyLayers.defs().find(x=>x.id==='gamedev');const leg=()=>typeof d.legend==='function'?d.legend():'';
+      const sz=()=>JSON.stringify(map.getLayoutProperty('gd-pub','icon-size'));
+      const btn=!!document.querySelector('.gd-scale button[data-m=rev]');
+      map.jumpTo({center:[10,35],zoom:1.5});await s(2500);const fs=map.querySourceFeatures('w-gamedev');const hl=new Set(fs.map(f=>f.properties.hl)).size,rl=new Set(fs.map(f=>f.properties.rl)).size;
+      const h={mode:SunnyGameScale.get(),size:sz(),leg:leg()};
+      SunnyGameScale.set('rev');await s(800);
+      const r={mode:SunnyGameScale.get(),size:sz(),leg:leg(),op:JSON.stringify(map.getPaintProperty('gd-pub','icon-opacity'))};
+      SunnyGameScale.set('head');await s(300);
+      return {btn,hl,rl,h,r}}""")
+    check("Scale by toggle: headcount by default, game revenue on demand, badge sizes read hl then rl",
+          sc["btn"] and sc["h"]["mode"]=="head" and '"hl"' in sc["h"]["size"] and sc["r"]["mode"]=="rev" and '"rl"' in sc["r"]["size"]
+          and sc["hl"]>3 and sc["rl"]>1, sc)
+    check("legend shows headcount sizes then revenue sizes, with the fixed Publishers line",
+          "10k+" in sc["h"]["leg"] and "$10B+" in sc["r"]["leg"] and "3+ subsidiaries" in sc["h"]["leg"], [sc["h"]["leg"][-300:], sc["r"]["leg"][-200:]])
+    await pg.evaluate("()=>{const p=document.getElementById('ip-peek');const x=p&&p.querySelector('.ip-x,.pp-close,button[aria-label=Close]');if(x)x.click()}")
+    r3 = await pg.evaluate(WG, {"id": "gamedev", "c": [135.7561, 34.9697], "z": 14, "l": ["gd-pub"]})
+    await pg.mouse.click(r3["x"], r3["y"])
+    await pg.wait_for_timeout(3000)
+    t3 = await pg.evaluate("()=>{const c=document.getElementById('ip-peek');return c?[c.innerText,c.innerHTML]:['','']}")
+    check("Nintendo card shows its Wikidata headcount and reported game revenue with a source, no console errors",
+          "Headcount" in t3[0] and "Game revenue" in t3[0] and "$" in t3[0] and "wikipedia.org" in t3[1] and not errs, [t3[0][:400], errs])
+    print("  gamedev", meta["k"], r["n"], t[0][:90].replace("\n"," | "), r2["n"], t3[0][:160].replace("\n"," | "), flush=True)
     await ctx.close()
 async def main():
     only = os.environ.get("SUNNY_BUGS_ONLY", "")

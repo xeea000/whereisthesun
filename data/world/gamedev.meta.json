@@ -1,5 +1,5 @@
 {
- "built": "opt307",
+ "built": "opt308",
  "counts": {
   "noloc": 4999,
   "unk": 3276,
@@ -12,7 +12,9 @@
   "pub": 59,
   "osm_upgrade": 35,
   "osm_only": 83,
-  "former": 65
+  "former": 65,
+  "rev": 71,
+  "emp_known": 308
  },
  "countries": [
   [

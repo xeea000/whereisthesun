@@ -31,7 +31,11 @@ const split = (base, items, cols, S) => {
   fs.mkdirSync(path.dirname(base), { recursive: true });
   const old = fs.readdirSync(path.dirname(base)).filter((f) => { return f.indexOf(path.basename(base) + ".") === 0; });
   old.forEach((f) => { fs.unlinkSync(path.join(path.dirname(base), f)); });
-  const body = JSON.stringify({ n: items.length, S: S, codes: codes, cols: cols, lat: lat, lon: lon, c: c });
+  /* optional small per-point numbers for map styling (it.props), written as one array per name */
+  const pk = items.some((it) => { return it.props; }) ? Object.keys(items.find((it) => { return it.props; }).props) : [];
+  const props = {};
+  pk.forEach((k) => { props[k] = items.map((it) => { return it.props ? it.props[k] : 0; }); });
+  const body = JSON.stringify(Object.assign({ n: items.length, S: S, codes: codes, cols: cols, lat: lat, lon: lon, c: c }, pk.length ? { props: props } : {}));
   fs.writeFileSync(base + ".p.json", body);
   let dbytes = 0, dgz = 0, shards = 0;
   for (let k = 0; k * S < items.length; k++) {

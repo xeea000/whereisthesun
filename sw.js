@@ -11,7 +11,7 @@
  *   vendor/lag-o-meter-1.7.0/sw-counter.js reads the worker's own timing entries and
  *   posts them to the page; the page itself reads 0 for every file this worker answers. */
 importScripts("vendor/lag-o-meter-1.7.0/sw-counter.js");
-var BUILD = "opt307"; /* deploy name, read by tools/write-version.js */
+var BUILD = "opt308"; /* deploy name, read by tools/write-version.js */
 self.SUNNY_BUILD = BUILD;
 var CACHE = "sunny-app-1";
 var STATIC = "sunny-static-1";
@@ -40,7 +40,7 @@ var PRECACHE = [
   "vendor/maplibre-gl.js?h=be9633c4d8",
   "base-guard.js?h=45c2453283",
   "tap-snap.js?h=f73e5c3abe",
-  "points.js?h=bd3ec9c286",
+  "points.js?h=b4ddf79108",
   "peek-place.js?h=4dfa1405fd",
   "drag-kit.js?h=8c3939a239",
   "plus-code.js?h=2de5aed8e0",
@@ -139,11 +139,11 @@ var PRECACHE = [
   "ca-cover.js?h=c5dd186c2a",
   "badge-kit.js?h=ab2625c33c",
   "canada-static.js?h=cc05dcd59d",
-  "world-layers.js?h=fd21708d39",
+  "world-layers.js?h=c125e667d8",
   "smell-layers.js?h=aea91cfb2a",
   "land-value.js?h=35ff6d7e8d",
   "civic-layers.js?h=513693d413",
-  "game-studios.js?h=0f85451d80",
+  "game-studios.js?h=28fac8c9bb",
   "reef-layers.js?h=c9f78c51e5",
   "space-layers.js?h=15516cba60",
   "maritime-layers.js?h=0a63182016",

@@ -10,6 +10,7 @@
     for (var i = 0; i < j.n; i++) {
       a += j.lat[i]; o += j.lon[i];
       var p = { i: i, k: j.codes[j.c[i]] };
+      if (j.props) for (var pk in j.props) p[pk] = j.props[pk][i];
       if (extra) Object.assign(p, extra);
       out.push({ type: "Feature", properties: p, geometry: { type: "Point", coordinates: [o / 1e5, a / 1e5] } });
     }

@@ -18,7 +18,7 @@ import json, os, re, sys, math, subprocess, collections, csv
 RAW = sys.argv[1] if len(sys.argv) > 1 else "/workspace/t436/raw"
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 OUT = os.path.join(ROOT, "data", "world", "gamedev")
-COLS = "name,why,city,country,prec,parent,pq,founded,formerly,games,web,qid,wiki,src,note"
+COLS = "name,why,city,country,prec,parent,pq,founded,formerly,games,web,qid,wiki,src,note,emp,empy,rev,revg,revs,revu"
 DEV = {"Q210167", "Q1137109", "Q105543609"}  # developer, publisher, indie games publisher
 PUBCLS = {"Q1137109", "Q105543609", "Q219577"}  # publisher, indie publisher, holding company
 GAME = re.compile(r"video ?games?|computer games?|game (developer|studio|publisher|company|develop|maker)|"
@@ -308,6 +308,8 @@ def main():
         items.append({"lat": loc[0], "lon": loc[1], "code": code, "row": [
             name, why, city, country, prec, pl, pq, founded if re.match(r"^\d{4}$", founded or "") else "",
             "|".join(fn), works, r.get("web", ""), q, wiki, src or "wd", ""]})
+        if emp:
+            items[-1]["emp"] = (int(emp[1]), emp[0] if emp[0] != "0000" else "")
     cur_json = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamedev-former.json")))
     byq0 = {it["row"][11]: it for it in items}
     for f in cur_json["fixes"]:
@@ -395,17 +397,82 @@ def main():
         keepf.append(f)
     items += keepf
     stats["former"] = len(keepf)
+    revenue(items, stats)
     for it in items:
         it["row"] = ["" if v is None else v for v in it["row"]]
+        e = it.get("emp")
+        rv = it.get("rev")
+        it["row"] += [e[0] if e else "", e[1] if e else "", round(rv[0] / 1e6, 1) if rv else "", rv[1] if rv else "",
+                      rv[2] if rv else "", rv[3] if rv else ""]
+        # map props: log10 of headcount and of game revenue (USD), times 10; 0 = not known
+        it["props"] = {"hl": int(round(math.log10(e[0]) * 10)) if e and e[0] >= 1 else 0,
+                       "rl": int(round(math.log10(rv[0]) * 10)) if rv and rv[0] >= 1 else 0}
     tmp = OUT + ".items.json"
     json.dump({"items": items, "cols": COLS}, open(tmp, "w"), ensure_ascii=False)
     js = ("const {split}=require('%s/tools/split-points.js');const fs=require('fs');const d=JSON.parse(fs.readFileSync('%s','utf8'));"
           "fs.unlinkSync('%s');console.log(JSON.stringify(split('%s',d.items,d.cols,200)))") % (ROOT, tmp, tmp, OUT)
     print(subprocess.check_output(["node", "-e", js]).decode().strip())
-    meta = {"built": "opt307", "counts": dict(stats),
+    meta = {"built": "opt308", "counts": dict(stats),
             "countries": collections.Counter(it["row"][3] for it in items if it["code"] != "former").most_common(15)}
     json.dump(meta, open(OUT + ".meta.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(meta, ensure_ascii=False))
+
+
+def root(t):
+    t = re.sub(r"\(.*?\)|\bfranchise\b", "", t.lower())
+    t = re.split(r"[:–-]", t)[0]
+    t = re.sub(r"\b([ivx]+|\d+)\b", "", t)
+    return re.sub(r"[^a-z0-9]+", "", t)
+
+
+def revenue(items, stats):
+    """Attach real reported game revenue to studio pins (tools/gamedev-revenue.json). A title's revenue goes to
+    the first credited studio that is on the map: developer or creator first, then publisher or owner. The same
+    game or franchise counted twice keeps its larger figure; different games add up. A company's reported video
+    game revenue is used when it is larger than its titles."""
+    d = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "gamedev-revenue.json")))
+    pins = {}
+    for it in items:
+        q = it["row"][11]
+        if q and it["code"] not in ("former",) and q not in pins:
+            pins[q] = it
+    # each game or franchise is credited once, using its largest reported figure: to a credited developer or
+    # creator on the map if there is one, else to a publisher or owner on the map
+    cands = []
+    def add(dev, pub, title, usd, src, url):
+        qs = [(0, q) for q in dev if q in pins] + [(1, q) for q in pub if q in pins]
+        if qs:
+            cands.append([root(title), min(qs), title, usd, src, url])
+    for e in d["titles"]:
+        add([q for q in e["cq"] if q], [q for q in e["oq"] if q], e["title"].replace(" ( ", " (").replace(" )", ")"), e["usd"], e["src"], e["url"])
+    for g in d["wikidata"]:
+        add([g["dev"]] if g["dev"] else [], [g["pub"]] if g["pub"] else [], g["title"], g["usd"], "Wikidata " + g["gq"], "https://www.wikidata.org/wiki/" + g["gq"])
+    groups = []
+    for c in sorted(cands, key=lambda c: len(c[0])):
+        g = next((g for g in groups if len(g[0][0]) >= 4 and (c[0].startswith(g[0][0]) or g[0][0].startswith(c[0]))), None)
+        if g:
+            g.append(c)
+        else:
+            groups.append([c])
+    got = collections.defaultdict(dict)
+    for g in groups:
+        best = max(g, key=lambda c: (c[3], -c[1][0]))
+        who = best[1][1]
+        got[who][g[0][0]] = (best[2], best[3], best[4], best[5])
+    byname = {norm(it["row"][0]): it for it in items if it["code"] != "former"}
+    for q, games in got.items():
+        gs = sorted(games.values(), key=lambda x: -x[1])
+        tot = sum(x[1] for x in gs)
+        srcs = list(dict.fromkeys(x[2] for x in gs))
+        pins[q]["rev"] = (tot, "|".join(x[0] for x in gs[:3]), "; ".join(srcs), gs[0][3])
+    for c in d["companies"]:
+        it = next((pins[q] for q in c["q"] if q in pins), None) or byname.get(norm(c["company"]))
+        if not it:
+            continue
+        if not it.get("rev") or c["usd"] > it["rev"][0]:
+            it["rev"] = (c["usd"], (it.get("rev") or (0, ""))[1], "Wikipedia: largest video game companies by revenue (%s, video game revenue)" % c["company"], c["url"])
+    stats["rev"] = sum(1 for it in items if it.get("rev"))
+    stats["emp_known"] = sum(1 for it in items if it.get("emp"))
 
 
 if __name__ == "__main__":
