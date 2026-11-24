@@ -417,7 +417,7 @@ def main():
     js = ("const {split}=require('%s/tools/split-points.js');const fs=require('fs');const d=JSON.parse(fs.readFileSync('%s','utf8'));"
           "fs.unlinkSync('%s');console.log(JSON.stringify(split('%s',d.items,d.cols,200)))") % (ROOT, tmp, tmp, OUT)
     print(subprocess.check_output(["node", "-e", js]).decode().strip())
-    meta = {"built": "opt309", "counts": dict(stats),
+    meta = {"built": "opt310", "counts": dict(stats),
             "countries": collections.Counter(it["row"][3] for it in items if it["code"] != "former").most_common(15)}
     json.dump(meta, open(OUT + ".meta.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(meta, ensure_ascii=False))
@@ -475,7 +475,7 @@ def revenue(items, stats):
         if not it:
             continue
         if not it.get("rev") or c["usd"] > it["rev"][0]:
-            it["rev"] = (c["usd"], (it.get("rev") or (0, ""))[1], "Wikipedia: largest video game companies by revenue (%s, video game revenue)" % c["company"], c["url"])
+            it["rev"] = (c["usd"], "", "Wikipedia: largest video game companies by revenue (%s, all video game revenue)" % c["company"], c["url"])
     stats["rev"] = sum(1 for it in items if it.get("rev"))
     stats["emp_known"] = sum(1 for it in items if it.get("emp"))
 
