@@ -201,6 +201,11 @@ def main():
             loc, prec = pt(r["coord"]), "o"
             if cur:
                 city, country = cur[0].get("hqLabel", ""), cur[0].get("hqcn", "")
+                # item coordinates far from its stated head office city (a registered office elsewhere): use the HQ city
+                hc = pt(cur[0].get("hqc", ""))
+                if hc and km(loc, hc) > 100:
+                    loc, prec = hc, "c"
+                    stats["coord_far"] += 1
         if not loc:
             for h in cur:
                 if h.get("hqc") and pt(h["hqc"]):
@@ -412,7 +417,7 @@ def main():
     js = ("const {split}=require('%s/tools/split-points.js');const fs=require('fs');const d=JSON.parse(fs.readFileSync('%s','utf8'));"
           "fs.unlinkSync('%s');console.log(JSON.stringify(split('%s',d.items,d.cols,200)))") % (ROOT, tmp, tmp, OUT)
     print(subprocess.check_output(["node", "-e", js]).decode().strip())
-    meta = {"built": "opt308", "counts": dict(stats),
+    meta = {"built": "opt309", "counts": dict(stats),
             "countries": collections.Counter(it["row"][3] for it in items if it["code"] != "former").most_common(15)}
     json.dump(meta, open(OUT + ".meta.json", "w"), ensure_ascii=False, indent=1)
     print(json.dumps(meta, ensure_ascii=False))

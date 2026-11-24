@@ -1,5 +1,5 @@
 {
- "built": "opt308",
+ "built": "opt309",
  "counts": {
   "noloc": 4999,
   "unk": 3276,
@@ -10,6 +10,7 @@
   "mid": 53,
   "out": 29,
   "pub": 59,
+  "coord_far": 1,
   "osm_upgrade": 35,
   "osm_only": 83,
   "former": 65,

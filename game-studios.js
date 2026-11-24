@@ -95,7 +95,7 @@
     return out;
   }
   var layer = {
-    id: "gamedev", file: "gamedev", v: "opt308", scale: scale, fade: fade, /* bump when tools/build-game-studios.py output changes */ name: "Game dev studios", icon: "🎮", group: "Fun & Games", kids: true,
+    id: "gamedev", file: "gamedev", v: "opt309", scale: scale, fade: fade, /* bump when tools/build-game-studios.py output changes */ name: "Game dev studios", icon: "🎮", group: "Fun & Games", kids: true,
     tip: "Video game developers, publishers and outsourcing houses worldwide, sized by real headcount or reported game revenue",
     attrib: 'Game studios: <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>, ' +
       '<a href="https://en.wikipedia.org/wiki/List_of_video_game_developers" target="_blank" rel="noopener">Wikipedia</a>, ' +
